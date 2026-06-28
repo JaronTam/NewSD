@@ -1214,19 +1214,25 @@ function AsciiBadge({ icon, color, got, title }: { icon: string; color: string; 
   const scan = ["/", "─", "\\", "│"][phase];
   const c = got ? color : "#2a3142";
   const shadow = got ? `0 0 6px ${color}` : "none";
+  const corner = got ? scan : "·";
   return (
     <div
       title={title}
-      className="relative flex aspect-square items-center justify-center text-xl"
-      style={{ color: c, textShadow: shadow, background: got ? "#0a0e14" : "transparent" }}
+      className="relative flex aspect-square items-center justify-center"
+      style={{
+        color: c,
+        textShadow: shadow,
+        background: got ? "#0a0e14" : "transparent",
+        border: `1px solid ${got ? color : "#1a1f2e"}`,
+        boxShadow: got ? `inset 0 0 8px ${color}33` : "none",
+        minHeight: 32,
+      }}
     >
-      <span className="absolute left-0 top-0 text-[10px]">{got ? scan : "·"}</span>
-      <span className="absolute right-0 top-0 text-[10px]">{got ? scan : "·"}</span>
-      <span className="absolute left-0 bottom-0 text-[10px]">{got ? scan : "·"}</span>
-      <span className="absolute right-0 bottom-0 text-[10px]">{got ? scan : "·"}</span>
-      <span className="absolute inset-x-0 top-1 text-center text-[8px] opacity-60">╔══╗</span>
-      <span className="absolute inset-x-0 bottom-1 text-center text-[8px] opacity-60">╚══╝</span>
-      {icon}
+      <span className="pointer-events-none absolute left-0.5 top-0 text-[9px] leading-none">{corner}</span>
+      <span className="pointer-events-none absolute right-0.5 top-0 text-[9px] leading-none">{corner}</span>
+      <span className="pointer-events-none absolute left-0.5 bottom-0 text-[9px] leading-none">{corner}</span>
+      <span className="pointer-events-none absolute right-0.5 bottom-0 text-[9px] leading-none">{corner}</span>
+      <span className="text-base leading-none">{icon}</span>
     </div>
   );
 }
