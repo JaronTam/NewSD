@@ -234,6 +234,7 @@ function Index() {
   // badges
   const [unlocked, setUnlocked] = useState<Set<string>>(new Set());
   const [toasts, setToasts] = useState<{ id: string; key: string }[]>([]);
+  const [lvlTrigger, setLvlTrigger] = useState(0);
 
   // refs for hot loop
   const canvasRef = useRef<HTMLCanvasElement>(null);
