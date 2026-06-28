@@ -643,11 +643,21 @@ function Index() {
   };
 
   const onMouseMove = (e: React.MouseEvent) => {
-    if (!dragRef.current) return;
     const canvas = canvasRef.current!;
     const rect = canvas.getBoundingClientRect();
     const sx = e.clientX - rect.left;
     const sy = e.clientY - rect.top;
+
+    // hover detection (always)
+    const wHover = s2w(sx, sy);
+    const hit = hitTest(elementsRef.current, wHover.x, wHover.y);
+    const newHover = hit ? hit.id : null;
+    if (newHover !== hoverIdRef.current) {
+      hoverIdRef.current = newHover;
+      forceTick((v) => v + 1);
+    }
+
+    if (!dragRef.current) return;
     const d = dragRef.current;
     if (d.type === "pan") {
       setPanX(d.origPan.x + (sx - d.startX));
@@ -664,6 +674,7 @@ function Index() {
       }));
     }
   };
+
 
   const onMouseUp = () => { dragRef.current = null; };
 
