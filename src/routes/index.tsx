@@ -810,6 +810,27 @@ function Index() {
         {[0.01, 0.1, 0.5, 1.0].map((d) => (
           <TermButton key={d} active={dt === d} onClick={() => setDt(d)} color={COLORS.cloud} breathing={dt === d && running}>{d}</TermButton>
         ))}
+        <div className="mx-2 h-4 w-px bg-[#1a1f2e]" />
+        <span className="text-[#4a5568]">flux:</span>
+        <input
+          type="range" min={0} max={30} step={1} value={flowSpeed}
+          onChange={(e) => setFlowSpeed(parseFloat(e.target.value))}
+          className="h-1 w-20 accent-[#ff5577]"
+          style={{ ['--flow-speed' as string]: `${flowSpeed}` }}
+          title={`flow speed ${flowSpeed} c/s`}
+        />
+        <span className="text-[10px]" style={{ color: COLORS.flow, textShadow: `0 0 4px ${COLORS.flow}` }}>{flowSpeed}c/s</span>
+        <span className="ml-1 text-[#4a5568]">gap:</span>
+        <input
+          type="range" min={2} max={8} step={1} value={flowSpacing}
+          onChange={(e) => setFlowSpacing(parseFloat(e.target.value))}
+          className="h-1 w-14 accent-[#ff5577]"
+          title={`marker gap ${flowSpacing}`}
+        />
+        <TermButton onClick={() => setSoundOn((s) => !s)} color={soundOn ? COLORS.spark : COLORS.dim}>
+          {soundOn ? "♪ on" : "♪ off"}
+        </TermButton>
+
         <div className="ml-auto flex items-center gap-2">
           <span className="text-[#4a5568]">{tr("zoom")}: <span style={{ color: COLORS.stock }}>{(zoom * 100).toFixed(0)}%</span></span>
           <TermButton onClick={() => setLang(lang === "zh" ? "en" : "zh")} color={COLORS.spark}>
