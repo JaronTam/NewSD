@@ -659,8 +659,10 @@ function Index() {
       setElements((es) => [...es, nc]);
       setSelectedId(id);
       setTool("select");
+      if (soundOnRef.current) blip("C", 0.04, 0.06);
       return;
     }
+
     if (tool === "flow") {
       const hit = hitTest(elementsRef.current, w.x, w.y);
       if (!hit || hit.kind === "flow") return;
