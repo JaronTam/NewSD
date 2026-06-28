@@ -34,6 +34,70 @@ const COLORS = {
   dim: "#4a5568",
 };
 
+// --- CRT helpers: luminance-bound glow ---
+function hexLum(hex: string): number {
+  const h = hex.replace("#", "");
+  const r = parseInt(h.slice(0, 2), 16) / 255;
+  const g = parseInt(h.slice(2, 4), 16) / 255;
+  const b = parseInt(h.slice(4, 6), 16) / 255;
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+function glowFor(hex: string, boost = 1): number {
+  // bound to color luminance — bright colors burn brighter
+  return (2 + hexLum(hex) * 9) * boost;
+}
+function shiftHue(hex: string, deg: number): string {
+  const h = hex.replace("#", "");
+  const r = parseInt(h.slice(0, 2), 16);
+  const g = parseInt(h.slice(2, 4), 16);
+  const b = parseInt(h.slice(4, 6), 16);
+  // crude hue shift via rgb rotation
+  const cos = Math.cos((deg * Math.PI) / 180);
+  const sin = Math.sin((deg * Math.PI) / 180);
+  const m = [
+    0.213 + cos * 0.787 - sin * 0.213, 0.715 - cos * 0.715 - sin * 0.715, 0.072 - cos * 0.072 + sin * 0.928,
+    0.213 - cos * 0.213 + sin * 0.143, 0.715 + cos * 0.285 + sin * 0.140, 0.072 - cos * 0.072 - sin * 0.283,
+    0.213 - cos * 0.213 - sin * 0.787, 0.715 - cos * 0.715 + sin * 0.715, 0.072 + cos * 0.928 + sin * 0.072,
+  ];
+  const nr = Math.max(0, Math.min(255, Math.round(r * m[0] + g * m[1] + b * m[2])));
+  const ng = Math.max(0, Math.min(255, Math.round(r * m[3] + g * m[4] + b * m[5])));
+  const nb = Math.max(0, Math.min(255, Math.round(r * m[6] + g * m[7] + b * m[8])));
+  return `#${nr.toString(16).padStart(2, "0")}${ng.toString(16).padStart(2, "0")}${nb.toString(16).padStart(2, "0")}`;
+}
+
+// --- ASCII shrapnel for toast splatter ---
+const SHARDS: Record<string, string[]> = {
+  A: ["/", "\\", "-", "^"],
+  U: ["\\", "/", "_"],
+  S: ["~", "-", "_", "/"],
+  Y: ["Y", "/", "\\", "|"],
+  T: ["T", "-", "|"],
+  E: ["E", "=", "-"],
+  M: ["M", "/", "\\", "|"],
+  O: ["o", "(", ")"],
+  C: ["(", "c"],
+  K: ["<", "/", "\\"],
+  N: ["N", "/", "\\"],
+  D: ["D", ")", "|"],
+  L: ["L", "|", "_"],
+  R: ["R", "/", "|"],
+  P: ["P", "|", "p"],
+  I: ["|", "i", "."],
+  H: ["H", "|", "-"],
+  V: ["V", "/", "\\"],
+  W: ["W", "/", "\\"],
+  G: ["G", "(", ")"],
+  B: ["B", "(", "|"],
+  F: ["F", "|", "-"],
+  J: ["J", "_", "|"],
+  X: ["X", "/", "\\"],
+  Z: ["Z", "/", "-"],
+  Q: ["Q", "o", "/"],
+};
+function shardsFor(ch: string): string[] {
+  return SHARDS[ch.toUpperCase()] ?? [ch, "·", "*"];
+}
+
 const BADGES: { id: string; key: DictKey; descKey: DictKey; icon: string; color: string }[] = [
   { id: "first_stock", key: "badgeFirstStock", descKey: "badgeFirstStockDesc", icon: "★", color: COLORS.stock },
   { id: "first_flow", key: "badgeFirstFlow", descKey: "badgeFirstFlowDesc", icon: "◆", color: COLORS.flow },
@@ -41,6 +105,33 @@ const BADGES: { id: string; key: DictKey; descKey: DictKey; icon: string; color:
   { id: "weaver", key: "badgeWeb", descKey: "badgeWebDesc", icon: "⬢", color: COLORS.cloud },
   { id: "modeler", key: "badgeModel", descKey: "badgeModelDesc", icon: "✺", color: COLORS.spark },
 ];
+
+// --- audio: short ascii blip; freq from char code ---
+let _audioCtx: AudioContext | null = null;
+function blip(charOrFreq: string | number, vol = 0.04, dur = 0.05) {
+  try {
+    if (typeof window === "undefined") return;
+    if (!_audioCtx) {
+      const Ctx = (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext);
+      _audioCtx = new Ctx();
+    }
+    const ctx = _audioCtx;
+    const freq = typeof charOrFreq === "number"
+      ? charOrFreq
+      : 220 + ((charOrFreq.charCodeAt(0) % 40) * 18);
+    const osc = ctx.createOscillator();
+    const g = ctx.createGain();
+    osc.type = "square";
+    osc.frequency.value = freq;
+    g.gain.value = vol;
+    g.gain.setValueAtTime(vol, ctx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + dur);
+    osc.connect(g).connect(ctx.destination);
+    osc.start();
+    osc.stop(ctx.currentTime + dur);
+  } catch { /* ignore */ }
+}
+
 
 // --------------------------- initial scene ---------------------------
 function initialElements(): SDElement[] {
@@ -133,6 +224,12 @@ function Index() {
   // settings
   const [gameOn, setGameOn] = useState(true);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [flowSpeed, setFlowSpeed] = useState(6); // chars/sec along flow line
+  const [flowSpacing, setFlowSpacing] = useState(3); // chars between > markers
+  const [soundOn, setSoundOn] = useState(false);
+  const hoverIdRef = useRef<string | null>(null);
+  const [, forceTick] = useState(0); // for hover-change repaints if needed
+
 
   // badges
   const [unlocked, setUnlocked] = useState<Set<string>>(new Set());
@@ -156,7 +253,45 @@ function Index() {
   panRef.current = { x: panX, y: panY };
   zoomRef.current = zoom;
 
+  // --- particles (toast splatter) ---
+  type Particle = { id: string; ch: string; x: number; y: number; vx: number; vy: number; born: number; color: string };
+  const [particles, setParticles] = useState<Particle[]>([]);
+  const spawnSplatter = useCallback((text: string, anchorX: number, anchorY: number, color: string) => {
+    const pieces: Particle[] = [];
+    const chars = text.replace(/\s+/g, "").slice(0, 16).split("");
+    chars.forEach((c, i) => {
+      const frags = shardsFor(c);
+      frags.forEach((ch, j) => {
+        pieces.push({
+          id: `${Date.now()}-${i}-${j}-${Math.random()}`,
+          ch,
+          x: anchorX + (Math.random() - 0.5) * 60,
+          y: anchorY + (Math.random() - 0.5) * 20,
+          vx: (Math.random() - 0.5) * 240,
+          vy: -120 - Math.random() * 140,
+          born: performance.now(),
+          color,
+        });
+      });
+    });
+    setParticles((p) => [...p, ...pieces]);
+  }, []);
+
+  // particle decay loop
+  useEffect(() => {
+    let raf = 0;
+    const tick = () => {
+      const now = performance.now();
+      setParticles((ps) => ps.filter((p) => now - p.born < 900));
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, []);
+
   // --- badge logic ---
+  const soundOnRef = useRef(soundOn);
+  soundOnRef.current = soundOn;
   const unlockBadge = useCallback((id: string) => {
     if (!gameOn) return;
     setUnlocked((prev) => {
@@ -165,12 +300,24 @@ function Index() {
       next.add(id);
       const toastId = `${id}-${Date.now()}`;
       setToasts((ts) => [...ts, { id: toastId, key: id }]);
+      const badge = BADGES.find((b) => b.id === id);
+      if (badge) {
+        // splatter near toast anchor (top-right corner of viewport)
+        const aX = window.innerWidth - 160;
+        const aY = 60 + Math.random() * 20;
+        spawnSplatter("ACHIEVEMENT UNLOCKED", aX, aY, badge.color);
+        if (soundOnRef.current) {
+          blip(880, 0.05, 0.08);
+          setTimeout(() => blip(1320, 0.04, 0.1), 90);
+        }
+      }
       setTimeout(() => {
         setToasts((ts) => ts.filter((t) => t.id !== toastId));
       }, 2800);
       return next;
     });
-  }, [gameOn]);
+  }, [gameOn, spawnSplatter]);
+
 
   // First stock badge if there's any stock at start? Skip — only trigger on user action.
 
@@ -297,6 +444,8 @@ function Index() {
     const fontSize = Math.max(8, Math.round(13 * z));
     ctx.font = `${fontSize}px "JetBrains Mono","Courier New",monospace`;
     ctx.textBaseline = "top";
+    const now = performance.now();
+    const drift = now / 1000;
 
     // grid: vertical lines every 4 chars
     const gridStepX = CELL_W * 4 * z;
@@ -316,14 +465,33 @@ function Index() {
       ctx.stroke();
     }
 
-    const drawText = (text: string, wx: number, wy: number, color: string, glow = false) => {
-      const { x, y } = w2s(wx, wy);
-      if (glow) {
-        ctx.shadowColor = color;
-        ctx.shadowBlur = 6;
-      } else {
-        ctx.shadowBlur = 0;
+    // background CRT char drift — sparse glyphs with slow hue shift
+    if (z >= 0.4) {
+      const cellPxX = CELL_W * z * 8;
+      const cellPxY = CELL_H * z * 4;
+      const bgGlyphs = [".", "·", "˙", "‧", "⋅"];
+      const baseHueShift = Math.sin(drift * 0.1) * 25;
+      for (let y = 0; y < rect.height; y += cellPxY) {
+        for (let x = 0; x < rect.width; x += cellPxX) {
+          const seed = Math.sin(x * 13.37 + y * 7.13);
+          if (seed < 0.55) continue;
+          const localDeg = baseHueShift + Math.sin(drift * 0.3 + seed * 6) * 30;
+          const c = shiftHue("#1e3a44", localDeg);
+          ctx.shadowColor = c;
+          ctx.shadowBlur = 2;
+          ctx.fillStyle = c;
+          ctx.fillText(bgGlyphs[Math.floor((seed + 1) * bgGlyphs.length) % bgGlyphs.length], x, y);
+        }
       }
+      ctx.shadowBlur = 0;
+    }
+
+    const hoverId = hoverIdRef.current;
+    const drawText = (text: string, wx: number, wy: number, color: string, boost = 1) => {
+      const { x, y } = w2s(wx, wy);
+      const blur = glowFor(color, boost);
+      ctx.shadowColor = color;
+      ctx.shadowBlur = blur;
       ctx.fillStyle = color;
       ctx.fillText(text, x, y);
       ctx.shadowBlur = 0;
@@ -341,60 +509,70 @@ function Index() {
       const a = elementCenter(from);
       const b = elementCenter(to);
       const isSel = f.id === selectedRef.current;
+      const isHover = f.id === hoverId;
       const color = isSel && blink ? COLORS.selected : COLORS.flow;
+      const boost = isHover ? 1.4 : 1;
       // attach to bounds edge
       const ab = elementBounds(from);
       const bb = elementBounds(to);
       let ax = a.cx, ay = a.cy, bx = b.cx, by = b.cy;
       if (ab) ax = a.cx < b.cx ? ab.x + ab.w : ab.x;
       if (bb) bx = a.cx < b.cx ? bb.x : bb.x + bb.w;
-      // horizontal flow line drawn with dashes & arrow
-      const steps = Math.max(2, Math.round(Math.abs(bx - ax)));
       const dir = bx > ax ? 1 : -1;
       const lineY = Math.round((ay + by) / 2);
+      const x0 = Math.min(ax, bx);
+      const x1 = Math.max(ax, bx);
+      const steps = Math.max(2, Math.round(x1 - x0));
+      // animated >>>>>> data-stream
+      const spacing = Math.max(2, flowSpacing);
+      const offset = Math.floor((now / 1000) * flowSpeed) % spacing;
+      const head = dir > 0 ? ">" : "<";
       let line = "";
-      for (let i = 0; i < steps; i++) line += "─";
-      drawText(line, Math.min(ax, bx), lineY, color, true);
+      for (let i = 0; i < steps; i++) {
+        const idx = dir > 0 ? i : steps - 1 - i;
+        line += ((idx + offset) % spacing === 0) ? head : "─";
+      }
+      drawText(line, x0, lineY, color, boost);
       // arrow head
-      drawText(dir > 0 ? "▶" : "◀", bx - (dir > 0 ? 1 : 0), lineY, color, true);
+      drawText(dir > 0 ? "▶" : "◀", bx - (dir > 0 ? 1 : 0), lineY, color, boost);
       // mid marker (variable ▼ / constant ○)
       const midX = Math.round((ax + bx) / 2) - 1;
-      drawText(f.isVariable ? "▼" : "○", midX, lineY - 1, color, true);
+      drawText(f.isVariable ? "▼" : "○", midX, lineY - 1, color, boost);
       // name + value
-      drawText(`${f.name}=${fmt(f.lastValue)}`, midX - 2, lineY + 1, color, false);
+      drawText(`${f.name}=${fmt(f.lastValue)}`, midX - 2, lineY + 1, color, boost);
       if (f.formulaError) {
-        drawText("!", midX + 2, lineY - 1, "#ff4444", true);
+        drawText("!", midX + 2, lineY - 1, "#ff4444", boost);
       }
     });
 
     // nodes
     els.forEach((el) => {
       const isSel = el.id === selectedRef.current;
+      const isHover = el.id === hoverId;
+      const boost = isHover ? 1.4 : 1;
       if (el.kind === "stock") {
         const s = el;
         const color = isSel && blink ? COLORS.selected : COLORS.stock;
         const inner = s.w - 2;
         const top = "┌" + "─".repeat(inner) + "┐";
         const bot = "└" + "─".repeat(inner) + "┘";
-        drawText(top, s.x, s.y, color, true);
-        drawText(bot, s.x, s.y + s.h - 1, color, true);
+        drawText(top, s.x, s.y, color, boost);
+        drawText(bot, s.x, s.y + s.h - 1, color, boost);
         for (let r = 1; r < s.h - 1; r++) {
-          drawText("│", s.x, s.y + r, color, true);
-          drawText("│", s.x + s.w - 1, s.y + r, color, true);
+          drawText("│", s.x, s.y + r, color, boost);
+          drawText("│", s.x + s.w - 1, s.y + r, color, boost);
         }
-        // contents
         const nameLine = ` ${s.name}`.padEnd(inner, " ").slice(0, inner);
         const valLine = ` ${fmt(s.currentValue)} ${s.units}`.padEnd(inner, " ").slice(0, inner);
-        drawText(nameLine, s.x + 1, s.y + 1, color, false);
-        drawText(valLine, s.x + 1, s.y + 2, COLORS.text, false);
-        // sparkline next to box
-        drawText(spark(s.history), s.x + s.w + 1, s.y + 2, COLORS.spark, true);
+        drawText(nameLine, s.x + 1, s.y + 1, color, boost);
+        drawText(valLine, s.x + 1, s.y + 2, COLORS.text, boost);
+        drawText(spark(s.history), s.x + s.w + 1, s.y + 2, COLORS.spark, boost);
       } else if (el.kind === "cloud") {
         const c = el;
         const color = isSel && blink ? COLORS.selected : COLORS.cloud;
-        drawText(" .--.", c.x, c.y, color, true);
-        drawText("(    )", c.x, c.y + 1, color, true);
-        drawText(" `--'", c.x, c.y + 2, color, true);
+        drawText(" .--.", c.x, c.y, color, boost);
+        drawText("(    )", c.x, c.y + 1, color, boost);
+        drawText(" `--'", c.x, c.y + 2, color, boost);
       }
     });
 
@@ -403,10 +581,11 @@ function Index() {
       const from = els.find((e) => e.id === flowFromId);
       if (from) {
         const c = elementCenter(from);
-        drawText("◆", c.cx, c.cy, COLORS.selected, true);
+        drawText("◆", c.cx, c.cy, COLORS.selected, 1.4);
       }
     }
-  }, [tool, flowFromId, w2s]);
+  }, [tool, flowFromId, w2s, flowSpeed, flowSpacing]);
+
 
   // --- mouse handling ---
   const dragRef = useRef<
@@ -470,6 +649,8 @@ function Index() {
       setSelectedId(id);
       setTool("select");
       unlockBadge("first_stock");
+      if (soundOnRef.current) blip("S", 0.05, 0.07);
+
       return;
     }
     if (tool === "cloud") {
@@ -478,8 +659,10 @@ function Index() {
       setElements((es) => [...es, nc]);
       setSelectedId(id);
       setTool("select");
+      if (soundOnRef.current) blip("C", 0.04, 0.06);
       return;
     }
+
     if (tool === "flow") {
       const hit = hitTest(elementsRef.current, w.x, w.y);
       if (!hit || hit.kind === "flow") return;
@@ -496,9 +679,11 @@ function Index() {
         setFlowFromId(null);
         setTool("select");
         unlockBadge("first_flow");
+        if (soundOnRef.current) blip("F", 0.05, 0.09);
       }
       return;
     }
+
 
     // select / move
     const hit = hitTest(elementsRef.current, w.x, w.y);
@@ -514,11 +699,21 @@ function Index() {
   };
 
   const onMouseMove = (e: React.MouseEvent) => {
-    if (!dragRef.current) return;
     const canvas = canvasRef.current!;
     const rect = canvas.getBoundingClientRect();
     const sx = e.clientX - rect.left;
     const sy = e.clientY - rect.top;
+
+    // hover detection (always)
+    const wHover = s2w(sx, sy);
+    const hit = hitTest(elementsRef.current, wHover.x, wHover.y);
+    const newHover = hit ? hit.id : null;
+    if (newHover !== hoverIdRef.current) {
+      hoverIdRef.current = newHover;
+      forceTick((v) => v + 1);
+    }
+
+    if (!dragRef.current) return;
     const d = dragRef.current;
     if (d.type === "pan") {
       setPanX(d.origPan.x + (sx - d.startX));
@@ -535,6 +730,7 @@ function Index() {
       }));
     }
   };
+
 
   const onMouseUp = () => { dragRef.current = null; };
 
@@ -571,9 +767,11 @@ function Index() {
     setRunning((r) => {
       const nr = !r;
       if (nr) unlockBadge("first_sim");
+      if (soundOnRef.current) blip(nr ? 660 : 220, 0.05, 0.08);
       return nr;
     });
   };
+
   const handleReset = () => {
     setRunning(false);
     simTimeRef.current = 0;
@@ -620,6 +818,27 @@ function Index() {
         {[0.01, 0.1, 0.5, 1.0].map((d) => (
           <TermButton key={d} active={dt === d} onClick={() => setDt(d)} color={COLORS.cloud} breathing={dt === d && running}>{d}</TermButton>
         ))}
+        <div className="mx-2 h-4 w-px bg-[#1a1f2e]" />
+        <span className="text-[#4a5568]">flux:</span>
+        <input
+          type="range" min={0} max={30} step={1} value={flowSpeed}
+          onChange={(e) => setFlowSpeed(parseFloat(e.target.value))}
+          className="h-1 w-20 accent-[#ff5577]"
+          style={{ ['--flow-speed' as string]: `${flowSpeed}` }}
+          title={`flow speed ${flowSpeed} c/s`}
+        />
+        <span className="text-[10px]" style={{ color: COLORS.flow, textShadow: `0 0 4px ${COLORS.flow}` }}>{flowSpeed}c/s</span>
+        <span className="ml-1 text-[#4a5568]">gap:</span>
+        <input
+          type="range" min={2} max={8} step={1} value={flowSpacing}
+          onChange={(e) => setFlowSpacing(parseFloat(e.target.value))}
+          className="h-1 w-14 accent-[#ff5577]"
+          title={`marker gap ${flowSpacing}`}
+        />
+        <TermButton onClick={() => setSoundOn((s) => !s)} color={soundOn ? COLORS.spark : COLORS.dim}>
+          {soundOn ? "♪ on" : "♪ off"}
+        </TermButton>
+
         <div className="ml-auto flex items-center gap-2">
           <span className="text-[#4a5568]">{tr("zoom")}: <span style={{ color: COLORS.stock }}>{(zoom * 100).toFixed(0)}%</span></span>
           <TermButton onClick={() => setLang(lang === "zh" ? "en" : "zh")} color={COLORS.spark}>
@@ -650,6 +869,36 @@ function Index() {
             </div>
           )}
 
+          {/* particle splatter overlay (edge only) */}
+          <div className="pointer-events-none fixed inset-0 z-40 overflow-hidden">
+            {particles.map((p) => {
+              const age = (performance.now() - p.born) / 1000;
+              const tx = p.vx * age;
+              const ty = p.vy * age + 0.5 * 520 * age * age; // gravity
+              const opacity = Math.max(0, 1 - age / 0.9);
+              return (
+                <span
+                  key={p.id}
+                  style={{
+                    position: "absolute",
+                    left: p.x,
+                    top: p.y,
+                    transform: `translate(${tx}px, ${ty}px) rotate(${tx}deg)`,
+                    color: p.color,
+                    textShadow: `0 0 6px ${p.color}`,
+                    opacity,
+                    fontFamily: '"JetBrains Mono",monospace',
+                    fontSize: 14,
+                    fontWeight: 700,
+                    willChange: "transform, opacity",
+                  }}
+                >
+                  {p.ch}
+                </span>
+              );
+            })}
+          </div>
+
           {/* badge toasts */}
           <div className="pointer-events-none absolute right-3 top-3 flex flex-col gap-2">
             {toasts.map((t) => {
@@ -662,7 +911,7 @@ function Index() {
                 >
                   <span className="text-2xl" style={{ color: b.color, textShadow: `0 0 8px ${b.color}` }}>{b.icon}</span>
                   <div>
-                    <div style={{ color: b.color, textShadow: `0 0 4px ${b.color}` }}>★ {tr(b.key)}</div>
+                    <div style={{ color: b.color, textShadow: `0 0 4px ${b.color}` }}>★ <ScrambleText text={tr(b.key)} /></div>
                     <div className="text-[#c9d1d9]">{tr(b.descKey)}</div>
                   </div>
                 </div>
@@ -670,6 +919,7 @@ function Index() {
             })}
           </div>
         </div>
+
 
         {/* RIGHT PANEL */}
         <div className="flex w-72 flex-col border-l border-[#1a1f2e] bg-[#0f1419]">
@@ -766,9 +1016,10 @@ function Index() {
 
       {/* STATUS BAR */}
       <div className="flex items-center gap-4 border-t border-[#1a1f2e] bg-[#0f1419] px-3 py-1 text-[11px] text-[#4a5568]">
-        <span>{tr("simTime")}: <span style={{ color: COLORS.stock }}>{simTime.toFixed(2)}</span></span>
-        <span>{tr("elements")}: <span style={{ color: COLORS.stock }}>{elements.length}</span></span>
-        <span>{tr("fps")}: <span style={{ color: COLORS.spark }}>{fps}</span></span>
+        <span>{tr("simTime")}: <span style={{ color: COLORS.stock, textShadow: `0 0 4px ${COLORS.stock}` }}><ScrambleNumber value={simTime} digits={2} /></span></span>
+        <span>{tr("elements")}: <span style={{ color: COLORS.stock, textShadow: `0 0 4px ${COLORS.stock}` }}><ScrambleNumber value={elements.length} digits={0} /></span></span>
+        <span>{tr("fps")}: <span style={{ color: COLORS.spark, textShadow: `0 0 4px ${COLORS.spark}` }}>{fps}</span></span>
+
         <span>{tr("dimensions")}: <span style={{ color: COLORS.cloud }}>{tr("dimSummary")}</span></span>
         <span className="ml-auto">{tr("online")}: <span style={{ color: COLORS.spark }}>1</span></span>
       </div>
@@ -871,3 +1122,60 @@ function TermInput({ value, onChange, error }: { value: string; onChange: (v: st
     />
   );
 }
+
+
+// --- text scramble (300ms glitch on change) ---
+const SCRAMBLE_POOL = "!@#$%^&*<>/\\|01234567890.?";
+function ScrambleNumber({ value, digits = 2 }: { value: number; digits?: number }) {
+  const formatted = Number.isFinite(value) ? value.toFixed(digits) : "NaN";
+  const [display, setDisplay] = useState(formatted);
+  const targetRef = useRef(formatted);
+  useEffect(() => {
+    targetRef.current = formatted;
+    const start = performance.now();
+    const dur = 300;
+    let raf = 0;
+    const tick = () => {
+      const t = (performance.now() - start) / dur;
+      if (t >= 1) { setDisplay(targetRef.current); return; }
+      const out = targetRef.current
+        .split("")
+        .map((c, i) => {
+          // settle from left to right
+          if (i / targetRef.current.length < t) return c;
+          if (c === "." || c === "-") return c;
+          return SCRAMBLE_POOL[Math.floor(Math.random() * SCRAMBLE_POOL.length)];
+        })
+        .join("");
+      setDisplay(out);
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [formatted]);
+  return <>{display}</>;
+}
+
+function ScrambleText({ text }: { text: string }) {
+  const [display, setDisplay] = useState(text);
+  useEffect(() => {
+    const start = performance.now();
+    const dur = 350;
+    let raf = 0;
+    const tick = () => {
+      const t = (performance.now() - start) / dur;
+      if (t >= 1) { setDisplay(text); return; }
+      const out = text.split("").map((c, i) => {
+        if (i / text.length < t) return c;
+        if (c === " ") return " ";
+        return SCRAMBLE_POOL[Math.floor(Math.random() * SCRAMBLE_POOL.length)];
+      }).join("");
+      setDisplay(out);
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [text]);
+  return <>{display}</>;
+}
+
