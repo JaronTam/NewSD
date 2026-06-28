@@ -26,7 +26,7 @@ const COLORS = {
   bg: "#0a0e14",
   grid: "#1a1f2e",
   stock: "#00ffd5",
-  flow: "#ff2e88",
+  flow: "#ff5577",
   cloud: "#7c3aed",
   spark: "#39ff14",
   selected: "#ffd700",
@@ -106,9 +106,12 @@ function hitTest(elements: SDElement[], wx: number, wy: number): SDElement | nul
 
 // --------------------------- component ---------------------------
 function Index() {
-  const [lang, setLang] = useState<Lang>(() =>
-    typeof navigator !== "undefined" && navigator.language.startsWith("zh") ? "zh" : "en"
-  );
+  const [lang, setLang] = useState<Lang>("en");
+  useEffect(() => {
+    if (typeof navigator !== "undefined" && navigator.language.startsWith("zh")) {
+      setLang("zh");
+    }
+  }, []);
   const tr = useCallback((k: DictKey) => t(k, lang), [lang]);
 
   const [elements, setElements] = useState<SDElement[]>(() => initialElements());
@@ -615,7 +618,7 @@ function Index() {
         <div className="mx-2 h-4 w-px bg-[#1a1f2e]" />
         <span className="text-[#4a5568]">{tr("dt")}:</span>
         {[0.01, 0.1, 0.5, 1.0].map((d) => (
-          <TermButton key={d} active={dt === d} onClick={() => setDt(d)} color={COLORS.cloud}>{d}</TermButton>
+          <TermButton key={d} active={dt === d} onClick={() => setDt(d)} color={COLORS.cloud} breathing={dt === d && running}>{d}</TermButton>
         ))}
         <div className="ml-auto flex items-center gap-2">
           <span className="text-[#4a5568]">{tr("zoom")}: <span style={{ color: COLORS.stock }}>{(zoom * 100).toFixed(0)}%</span></span>
@@ -702,7 +705,7 @@ function Index() {
               </div>
             )}
             {selected?.kind === "flow" && (
-              <div className="space-y-2">
+              <div className="flex flex-col gap-1.5">
                 <Field label={tr("name")}>
                   <TermInput value={selected.name} onChange={(v) => updateSelected({ name: v } as Partial<Flow>)} />
                 </Field>
@@ -716,7 +719,7 @@ function Index() {
                 {selected.formulaError && (
                   <div className="text-[10px]" style={{ color: "#ff4444" }}>! {selected.formulaError}</div>
                 )}
-                <label className="flex items-center gap-2">
+                <label className="mt-0.5 flex items-center gap-2">
                   <input type="checkbox" checked={selected.isVariable} onChange={(e) => updateSelected({ isVariable: e.target.checked } as Partial<Flow>)} />
                   <span>{tr("variable")}</span>
                 </label>
@@ -799,13 +802,17 @@ function Index() {
           from { filter: brightness(0.9); }
           to   { filter: brightness(1.3); }
         }
+        @keyframes breathGlow {
+          0%, 100% { box-shadow: 0 0 4px #7c3aed, inset 0 0 2px #7c3aed; }
+          50%      { box-shadow: 0 0 14px #7c3aed, 0 0 22px #7c3aed, inset 0 0 6px #7c3aed; }
+        }
       `}</style>
     </div>
   );
 }
 
 // --------------------------- small UI primitives ---------------------------
-function TermButton({ children, onClick, active, color = "#c9d1d9" }: { children: React.ReactNode; onClick?: () => void; active?: boolean; color?: string }) {
+function TermButton({ children, onClick, active, color = "#c9d1d9", breathing }: { children: React.ReactNode; onClick?: () => void; active?: boolean; color?: string; breathing?: boolean }) {
   return (
     <button
       onClick={onClick}
@@ -815,6 +822,7 @@ function TermButton({ children, onClick, active, color = "#c9d1d9" }: { children
         color,
         textShadow: active ? `0 0 6px ${color}` : "none",
         background: active ? "#0a0e14" : "transparent",
+        animation: breathing ? "breathGlow 1.4s ease-in-out infinite" : undefined,
       }}
     >
       {children}
