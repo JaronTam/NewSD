@@ -1068,7 +1068,20 @@ function Index() {
           0%, 100% { box-shadow: 0 0 4px #7c3aed, inset 0 0 2px #7c3aed; }
           50%      { box-shadow: 0 0 14px #7c3aed, 0 0 22px #7c3aed, inset 0 0 6px #7c3aed; }
         }
+        @keyframes hueShift { 0% { filter: hue-rotate(0deg); } 100% { filter: hue-rotate(360deg); } }
+        @keyframes blink { 0%, 49% { opacity: 1; } 50%, 100% { opacity: 0.25; } }
+        @keyframes menuFlyIn {
+          from { transform: translateX(-8px); opacity: 0; }
+          to   { transform: translateX(0); opacity: 1; }
+        }
+        @keyframes lvlPop {
+          0%   { transform: scale(0.4); opacity: 0; }
+          25%  { transform: scale(1.15); opacity: 1; }
+          70%  { transform: scale(1); opacity: 1; }
+          100% { transform: scale(1.05); opacity: 0; }
+        }
       `}</style>
+      <LvlUpOverlay trigger={lvlTrigger} />
     </div>
   );
 }
