@@ -1008,9 +1008,10 @@ function Index() {
 
       {/* STATUS BAR */}
       <div className="flex items-center gap-4 border-t border-[#1a1f2e] bg-[#0f1419] px-3 py-1 text-[11px] text-[#4a5568]">
-        <span>{tr("simTime")}: <span style={{ color: COLORS.stock }}>{simTime.toFixed(2)}</span></span>
-        <span>{tr("elements")}: <span style={{ color: COLORS.stock }}>{elements.length}</span></span>
-        <span>{tr("fps")}: <span style={{ color: COLORS.spark }}>{fps}</span></span>
+        <span>{tr("simTime")}: <span style={{ color: COLORS.stock, textShadow: `0 0 4px ${COLORS.stock}` }}><ScrambleNumber value={simTime} digits={2} /></span></span>
+        <span>{tr("elements")}: <span style={{ color: COLORS.stock, textShadow: `0 0 4px ${COLORS.stock}` }}><ScrambleNumber value={elements.length} digits={0} /></span></span>
+        <span>{tr("fps")}: <span style={{ color: COLORS.spark, textShadow: `0 0 4px ${COLORS.spark}` }}>{fps}</span></span>
+
         <span>{tr("dimensions")}: <span style={{ color: COLORS.cloud }}>{tr("dimSummary")}</span></span>
         <span className="ml-auto">{tr("online")}: <span style={{ color: COLORS.spark }}>1</span></span>
       </div>
