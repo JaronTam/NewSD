@@ -301,6 +301,7 @@ function Index() {
       next.add(id);
       const toastId = `${id}-${Date.now()}`;
       setToasts((ts) => [...ts, { id: toastId, key: id }]);
+      setLvlTrigger((n) => n + 1);
       const badge = BADGES.find((b) => b.id === id);
       if (badge) {
         // splatter near toast anchor (top-right corner of viewport)
