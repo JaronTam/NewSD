@@ -1083,18 +1083,143 @@ function TermButton({ children, onClick, active, color = "#c9d1d9", breathing }:
 
 function TermMenu({ label, items }: { label: string; items: string[] }) {
   const [open, setOpen] = useState(false);
+  const [hover, setHover] = useState<number>(0);
+  const title = ` [ ${label.toUpperCase()} ] `;
+  const inner = Math.max(title.length, ...items.map((i) => i.length + 4));
+  const topBar = "┌" + "─".repeat(inner) + "┐";
+  const botBar = "└" + "─".repeat(inner) + "┘";
   return (
     <div className="relative">
-      <TermButton onClick={() => setOpen((o) => !o)}>{label}</TermButton>
+      <TermButton onClick={() => setOpen((o) => !o)} active={open}>{label}</TermButton>
       {open && (
-        <div className="absolute left-0 top-full z-40 mt-1 min-w-[120px] rounded border border-[#1a1f2e] bg-[#0f1419] py-1 text-xs" onMouseLeave={() => setOpen(false)}>
-          {items.map((it) => (
-            <div key={it} className="cursor-pointer px-3 py-1 hover:bg-[#1a1f2e] hover:text-[#00ffd5]" onClick={() => setOpen(false)}>
-              {it}
+        <div
+          className="absolute left-0 top-full z-40 mt-1 select-none whitespace-pre text-xs leading-tight"
+          style={{ color: "#00ffd5", textShadow: "0 0 6px #00ffd5", background: "#0a0e14" }}
+          onMouseLeave={() => setOpen(false)}
+        >
+          <div>{"┌" + title + "─".repeat(Math.max(0, inner - title.length)) + "┐"}</div>
+          {items.map((it, i) => (
+            <div
+              key={it}
+              className="cursor-pointer"
+              onMouseEnter={() => setHover(i)}
+              onClick={() => setOpen(false)}
+              style={{
+                color: hover === i ? "#ffd700" : "#c9d1d9",
+                textShadow: hover === i ? "0 0 6px #ffd700" : "none",
+                animation: `menuFlyIn 0.18s ease-out ${i * 40}ms both`,
+              }}
+            >
+              {`│ `}
+              <span style={{ color: "#ff5577", textShadow: "0 0 6px #ff5577", animation: "blink 0.9s steps(2) infinite" }}>
+                {hover === i ? ">" : " "}
+              </span>
+              {` ${it.padEnd(inner - 4, " ")} │`}
             </div>
           ))}
+          <div>{topBar.replace(/./g, (_, idx) => (idx === 0 ? "└" : idx === topBar.length - 1 ? "┘" : "─"))}</div>
+          <div className="sr-only">{botBar}</div>
         </div>
       )}
+    </div>
+  );
+}
+
+// ASCII rainbow button — each border char cycles hue via text-shadow
+function AsciiRainbowButton({ children, onClick, title }: { children: React.ReactNode; onClick?: () => void; title?: string }) {
+  const text = String(children);
+  const inner = text.length + 2;
+  const top = "┌" + "─".repeat(inner) + "┐";
+  const bot = "└" + "─".repeat(inner) + "┘";
+  const mid = `│ ${text} │`;
+  const renderHue = (s: string, base = 0) =>
+    s.split("").map((c, i) => (
+      <span
+        key={i}
+        style={{
+          color: "#fff",
+          textShadow: `0 0 6px hsl(${(i * 30 + base) % 360} 100% 60%), 0 0 12px hsl(${(i * 30 + base + 60) % 360} 100% 55%)`,
+          animation: `hueShift 1.4s linear infinite`,
+          animationDelay: `${(i * 60) % 1400}ms`,
+        }}
+      >
+        {c}
+      </span>
+    ));
+  return (
+    <button
+      onClick={onClick}
+      title={title}
+      className="select-none whitespace-pre text-[11px] leading-[1] cursor-pointer"
+      style={{ fontFamily: '"JetBrains Mono",monospace', background: "transparent", padding: 0 }}
+    >
+      <div>{renderHue(top, 0)}</div>
+      <div>{renderHue(mid, 90)}</div>
+      <div>{renderHue(bot, 180)}</div>
+    </button>
+  );
+}
+
+// ASCII badge with rotating scanner corners
+function AsciiBadge({ icon, color, got, title }: { icon: string; color: string; got: boolean; title: string }) {
+  const [phase, setPhase] = useState(0);
+  useEffect(() => {
+    if (!got) return;
+    const id = setInterval(() => setPhase((p) => (p + 1) % 4), 220);
+    return () => clearInterval(id);
+  }, [got]);
+  const scan = ["/", "─", "\\", "│"][phase];
+  const c = got ? color : "#2a3142";
+  const shadow = got ? `0 0 6px ${color}` : "none";
+  return (
+    <div
+      title={title}
+      className="relative flex aspect-square items-center justify-center text-xl"
+      style={{ color: c, textShadow: shadow, background: got ? "#0a0e14" : "transparent" }}
+    >
+      <span className="absolute left-0 top-0 text-[10px]">{got ? scan : "·"}</span>
+      <span className="absolute right-0 top-0 text-[10px]">{got ? scan : "·"}</span>
+      <span className="absolute left-0 bottom-0 text-[10px]">{got ? scan : "·"}</span>
+      <span className="absolute right-0 bottom-0 text-[10px]">{got ? scan : "·"}</span>
+      <span className="absolute inset-x-0 top-1 text-center text-[8px] opacity-60">╔══╗</span>
+      <span className="absolute inset-x-0 bottom-1 text-center text-[8px] opacity-60">╚══╝</span>
+      {icon}
+    </div>
+  );
+}
+
+// Large ASCII "LVL UP" overlay
+const LVL_UP_ART = [
+  "██╗  ██╗   ██╗   ██╗    ██████╗ ",
+  "██║  ██║   ██║   ██║   ██╔═══██╗",
+  "███████║   ██║   ██║   ██║   ██║",
+  "██╔══██║   ██║   ██║   ██║   ██║",
+  "██║  ██║   ╚██████╔╝   ╚██████╔╝",
+  "╚═╝  ╚═╝    ╚═════╝     ╚═════╝ ",
+];
+function LvlUpOverlay({ trigger }: { trigger: number }) {
+  const [show, setShow] = useState(false);
+  useEffect(() => {
+    if (!trigger) return;
+    setShow(true);
+    const t = setTimeout(() => setShow(false), 1300);
+    return () => clearTimeout(t);
+  }, [trigger]);
+  if (!show) return null;
+  return (
+    <div className="pointer-events-none absolute inset-0 z-50 flex items-center justify-center">
+      <pre
+        className="whitespace-pre text-center leading-none"
+        style={{
+          color: "#ffd700",
+          textShadow: "0 0 10px #ffd700, 0 0 22px #ff5577",
+          animation: "lvlPop 1.3s ease-out forwards, blink 0.3s steps(2) infinite",
+          fontFamily: '"JetBrains Mono",monospace',
+          fontSize: 14,
+        }}
+      >
+        {LVL_UP_ART.join("\n")}
+      </pre>
     </div>
   );
 }
