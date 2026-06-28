@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>PRD Validation: 系统动力学 ASCII 模拟器 (prd-NewSD-2026-06-26)</title>
+<style>
+  :root {
+    --bg: #fafaf9;
+    --surface: #ffffff;
+    --border: #e7e5e4;
+    --text: #1c1917;
+    --muted: #78716c;
+
+    --verdict-strong: #16a34a;
+    --verdict-adequate: #65a30d;
+    --verdict-thin: #d97706;
+    --verdict-broken: #dc2626;
+
+    --sev-low: #64748b;
+    --sev-medium: #ca8a04;
+    --sev-high: #ea580c;
+    --sev-critical: #dc2626;
+
+    --grade-exc: #16a34a;
+    --grade-good: #65a30d;
+    --grade-fair: #d97706;
+    --grade-poor: #dc2626;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    font-size: 15px;
+  }
+  .container { max-width: 960px; margin: 0 auto; padding: 32px 24px 64px; }
+
+  header.report-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 24px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 24px;
+  }
+  .title h1 { margin: 0; font-size: 22px; font-weight: 600; letter-spacing: -0.01em; }
+  .title .subtitle { color: var(--muted); font-size: 13px; margin-top: 4px; font-family: ui-monospace, "SF Mono", Menlo, monospace; }
+  .grade {
+    padding: 10px 18px;
+    border-radius: 8px;
+    font-weight: 600;
+    color: white;
+    font-size: 15px;
+    white-space: nowrap;
+  }
+  .grade-excellent { background: var(--grade-exc); }
+  .grade-good { background: var(--grade-good); }
+  .grade-fair { background: var(--grade-fair); }
+  .grade-poor { background: var(--grade-poor); }
+
+  .synthesis {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--muted);
+    border-radius: 8px;
+    padding: 18px 22px;
+    margin-bottom: 24px;
+    font-size: 15.5px;
+  }
+  .synthesis p { margin: 0 0 10px; }
+  .synthesis p:last-child { margin-bottom: 0; }
+
+  .dimension-summary {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 10px;
+    margin-bottom: 24px;
+  }
+  .dim-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 14px;
+  }
+  .dim-card .dim-name { font-size: 13px; color: var(--muted); margin-bottom: 6px; }
+  .dim-card .dim-verdict { font-size: 14px; font-weight: 600; }
+
+  section.dimension, section.reviewer-section { margin-bottom: 14px; }
+  section.dimension details, section.reviewer-section details {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  section summary {
+    padding: 14px 20px;
+    cursor: pointer;
+    user-select: none;
+    list-style: none;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  section summary::-webkit-details-marker { display: none; }
+  section summary::before {
+    content: "▸";
+    display: inline-block;
+    color: var(--muted);
+    transition: transform 0.15s ease;
+  }
+  section details[open] summary::before { transform: rotate(90deg); }
+  section summary h2 {
+    display: inline;
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+    letter-spacing: -0.005em;
+    flex: 1;
+  }
+  .verdict-pill {
+    font-size: 11px;
+    padding: 3px 10px;
+    border-radius: 999px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: white;
+  }
+  .verdict-strong { background: var(--verdict-strong); }
+  .verdict-adequate { background: var(--verdict-adequate); }
+  .verdict-thin { background: var(--verdict-thin); }
+  .verdict-broken { background: var(--verdict-broken); }
+
+  .dim-body { padding: 4px 20px 18px; }
+  .dim-judgment { color: var(--text); font-size: 14.5px; }
+  .dim-judgment p { margin: 0 0 10px; }
+
+  .findings-list { padding: 0 20px 4px; }
+  article.finding {
+    padding: 14px 0;
+    border-top: 1px solid var(--border);
+  }
+  article.finding:first-child { border-top: none; }
+  article.finding header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 6px;
+  }
+  .badge {
+    font-size: 10.5px;
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    line-height: 1.4;
+  }
+  .badge-sev-low { background: rgba(100, 116, 139, 0.12); color: var(--sev-low); }
+  .badge-sev-medium { background: rgba(202, 138, 4, 0.14); color: var(--sev-medium); }
+  .badge-sev-high { background: rgba(234, 88, 12, 0.14); color: var(--sev-high); }
+  .badge-sev-critical { background: rgba(220, 38, 38, 0.14); color: var(--sev-critical); }
+  .finding-title { margin: 0; font-size: 15px; font-weight: 500; flex: 1; min-width: 200px; }
+  .finding-location { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12.5px; color: var(--muted); }
+  .finding-note, .finding-fix { margin-top: 6px; font-size: 14px; }
+  .finding-fix strong { color: var(--muted); font-weight: 500; }
+  .finding-source { font-size: 11.5px; color: var(--muted); font-family: ui-monospace, "SF Mono", Menlo, monospace; margin-top: 4px; }
+
+  .reviewer-source {
+    font-size: 12px;
+    color: var(--muted);
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  }
+
+  .mechanical {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px 20px;
+    margin-top: 24px;
+    font-size: 14px;
+  }
+  .mechanical h3 { margin: 0 0 10px; font-size: 14px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+  .mechanical ul { margin: 0; padding-left: 20px; }
+  .mechanical li { margin-bottom: 4px; color: var(--text); }
+
+  footer.report-footer {
+    margin-top: 40px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border);
+    font-size: 12px;
+    color: var(--muted);
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  }
+  footer .meta { display: flex; gap: 24px; flex-wrap: wrap; }
+</style>
+</head>
+<body>
+  <div class="container">
+
+    <header class="report-header">
+      <div class="title">
+        <h1>系统动力学 ASCII 模拟器 — Validation Report</h1>
+        <div class="subtitle">prd-NewSD-2026-06-26 · prd.md + addendum.md</div>
+      </div>
+      <div class="grade grade-fair">Fair</div>
+    </header>
+
+    <div class="synthesis">
+      <p>这是一份<strong>质量强、决策诚实</strong>的 PRD:核心决策(C1–C5)明确标注、被否方案留名、四次体量警示如实记录、工程约束精度异常。R0 七维度 verdict 全为 strong/adequate,无 broken/thin。</p>
+      <p>但<strong>风险不在 PRD 质量,而在 MVP 范围本身</strong>:四项重决策(隐式求解器+量纲+结构化 AST CRDT 语义合并+游戏化)叠加,使"轻量教育工具"实质成为"协作版专业 SD 数值平台"。六位 reviewer 在此点上高度收敛:体量警示仅存 addendum,未回灌 PRD 正文,也未设可触发的内置逃生阀。数值/协作/安全各报若干架构阶段规约缺口。</p>
+      <p>关键张力:每一位 reviewer 整体 verdict 均正向(strong / conditional pass / 基本成形 / 合理),无概念性破产判定。经 audit 核校,初版 3 条 critical 因标定冲突全部降级(求解器↔R1 领域专家判 high 且明示非致命;逃生阀↔R5 自身汇总表归 Major;Glossary↔rubric 自身归 mechanical),现 <strong>Critical=0</strong>。遗留为架构阶段可规约的 high/medium。grade 由"任 high"机械得 Fair,不再依赖对 critical 的豁免。</p>
+    </div>
+
+    <div class="dimension-summary">
+      <div class="dim-card"><div class="dim-name">Decision-readiness</div><div class="dim-verdict" style="color: var(--verdict-strong)">strong</div></div>
+      <div class="dim-card"><div class="dim-name">Substance over theater</div><div class="dim-verdict" style="color: var(--verdict-strong)">strong</div></div>
+      <div class="dim-card"><div class="dim-name">Strategic coherence</div><div class="dim-verdict" style="color: var(--verdict-strong)">strong</div></div>
+      <div class="dim-card"><div class="dim-name">Done-ness clarity</div><div class="dim-verdict" style="color: var(--verdict-adequate)">adequate</div></div>
+      <div class="dim-card"><div class="dim-name">Scope honesty</div><div class="dim-verdict" style="color: var(--verdict-strong)">strong</div></div>
+      <div class="dim-card"><div class="dim-name">Downstream usability</div><div class="dim-verdict" style="color: var(--verdict-adequate)">adequate</div></div>
+      <div class="dim-card"><div class="dim-name">Shape fit</div><div class="dim-verdict" style="color: var(--verdict-strong)">strong</div></div>
+    </div>
+
+    <!-- 严重度聚合概览 -->
+    <section class="reviewer-section">
+      <details open>
+        <summary><h2>严重度聚合</h2><span class="reviewer-source">跨 6 reviewer 合并</span></summary>
+        <div class="dim-body">
+          <div class="dim-judgment">
+            <p>核校后:Critical 0 · High 15 · Medium 18 · Low 12(各 reviewer 汇总表相加,含同源重复)。初版 3 条 critical 经 audit 核校降级:求解器约束边界(R0 critical↔R1 high+非致命)→high;逃生阀(R5 正文 critical↔R5 汇总表 Major)→high;Glossary(R0 critical↔rubric 自身归 mechanical)→medium。归一方案:R5 Major→high、Minor→medium、Observation→low;R2 C/H/M/L→critical/high/medium/low。</p>
+          </div>
+        </div>
+      </details>
+    </section>
+
+    <!-- 七维度(rubric R0) -->
+    <section class="dimension">
+      <details>
+        <summary><h2>Decision-readiness</h2><span class="verdict-pill verdict-strong">strong</span></summary>
+        <div class="dim-body"><div class="dim-judgment"><p>C1–C5 显式标注为决策(非"考虑"),被否方案留名且给理由。开放问题 2–4 真开放(下一句无隐藏答案)。addendum §7.3/§8.3 体量警示异常诚实——命名张力、记录用户确认、列出减负杠杆顺序。通过 pushback 测试。</p></div></div>
+        <div class="findings-list">
+          <article class="finding"><header><span class="badge badge-sev-high">high</span><h3 class="finding-title">决策标签缺原开放问题文本</h3><span class="finding-location">§六 [决策（原开放问题1）]</span></header><div class="finding-note">开放问题 1 被决议吞并,读者无法追溯原问题。</div><div class="finding-fix"><strong>Fix:</strong> 补脚注"原开放问题 1: 仿真运行时态是否跨会话持久化?"</div><div class="finding-source">R0</div></article>
+        </div>
+      </details>
+    </section>
+
+    <section class="dimension">
+      <details>
+        <summary><h2>Substance over theater</h2><span class="verdict-pill verdict-strong">strong</span></summary>
+        <div class="dim-body"><div class="dim-judgment"><p>无 persona theater(四 persona,两个标 MVP-primary,驱动决策)。无 innovation/vision theater(ASCII 美学、structure-as-content 由工程约束背书)。NFR theater 是最弱处(见下)。</p></div></div>
+        <div class="findings-list">
+          <article class="finding"><header><span class="badge badge-sev-medium">medium</span><h3 class="finding-title">§4.2 可靠性 NFR 样板化</h3><span class="finding-location">§4.2</span></header><div class="finding-note">99.9%(~8.7h/年)对 10 人教育 MVP 过紧;"无数据丢失"对 SQLite 单节点无复制不现实。</div><div class="finding-fix"><strong>Fix:</strong> 改 99%(3.65 天)或"best-effort, no SLA for MVP"。</div><div class="finding-source">R0</div></article>
+        </div>
+      </details>
+    </section>
+
+    <section class="dimension">
+      <details>
+        <summary><h2>Strategic coherence</h2><span class="verdict-pill verdict-strong">strong</span></summary>
+        <div class="dim-body"><div class="dim-judgment"><p>thesis 清晰(轻量教育 + ASCII 美学 + 可选游戏化),feature 跟随 thesis。反指标(§1.4)具体。张力被标注未隐藏。但 thesis-体量张力仅存 addendum,主 PRD §5 未提减负杠杆顺序。</p></div></div>
+        <div class="findings-list">
+          <article class="finding"><header><span class="badge badge-sev-medium">medium</span><h3 class="finding-title">减负杠杆顺序未入主 PRD §5</h3><span class="finding-location">§5 vs addendum §8.3</span></header><div class="finding-note">仅扫主文档者不知 MVP 有已知体量问题与降级顺序。</div><div class="finding-fix"><strong>Fix:</strong> §5 加一行"体量警示:四项重决策叠加使 MVP 偏重,减负杠杆顺序见 addendum §8.3。"</div><div class="finding-source">R0 (R5 同源 critical)</div></article>
+          <article class="finding"><header><span class="badge badge-sev-low">low</span><h3 class="finding-title">成功指标全技术性,无产品级指标</h3><span class="finding-location">§1.4</span></header><div class="finding-note">thesis 是教育的,但指标是工程的(FPS/延迟/求解速度)。</div><div class="finding-fix"><strong>Fix:</strong> 加一条产品级 SM,如"首次建模完成率 ≥ 80%"。</div><div class="finding-source">R0</div></article>
+        </div>
+      </details>
+    </section>
+
+    <section class="dimension">
+      <details open>
+        <summary><h2>Done-ness clarity</h2><span class="verdict-pill verdict-adequate">adequate</span></summary>
+        <div class="dim-body"><div class="dim-judgment"><p>多数 FR 有可测后果,渲染规格/CRDT schema/剪贴板协议精度异常。但隐式求解器非负钳制的工程交接规格不足——关键架构决策边界未定(见 critical)。</p></div></div>
+        <div class="findings-list">
+          <article class="finding"><header><span class="badge badge-sev-high">high</span><h3 class="finding-title">求解器非负约束边界未定</h3><span class="finding-location">FR-SIM-1 / FR-SIM-4</span></header><div class="finding-note">带约束非线性隐式求解器:非负钳制是(a)线搜索期施加约束(活动集)还是(b)牛顿步后投影?R1 补充:约束激活/释放改变雅可比结构,更新策略未覆盖,边界可能不收敛。核校:R0 初判 critical,R1 领域专家判 high 且明示"非 PRD 致命缺陷,属架构规约",取 high。</div><div class="finding-fix"><strong>Fix:</strong> 写明架构决策边界 + 约束雅可比更新策略 + 防 Chattering(hysteresis)。</div><div class="finding-source">R0 → high(核校)· R1 high</div></article>
+          <article class="finding"><header><span class="badge badge-sev-high">high</span><h3 class="finding-title">FR-SIM-6 熔断阈值无调参引导</h3><span class="finding-location">FR-SIM-6</span></header><div class="finding-note">1e6×max(初始绝对值)标注可调但无引导,不懂 SD 的用户不知如何选值。</div><div class="finding-fix"><strong>Fix:</strong> 给默认值+理由(1e6 覆盖多数教育模型;指数增长需上调)。</div><div class="finding-source">R0</div></article>
+          <article class="finding"><header><span class="badge badge-sev-medium">medium</span><h3 class="finding-title">FR-GAME-2 徽章缺验收条件</h3><span class="finding-location">FR-GAME-2</span></header><div class="finding-note">列触发器但无显示/消失/收藏的验收条件。</div><div class="finding-fix"><strong>Fix:</strong> 补 2–3 条验收条件。</div><div class="finding-source">R0</div></article>
+        </div>
+      </details>
+    </section>
+
+    <section class="dimension">
+      <details>
+        <summary><h2>Scope honesty</h2><span class="verdict-pill verdict-strong">strong</span></summary>
+        <div class="dim-body"><div class="dim-judgment"><p>Non-goals 显式(§5.2 十项清晰)。假设标 [假设 N] 并索引于 §六。体量警示是最强信号——命名张力、命名降级杠杆、记录用户确认。开放问题真开放。无静默 de-scope。但逃生阀未入正文(见 critical)。</p></div></div>
+      </details>
+    </section>
+
+    <section class="dimension">
+      <details open>
+        <summary><h2>Downstream usability</h2><span class="verdict-pill verdict-adequate">adequate</span></summary>
+        <div class="dim-body"><div class="dim-judgment"><p>FR/UJ/SM ID 连续唯一,交叉引用可解析。addendum 与主文档分离得当(what vs how/future)。UJ 各有具名主角。但无 Glossary(见 critical),§六 假设/开放问题/决策混排无视觉分隔。</p></div></div>
+        <div class="findings-list">
+          <article class="finding"><header><span class="badge badge-sev-medium">medium</span><h3 class="finding-title">无 Glossary 小节</h3><span class="finding-location">全文</span></header><div class="finding-note">七大数学约束+域名词散落全文,下游抽取单条 FR 时无法便捷获取全部定义。核校:R0 初判 critical,但 rubric 自身将 Glossary 列入 "Mechanical notes" 并明示"don't drive the verdict",取 medium。</div><div class="finding-fix"><strong>Fix:</strong> §六前后加 Glossary,汇总数学约束 + 关键域名词(SFD/CLD/CRDT/R-tree/VRAM 双缓冲)。</div><div class="finding-source">R0 → medium(核校)</div></article>
+          <article class="finding"><header><span class="badge badge-sev-medium">medium</span><h3 class="finding-title">§六 三类标记混排无分隔</h3><span class="finding-location">§六</span></header><div class="finding-note">[假设]/[开放问题]/[决策] 混排,下游抽取开放项须细扫。</div><div class="finding-fix"><strong>Fix:</strong> 用表格 | Type | ID | Description | Status | 或加分节标题。</div><div class="finding-source">R0</div></article>
+        </div>
+      </details>
+    </section>
+
+    <section class="dimension">
+      <details>
+        <summary><h2>Shape fit</h2><span class="verdict-pill verdict-strong">strong</span></summary>
+        <div class="dim-body"><div class="dim-judgment"><p>消费/教育产品 + 有意义 UX → UJ 具名主角承重且齐备。BMAD 链式 PRD 形状(PRD+addendum)适配范围。UJ 密度恰当,addendum 卸载工程细节得当。无过度形式化。</p></div></div>
+      </details>
+    </section>
+
+    <!-- 额外 reviewer -->
+    <section class="reviewer-section">
+      <details>
+        <summary><h2>R1 数值子系统</h2><span class="reviewer-source">review-numerical.md</span></summary>
+        <div class="dim-body"><div class="dim-judgment"><p>conditional pass。数值架构方向正确,2 high-risk(BDF 起步、非负钳制雅可比更新)+ 3 medium-risk 需架构规约。FR-SIM-3 单收敛值重定义正确消解守恒冲突,FR-SIM-2 剪边语义自洽,性能 0.3 GFLOPS 估算合理。addendum §2 残留两处 RK4 过时措辞。</p></div></div>
+        <div class="findings-list">
+          <article class="finding"><header><span class="badge badge-sev-high">high</span><h3 class="finding-title">BDF 多步起步策略未说明</h3><span class="finding-location">FR-SIM-1</span></header><div class="finding-note">BDF-2+ 需历史步、无法自起步。未说明起步(后向欧拉→升阶)、初始猜测、步长控制(固定/自适应)。</div><div class="finding-fix"><strong>Fix:</strong> 补 BDF 阶数范围+起步策略+初始猜测+步长控制。</div><div class="finding-source">R1</div></article>
+          <article class="finding"><header><span class="badge badge-sev-medium">medium</span><h3 class="finding-title">ε 防除零未定义 + 1e3 误熔断风险</h3><span class="finding-location">FR-SIM-6</span></header><div class="finding-note">ε 未定义具体值;1e3 阈值对刚性系统初始瞬态/指数衰减近零有误熔断风险。</div><div class="finding-fix"><strong>Fix:</strong> 定义 ε=1e-15×max(初始绝对值);区分"溢出"与"不稳定"。</div><div class="finding-source">R1</div></article>
+          <article class="finding"><header><span class="badge badge-sev-medium">medium</span><h3 class="finding-title">DELAY 阶数上限未定义</h3><span class="finding-location">FR-SIM-5</span></header><div class="finding-note">DELAYn 展开 n 个串联隐式存量,n 无约束可致方程规模爆炸(LU O((N+Σn)³))。</div><div class="finding-fix"><strong>Fix:</strong> 规定 DELAY 阶数上限(如 ≤100)或总幽灵存量上限。</div><div class="finding-source">R1</div></article>
+          <article class="finding"><header><span class="badge badge-sev-medium">medium</span><h3 class="finding-title">待定节点对 autodiff 退化策略未讨论</h3><span class="finding-location">FR-SIM-7 / FR-COLLAB-6</span></header><div class="finding-note">CRDT 并发编辑产生的待定/过渡 AST 对 autodiff 生成雅可比的稳定性构成风险,未讨论退化策略。</div><div class="finding-fix"><strong>Fix:</strong> 补 autodiff 对 AST 完整性前置条件 + 待定节点回退策略。</div><div class="finding-source">R1 (R2 同源)</div></article>
+        </div>
+      </details>
+    </section>
+
+    <section class="reviewer-section">
+      <details>
+        <summary><h2>R2 协作 CRDT</h2><span class="reviewer-source">review-collab.md</span></summary>
+        <div class="dim-body"><div class="dim-judgment"><p>conditional pass。核心方向正确(Y.Map 嵌套 AST、整步收敛广播、快照续跑),但结构性冲突、待定节点表示、快照-CRDT 时序对齐、广播退化、降级成本评估五处设计缺口需架构规约。High 4 / Medium 3 / Low 2。</p></div></div>
+        <div class="findings-list">
+          <article class="finding"><header><span class="badge badge-sev-high">high</span><h3 class="finding-title">AST 结构性冲突未讨论</h3><span class="finding-location">FR-COLLAB-6</span></header><div class="finding-note">括号插入改变结合性/运算符替换/子树删除触发结构性冲突,合并结果可能合法 AST 但语义错误。AST→Y.Map 映射 schema 也未定义。"始终可解析"过乐观。</div><div class="finding-fix"><strong>Fix:</strong> 补 AST→Y.Map schema + 结构性冲突检测 + 冲突回退行为。</div><div class="finding-source">R2</div></article>
+          <article class="finding"><header><span class="badge badge-sev-high">high</span><h3 class="finding-title">待定节点 CRDT 表示/合并未定义</h3><span class="finding-location">FR-COLLAB-6</span></header><div class="finding-note">待定节点在 Y.Map 中数据结构、合并规则、待定→完整转换触发条件均未定义,合并行为不可预测。</div><div class="finding-fix"><strong>Fix:</strong> 定义待定节点 schema + 合并规则 + 转换触发条件。</div><div class="finding-source">R2</div></article>
+          <article class="finding"><header><span class="badge badge-sev-high">high</span><h3 class="finding-title">快照与 CRDT 文档时序对齐缺口</h3><span class="finding-location">FR-COLLAB-3 / FR-COLLAB-5</span></header><div class="finding-note">快照采集时刻与 CRDT 同步时刻可能错位,新房主用旧模型仿真结果+新初始值续跑,可能跳跃/不连续,违反"无 t=0 回滚"。</div><div class="finding-fix"><strong>Fix:</strong> 快照附 CRDT 版本标识,新房主校验对齐,不对齐则增量追赶。</div><div class="finding-source">R2</div></article>
+          <article class="finding"><header><span class="badge badge-sev-high">high</span><h3 class="finding-title">⑤ 减负杠杆 C→A 回滚成本被低估</h3><span class="finding-location">addendum §8.3</span></header><div class="finding-note">AST 感知编辑器与结构化 CRDT 紧耦合,回退非"改类型";快照需兼容两种 formula 格式;协作冲突退化为文本级提示。</div><div class="finding-fix"><strong>Fix:</strong> 架构阶段定义"降级接口"(⑤→A 适配器层),预留数据兼容+编辑器抽象+校验管道抽象。</div><div class="finding-source">R2</div></article>
+        </div>
+      </details>
+    </section>
+
+    <section class="reviewer-section">
+      <details>
+        <summary><h2>R3 安全</h2><span class="reviewer-source">review-security.md</span></summary>
+        <div class="dim-body"><div class="dim-judgment"><p>安全框架基本成形。Origin 校验定位诚实、剪贴板边界清醒(CRC32 仅完整性、不 eval)、NaN 值域保护到位。但匿名无认证场景 CRDT ops 防御空白、Wasm 求解器缺时间维/迭代次数维熔断、SQLite 未显式要求参数化查询。所有缺口可架构阶段补,不阻断进架构。High 1 / Medium 3 / Low 2。</p></div></div>
+        <div class="findings-list">
+          <article class="finding"><header><span class="badge badge-sev-high">high</span><h3 class="finding-title">Wasm 求解器缺时间维/迭代次数维熔断</h3><span class="finding-location">FR-SIM-6</span></header><div class="finding-note">仅值域熔断。恶意/病态公式可致牛顿迭代无限不收敛(不产生 NaN)、单步 wall-clock 无限延长。无 maxIterations、无 AST 复杂度预算、无 Wasm 内存硬限制。</div><div class="finding-fix"><strong>Fix:</strong> FR-SIM-6 扩展单步 wall-clock 超时 + 牛顿 maxIterations + AST 节点上限 + Wasm.Memory 上限,ASCII 通知反馈。</div><div class="finding-source">R3</div></article>
+          <article class="finding"><header><span class="badge badge-sev-medium">medium</span><h3 class="finding-title">匿名协作 CRDT ops/stockId 伪造防御空白</h3><span class="finding-location">FR-COLLAB-1/4</span></header><div class="finding-note">无认证+服务端纯中继+Yjs 假设客户端合作。恶意客户端可插入非法/巨量元素、删全房、伪造 stockId 污染 AST、Awareness 耗尽内存。无 op 级速率限制、无 stockId 存在性验证。</div><div class="finding-fix"><strong>Fix:</strong> CRDT 操作准入校验 + per-client op/s 配额 + Awareness 限制 + 房间容量硬限制 + stockId 存在性验证。</div><div class="finding-source">R3</div></article>
+          <article class="finding"><header><span class="badge badge-sev-medium">medium</span><h3 class="finding-title">SQLite 未显式要求参数化查询</h3><span class="finding-location">FR-COLLAB-1 / §7</span></header><div class="finding-note">操作日志追加式但未要求参数化查询,拼接路径即注入点;快照反序列化校验缺失。</div><div class="finding-fix"><strong>Fix:</strong> 显式要求参数化查询 + 快照反序列化完整性校验 + 大操作分片/大小限制。</div><div class="finding-source">R3</div></article>
+        </div>
+      </details>
+    </section>
+
+    <section class="reviewer-section">
+      <details open>
+        <summary><h2>R4 教育定位 / 体量张力</h2><span class="reviewer-source">review-fit.md</span></summary>
+        <div class="dim-body"><div class="dim-judgment"><p>PRD 定位(教育/轻量)与 MVP 实际含项(=协作版专业 SD 数值平台体量)存在系统性张力,addendum 诚实记录但 PRD 正文定位段未据此调整措辞。High 3 / Medium 2 / Low 1。</p></div></div>
+        <div class="findings-list">
+          <article class="finding"><header><span class="badge badge-sev-high">high</span><h3 class="finding-title">定位段以"教育"修辞平滑专业数值平台事实</h3><span class="finding-location">§1.1–§1.3</span></header><div class="finding-note">§1.2 批评现有工具"过于复杂"隐含更轻量承诺,但 MVP 含 BDF+牛顿+LU+autodiff+结构化 AST CRDT。定位段未做任何反映体量张力的措辞调整。</div><div class="finding-fix"><strong>Fix:</strong> §1.1 坦陈体量,§1.3 增加定位张力声明(教育用户用默认简化界面,高级用户解锁隐式求解器)。</div><div class="finding-source">R4</div></article>
+          <article class="finding"><header><span class="badge badge-sev-high">high</span><h3 class="finding-title">教育用户 vs 隐式求解器能力错配未被命名</h3><span class="finding-location">§1.3</span></header><div class="finding-note">典型教育用户不需要也难理解隐式 BDF/牛顿/LU/autodiff/量纲 AST;数值子系统面向需刚性求解的高级建模者。张力未被命名。</div><div class="finding-fix"><strong>Fix:</strong> 增加用户分层说明 / 用户旅程(隐式求解器作透明底层,量纲作可忽略软警告)。</div><div class="finding-source">R4</div></article>
+          <article class="finding"><header><span class="badge badge-sev-high">high</span><h3 class="finding-title">sparkline 归一化抹除单位信息</h3><span class="finding-location">FR-SIM-VIZ-1</span></header><div class="finding-note">大量工程投入量纲系统,但 MVP 唯一结果呈现 ASCII sparkline 将数值归一化到 8 档字符,抹除绝对数值与单位。教育核心目标"看到人口(人)增长"无法达成。</div><div class="finding-fix"><strong>Fix:</strong> 存量方框内同步显示当前数值+单位(不归一化),或状态栏增量纲校验概要,或加极简数值面板。</div><div class="finding-source">R4</div></article>
+          <article class="finding"><header><span class="badge badge-sev-medium">medium</span><h3 class="finding-title">游戏化徽章与专业数值子系统定位割裂</h3><span class="finding-location">FR-GAME-2 / §3.8</span></header><div class="finding-note">BDF 求解器工具同时发"首个存量"徽章,用户成熟度错配未命名。总开关可关但无法解决定位二元性。</div><div class="finding-fix"><strong>Fix:</strong> 说明游戏化面向入门、高级数值面向专业,通过 UI 分层/默认配置隔离。</div><div class="finding-source">R4</div></article>
+        </div>
+      </details>
+    </section>
+
+    <section class="reviewer-section">
+      <details>
+        <summary><h2>R5 范围 / 范围蔓延</h2><span class="reviewer-source">review-scope.md</span></summary>
+        <div class="dim-body"><div class="dim-judgment"><p>范围定义基本合理,5.1/5.2 互补无重叠,开放问题全真开放,C3/C4 后续边界清晰无回流。但 2 处重大遗漏(逃生阀未入正文、§3.2 触发条件不可量化)+ 1 处可量化性缺陷。Critical 1(逃生阀)/ Major 2 / Minor 2 / Observation 2。</p></div></div>
+        <div class="findings-list">
+          <article class="finding"><header><span class="badge badge-sev-high">high</span><h3 class="finding-title">MVP 体量逃生阀未入 PRD 正文 5.x</h3><span class="finding-location">§5.1 vs addendum §7.3/§8.3</span></header><div class="finding-note">四次体量警示+减负杠杆优先级(⑤>③>①)仅藏 addendum,PRD 主文档 5.x 完全未提。仅读 PRD 者无从知晓超载风险与降级顺序,架构超载时无 PRD 级授权回调。核校:R5 正文核查点三标 critical,但 R5 §7 汇总表记 Critical=0/该条归 Major——reviewer 内部矛盾,取汇总表 Major→high。</div><div class="finding-fix"><strong>Fix:</strong> 在 5.1 末尾插入显式逃生阀段落(草案见 review-scope §3)。</div><div class="finding-source">R5 → high(核校)· R0 thesis 同源</div></article>
+          <article class="finding"><header><span class="badge badge-sev-high">high</span><h3 class="finding-title">§3.2 路线图触发条件不可量化</h3><span class="finding-location">addendum §3.2</span></header><div class="finding-note">PG("规模增长")/Redis("多节点")/多节点网关("单节点上限")循环定义或未定义,架构阶段无法做客观迁移决策。</div><div class="finding-fix"><strong>Fix:</strong> 每个触发条件补可观测阈值(SQLite 写延迟>200ms、部署≥2 实例、单节点 WS>500)或标注待校准。</div><div class="finding-source">R5</div></article>
+          <article class="finding"><header><span class="badge badge-sev-high">high</span><h3 class="finding-title">隐式求解器体量未在 5.1 显式标注</h3><span class="finding-location">§5.1</span></header><div class="finding-note">5.1 列隐式求解器但无体量警示标记,决策惯性嫌疑高("全进"本身是否应为 MVP 未被 challenge)。</div><div class="finding-fix"><strong>Fix:</strong> 5.1 为隐式求解器+语义合并标注"含项但体量警示/可降级"。</div><div class="finding-source">R5</div></article>
+        </div>
+      </details>
+    </section>
+
+    <!-- 跨 reviewer 收敛根因 -->
+    <section class="reviewer-section">
+      <details open>
+        <summary><h2>跨 reviewer 收敛根因</h2><span class="reviewer-source">synthesis</span></summary>
+        <div class="dim-body">
+          <div class="dim-judgment">
+            <p><strong>① 体量/定位张力</strong>(R0+R4+R5+R2):逃生阀入正文、定位段诚实化、降级成本真实化。最高杠杆——解决它顺带覆盖多条 high/medium。</p>
+            <p><strong>② 隐式求解器架构规约</strong>(R0+R1):约束边界、BDF 起步、雅可比更新、ε/阈值、DELAY 上限、AST 完整性。建议架构阶段产出"求解器专项规约"统一收口。</p>
+            <p><strong>③ 协作边界行为</strong>(R2):结构性冲突、待定节点、快照时序、广播退化、迁移状态机。建议产出"协作冲突与迁移规约"。</p>
+            <p><strong>④ 资源耗尽/匿名防御</strong>(R3):Wasm 时间维熔断、CRDT op 准入、SQLite 参数化。可架构阶段补,不阻断进架构。</p>
+            <p><strong>⑤ 教育呈现</strong>(R4):sparkline 单位抹除——低成本修复但直击教育核心目标,建议提优先级。</p>
+          </div>
+        </div>
+      </details>
+    </section>
+
+    <div class="mechanical">
+      <h3>Grade 推理</h3>
+      <ul>
+        <li>规则:Excellent=全 strong/adequate 无 high/critical · Good=≤1 thin 无 critical · Fair=多 thin 或任 high · Poor=任 broken 或任 critical。</li>
+        <li>broken/thin:无(R0 七维度全 strong/adequate)。critical:0(核校后,初版 3 条因标定冲突降级)。high:15(>0)。</li>
+        <li>由"任 high"机械推出 <strong>Fair</strong>。无需对 critical 作任何豁免——critical 已为 0。未达 Excellent 因有 high;未达 Poor 因无 critical/broken。判定自洽可复现。</li>
+        <li>与初版差异:初版误判 3 条 critical 后以"规格完整性缺口非概念性破产"为由给 Fair,触发 audit 的 Type_B 概念滑坡(计数用 critical 义、定级豁免 critical 义)。本次将三条按各自标定冲突降级,Critical 归零,grade 由"任 high"机械成立。</li>
+      </ul>
+    </div>
+
+    <footer class="report-footer">
+      <div class="meta">
+        <span>Rubric: .claude/skills/bmad-prd/assets/prd-validation-checklist.md</span>
+        <span>Generated: 2026-06-27</span>
+        <span>Reviews: rubric · numerical · collab · security · fit · scope</span>
+      </div>
+    </footer>
+  </div>
+</body>
+</html>
