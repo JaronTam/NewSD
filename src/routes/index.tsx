@@ -679,9 +679,11 @@ function Index() {
         setFlowFromId(null);
         setTool("select");
         unlockBadge("first_flow");
+        if (soundOnRef.current) blip("F", 0.05, 0.09);
       }
       return;
     }
+
 
     // select / move
     const hit = hitTest(elementsRef.current, w.x, w.y);
