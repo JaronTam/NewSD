@@ -253,7 +253,45 @@ function Index() {
   panRef.current = { x: panX, y: panY };
   zoomRef.current = zoom;
 
+  // --- particles (toast splatter) ---
+  type Particle = { id: string; ch: string; x: number; y: number; vx: number; vy: number; born: number; color: string };
+  const [particles, setParticles] = useState<Particle[]>([]);
+  const spawnSplatter = useCallback((text: string, anchorX: number, anchorY: number, color: string) => {
+    const pieces: Particle[] = [];
+    const chars = text.replace(/\s+/g, "").slice(0, 16).split("");
+    chars.forEach((c, i) => {
+      const frags = shardsFor(c);
+      frags.forEach((ch, j) => {
+        pieces.push({
+          id: `${Date.now()}-${i}-${j}-${Math.random()}`,
+          ch,
+          x: anchorX + (Math.random() - 0.5) * 60,
+          y: anchorY + (Math.random() - 0.5) * 20,
+          vx: (Math.random() - 0.5) * 240,
+          vy: -120 - Math.random() * 140,
+          born: performance.now(),
+          color,
+        });
+      });
+    });
+    setParticles((p) => [...p, ...pieces]);
+  }, []);
+
+  // particle decay loop
+  useEffect(() => {
+    let raf = 0;
+    const tick = () => {
+      const now = performance.now();
+      setParticles((ps) => ps.filter((p) => now - p.born < 900));
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, []);
+
   // --- badge logic ---
+  const soundOnRef = useRef(soundOn);
+  soundOnRef.current = soundOn;
   const unlockBadge = useCallback((id: string) => {
     if (!gameOn) return;
     setUnlocked((prev) => {
@@ -262,12 +300,24 @@ function Index() {
       next.add(id);
       const toastId = `${id}-${Date.now()}`;
       setToasts((ts) => [...ts, { id: toastId, key: id }]);
+      const badge = BADGES.find((b) => b.id === id);
+      if (badge) {
+        // splatter near toast anchor (top-right corner of viewport)
+        const aX = window.innerWidth - 160;
+        const aY = 60 + Math.random() * 20;
+        spawnSplatter("ACHIEVEMENT UNLOCKED", aX, aY, badge.color);
+        if (soundOnRef.current) {
+          blip(880, 0.05, 0.08);
+          setTimeout(() => blip(1320, 0.04, 0.1), 90);
+        }
+      }
       setTimeout(() => {
         setToasts((ts) => ts.filter((t) => t.id !== toastId));
       }, 2800);
       return next;
     });
-  }, [gameOn]);
+  }, [gameOn, spawnSplatter]);
+
 
   // First stock badge if there's any stock at start? Skip — only trigger on user action.
 
