@@ -810,9 +810,11 @@ function Index() {
         <div className="mx-2 h-4 w-px bg-[#1a1f2e]" />
         <TermButton onClick={handleReset} color={COLORS.text}>⏹ {tr("reset")}</TermButton>
         <TermButton onClick={handleStep} color={COLORS.text}>⏭ {tr("step")}</TermButton>
-        <TermButton onClick={handlePlay} color={running ? COLORS.flow : COLORS.stock}>
-          {running ? `⏸ ${tr("pause")}` : `▶ ${tr("play")}`}
-        </TermButton>
+        {running ? (
+          <AsciiRainbowButton onClick={handlePlay} title={tr("pause")}>{`⏸ ${tr("pause")}`}</AsciiRainbowButton>
+        ) : (
+          <TermButton onClick={handlePlay} color={COLORS.stock}>{`▶ ${tr("play")}`}</TermButton>
+        )}
         <div className="mx-2 h-4 w-px bg-[#1a1f2e]" />
         <span className="text-[#4a5568]">{tr("dt")}:</span>
         {[0.01, 0.1, 0.5, 1.0].map((d) => (
