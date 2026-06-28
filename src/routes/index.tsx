@@ -1234,17 +1234,75 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 }
 
 function TermInput({ value, onChange, error }: { value: string; onChange: (v: string) => void; error?: boolean }) {
+  type Spark = { id: number; ch: string; x: number; y: number; vy: number; born: number; up: boolean };
+  const [sparks, setSparks] = useState<Spark[]>([]);
+  const sparkId = useRef(0);
+  const prev = useRef(value);
+  const emit = (up: boolean) => {
+    const arr: Spark[] = [];
+    const chars = up ? ["^", "*", "/", "|", "⚡"] : ["v", "*", "\\", "|", "."];
+    for (let i = 0; i < 6; i++) {
+      arr.push({
+        id: ++sparkId.current,
+        ch: chars[Math.floor(Math.random() * chars.length)],
+        x: 20 + Math.random() * 60,
+        y: 0,
+        vy: (up ? -1 : 1) * (20 + Math.random() * 30),
+        born: performance.now(),
+        up,
+      });
+    }
+    setSparks((s) => [...s, ...arr]);
+    setTimeout(() => {
+      const cutoff = performance.now() - 320;
+      setSparks((s) => s.filter((p) => p.born > cutoff));
+    }, 400);
+  };
   return (
-    <input
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      className="w-full rounded border bg-[#0a0e14] px-2 py-1 text-xs outline-none focus:border-[#00ffd5]"
-      style={{
-        borderColor: error ? "#ff4444" : "#1a1f2e",
-        color: error ? "#ff4444" : "#c9d1d9",
-        fontFamily: '"JetBrains Mono","Courier New",monospace',
-      }}
-    />
+    <div className="relative">
+      <input
+        value={value}
+        onChange={(e) => {
+          const v = e.target.value;
+          const pn = parseFloat(prev.current);
+          const nn = parseFloat(v);
+          if (Number.isFinite(pn) && Number.isFinite(nn) && pn !== nn) emit(nn > pn);
+          prev.current = v;
+          onChange(v);
+        }}
+        className="w-full rounded border bg-[#0a0e14] px-2 py-1 text-xs outline-none focus:border-[#00ffd5]"
+        style={{
+          borderColor: error ? "#ff4444" : "#1a1f2e",
+          color: error ? "#ff4444" : "#c9d1d9",
+          fontFamily: '"JetBrains Mono","Courier New",monospace',
+        }}
+      />
+      <div className="pointer-events-none absolute inset-0 overflow-visible">
+        {sparks.map((p) => {
+          const age = (performance.now() - p.born) / 320;
+          const ty = p.vy * age * 1.4;
+          const op = Math.max(0, 1 - age);
+          return (
+            <span
+              key={p.id}
+              style={{
+                position: "absolute",
+                left: p.x,
+                top: 8,
+                transform: `translateY(${ty}px)`,
+                color: p.up ? "#39ff14" : "#ff5577",
+                textShadow: `0 0 6px ${p.up ? "#39ff14" : "#ff5577"}`,
+                opacity: op,
+                fontSize: 11,
+                fontWeight: 700,
+              }}
+            >
+              {p.ch}
+            </span>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
