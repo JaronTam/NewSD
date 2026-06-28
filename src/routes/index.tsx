@@ -224,6 +224,12 @@ function Index() {
   // settings
   const [gameOn, setGameOn] = useState(true);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [flowSpeed, setFlowSpeed] = useState(6); // chars/sec along flow line
+  const [flowSpacing, setFlowSpacing] = useState(3); // chars between > markers
+  const [soundOn, setSoundOn] = useState(false);
+  const hoverIdRef = useRef<string | null>(null);
+  const [, forceTick] = useState(0); // for hover-change repaints if needed
+
 
   // badges
   const [unlocked, setUnlocked] = useState<Set<string>>(new Set());
