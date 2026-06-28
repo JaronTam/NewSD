@@ -1108,18 +1108,38 @@ function TermButton({ children, onClick, active, color = "#c9d1d9", breathing }:
 function TermMenu({ label, items }: { label: string; items: string[] }) {
   const [open, setOpen] = useState(false);
   const [hover, setHover] = useState<number>(0);
+  const idRef = useRef(Math.random().toString(36).slice(2));
   const title = ` [ ${label.toUpperCase()} ] `;
   const inner = Math.max(title.length, ...items.map((i) => i.length + 4));
-  const topBar = "┌" + "─".repeat(inner) + "┐";
-  const botBar = "└" + "─".repeat(inner) + "┘";
+  useEffect(() => {
+    const onOpen = (e: Event) => {
+      const ce = e as CustomEvent<string>;
+      if (ce.detail !== idRef.current) setOpen(false);
+    };
+    const onDoc = (e: MouseEvent) => {
+      if (!(e.target as HTMLElement)?.closest?.("[data-termmenu]")) setOpen(false);
+    };
+    window.addEventListener("termmenu:open", onOpen);
+    document.addEventListener("mousedown", onDoc);
+    return () => {
+      window.removeEventListener("termmenu:open", onOpen);
+      document.removeEventListener("mousedown", onDoc);
+    };
+  }, []);
+  const toggle = () => {
+    setOpen((o) => {
+      const next = !o;
+      if (next) window.dispatchEvent(new CustomEvent("termmenu:open", { detail: idRef.current }));
+      return next;
+    });
+  };
   return (
-    <div className="relative">
-      <TermButton onClick={() => setOpen((o) => !o)} active={open}>{label}</TermButton>
+    <div className="relative" data-termmenu>
+      <TermButton onClick={toggle} active={open}>{label}</TermButton>
       {open && (
         <div
           className="absolute left-0 top-full z-40 mt-1 select-none whitespace-pre text-xs leading-tight"
           style={{ color: "#00ffd5", textShadow: "0 0 6px #00ffd5", background: "#0a0e14" }}
-          onMouseLeave={() => setOpen(false)}
         >
           <div>{"┌" + title + "─".repeat(Math.max(0, inner - title.length)) + "┐"}</div>
           {items.map((it, i) => (
@@ -1141,8 +1161,7 @@ function TermMenu({ label, items }: { label: string; items: string[] }) {
               {` ${it.padEnd(inner - 4, " ")} │`}
             </div>
           ))}
-          <div>{topBar.replace(/./g, (_, idx) => (idx === 0 ? "└" : idx === topBar.length - 1 ? "┘" : "─"))}</div>
-          <div className="sr-only">{botBar}</div>
+          <div>{"└" + "─".repeat(inner) + "┘"}</div>
         </div>
       )}
     </div>
@@ -1195,19 +1214,25 @@ function AsciiBadge({ icon, color, got, title }: { icon: string; color: string; 
   const scan = ["/", "─", "\\", "│"][phase];
   const c = got ? color : "#2a3142";
   const shadow = got ? `0 0 6px ${color}` : "none";
+  const corner = got ? scan : "·";
   return (
     <div
       title={title}
-      className="relative flex aspect-square items-center justify-center text-xl"
-      style={{ color: c, textShadow: shadow, background: got ? "#0a0e14" : "transparent" }}
+      className="relative flex aspect-square items-center justify-center"
+      style={{
+        color: c,
+        textShadow: shadow,
+        background: got ? "#0a0e14" : "transparent",
+        border: `1px solid ${got ? color : "#1a1f2e"}`,
+        boxShadow: got ? `inset 0 0 8px ${color}33` : "none",
+        minHeight: 32,
+      }}
     >
-      <span className="absolute left-0 top-0 text-[10px]">{got ? scan : "·"}</span>
-      <span className="absolute right-0 top-0 text-[10px]">{got ? scan : "·"}</span>
-      <span className="absolute left-0 bottom-0 text-[10px]">{got ? scan : "·"}</span>
-      <span className="absolute right-0 bottom-0 text-[10px]">{got ? scan : "·"}</span>
-      <span className="absolute inset-x-0 top-1 text-center text-[8px] opacity-60">╔══╗</span>
-      <span className="absolute inset-x-0 bottom-1 text-center text-[8px] opacity-60">╚══╝</span>
-      {icon}
+      <span className="pointer-events-none absolute left-0.5 top-0 text-[9px] leading-none">{corner}</span>
+      <span className="pointer-events-none absolute right-0.5 top-0 text-[9px] leading-none">{corner}</span>
+      <span className="pointer-events-none absolute left-0.5 bottom-0 text-[9px] leading-none">{corner}</span>
+      <span className="pointer-events-none absolute right-0.5 bottom-0 text-[9px] leading-none">{corner}</span>
+      <span className="text-base leading-none">{icon}</span>
     </div>
   );
 }
