@@ -1113,4 +1113,61 @@ function TermInput({ value, onChange, error }: { value: string; onChange: (v: st
       }}
     />
   );
+  );
 }
+
+// --- text scramble (300ms glitch on change) ---
+const SCRAMBLE_POOL = "!@#$%^&*<>/\\|01234567890.?";
+function ScrambleNumber({ value, digits = 2 }: { value: number; digits?: number }) {
+  const formatted = Number.isFinite(value) ? value.toFixed(digits) : "NaN";
+  const [display, setDisplay] = useState(formatted);
+  const targetRef = useRef(formatted);
+  useEffect(() => {
+    targetRef.current = formatted;
+    const start = performance.now();
+    const dur = 300;
+    let raf = 0;
+    const tick = () => {
+      const t = (performance.now() - start) / dur;
+      if (t >= 1) { setDisplay(targetRef.current); return; }
+      const out = targetRef.current
+        .split("")
+        .map((c, i) => {
+          // settle from left to right
+          if (i / targetRef.current.length < t) return c;
+          if (c === "." || c === "-") return c;
+          return SCRAMBLE_POOL[Math.floor(Math.random() * SCRAMBLE_POOL.length)];
+        })
+        .join("");
+      setDisplay(out);
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [formatted]);
+  return <>{display}</>;
+}
+
+function ScrambleText({ text }: { text: string }) {
+  const [display, setDisplay] = useState(text);
+  useEffect(() => {
+    const start = performance.now();
+    const dur = 350;
+    let raf = 0;
+    const tick = () => {
+      const t = (performance.now() - start) / dur;
+      if (t >= 1) { setDisplay(text); return; }
+      const out = text.split("").map((c, i) => {
+        if (i / text.length < t) return c;
+        if (c === " ") return " ";
+        return SCRAMBLE_POOL[Math.floor(Math.random() * SCRAMBLE_POOL.length)];
+      }).join("");
+      setDisplay(out);
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [text]);
+  return <>{display}</>;
+}
+
