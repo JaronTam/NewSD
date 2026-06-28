@@ -34,6 +34,70 @@ const COLORS = {
   dim: "#4a5568",
 };
 
+// --- CRT helpers: luminance-bound glow ---
+function hexLum(hex: string): number {
+  const h = hex.replace("#", "");
+  const r = parseInt(h.slice(0, 2), 16) / 255;
+  const g = parseInt(h.slice(2, 4), 16) / 255;
+  const b = parseInt(h.slice(4, 6), 16) / 255;
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+function glowFor(hex: string, boost = 1): number {
+  // bound to color luminance — bright colors burn brighter
+  return (2 + hexLum(hex) * 9) * boost;
+}
+function shiftHue(hex: string, deg: number): string {
+  const h = hex.replace("#", "");
+  const r = parseInt(h.slice(0, 2), 16);
+  const g = parseInt(h.slice(2, 4), 16);
+  const b = parseInt(h.slice(4, 6), 16);
+  // crude hue shift via rgb rotation
+  const cos = Math.cos((deg * Math.PI) / 180);
+  const sin = Math.sin((deg * Math.PI) / 180);
+  const m = [
+    0.213 + cos * 0.787 - sin * 0.213, 0.715 - cos * 0.715 - sin * 0.715, 0.072 - cos * 0.072 + sin * 0.928,
+    0.213 - cos * 0.213 + sin * 0.143, 0.715 + cos * 0.285 + sin * 0.140, 0.072 - cos * 0.072 - sin * 0.283,
+    0.213 - cos * 0.213 - sin * 0.787, 0.715 - cos * 0.715 + sin * 0.715, 0.072 + cos * 0.928 + sin * 0.072,
+  ];
+  const nr = Math.max(0, Math.min(255, Math.round(r * m[0] + g * m[1] + b * m[2])));
+  const ng = Math.max(0, Math.min(255, Math.round(r * m[3] + g * m[4] + b * m[5])));
+  const nb = Math.max(0, Math.min(255, Math.round(r * m[6] + g * m[7] + b * m[8])));
+  return `#${nr.toString(16).padStart(2, "0")}${ng.toString(16).padStart(2, "0")}${nb.toString(16).padStart(2, "0")}`;
+}
+
+// --- ASCII shrapnel for toast splatter ---
+const SHARDS: Record<string, string[]> = {
+  A: ["/", "\\", "-", "^"],
+  U: ["\\", "/", "_"],
+  S: ["~", "-", "_", "/"],
+  Y: ["Y", "/", "\\", "|"],
+  T: ["T", "-", "|"],
+  E: ["E", "=", "-"],
+  M: ["M", "/", "\\", "|"],
+  O: ["o", "(", ")"],
+  C: ["(", "c"],
+  K: ["<", "/", "\\"],
+  N: ["N", "/", "\\"],
+  D: ["D", ")", "|"],
+  L: ["L", "|", "_"],
+  R: ["R", "/", "|"],
+  P: ["P", "|", "p"],
+  I: ["|", "i", "."],
+  H: ["H", "|", "-"],
+  V: ["V", "/", "\\"],
+  W: ["W", "/", "\\"],
+  G: ["G", "(", ")"],
+  B: ["B", "(", "|"],
+  F: ["F", "|", "-"],
+  J: ["J", "_", "|"],
+  X: ["X", "/", "\\"],
+  Z: ["Z", "/", "-"],
+  Q: ["Q", "o", "/"],
+};
+function shardsFor(ch: string): string[] {
+  return SHARDS[ch.toUpperCase()] ?? [ch, "·", "*"];
+}
+
 const BADGES: { id: string; key: DictKey; descKey: DictKey; icon: string; color: string }[] = [
   { id: "first_stock", key: "badgeFirstStock", descKey: "badgeFirstStockDesc", icon: "★", color: COLORS.stock },
   { id: "first_flow", key: "badgeFirstFlow", descKey: "badgeFirstFlowDesc", icon: "◆", color: COLORS.flow },
@@ -41,6 +105,33 @@ const BADGES: { id: string; key: DictKey; descKey: DictKey; icon: string; color:
   { id: "weaver", key: "badgeWeb", descKey: "badgeWebDesc", icon: "⬢", color: COLORS.cloud },
   { id: "modeler", key: "badgeModel", descKey: "badgeModelDesc", icon: "✺", color: COLORS.spark },
 ];
+
+// --- audio: short ascii blip; freq from char code ---
+let _audioCtx: AudioContext | null = null;
+function blip(charOrFreq: string | number, vol = 0.04, dur = 0.05) {
+  try {
+    if (typeof window === "undefined") return;
+    if (!_audioCtx) {
+      const Ctx = (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext);
+      _audioCtx = new Ctx();
+    }
+    const ctx = _audioCtx;
+    const freq = typeof charOrFreq === "number"
+      ? charOrFreq
+      : 220 + ((charOrFreq.charCodeAt(0) % 40) * 18);
+    const osc = ctx.createOscillator();
+    const g = ctx.createGain();
+    osc.type = "square";
+    osc.frequency.value = freq;
+    g.gain.value = vol;
+    g.gain.setValueAtTime(vol, ctx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + dur);
+    osc.connect(g).connect(ctx.destination);
+    osc.start();
+    osc.stop(ctx.currentTime + dur);
+  } catch { /* ignore */ }
+}
+
 
 // --------------------------- initial scene ---------------------------
 function initialElements(): SDElement[] {
