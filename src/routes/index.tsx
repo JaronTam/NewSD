@@ -861,6 +861,36 @@ function Index() {
             </div>
           )}
 
+          {/* particle splatter overlay (edge only) */}
+          <div className="pointer-events-none fixed inset-0 z-40 overflow-hidden">
+            {particles.map((p) => {
+              const age = (performance.now() - p.born) / 1000;
+              const tx = p.vx * age;
+              const ty = p.vy * age + 0.5 * 520 * age * age; // gravity
+              const opacity = Math.max(0, 1 - age / 0.9);
+              return (
+                <span
+                  key={p.id}
+                  style={{
+                    position: "absolute",
+                    left: p.x,
+                    top: p.y,
+                    transform: `translate(${tx}px, ${ty}px) rotate(${tx}deg)`,
+                    color: p.color,
+                    textShadow: `0 0 6px ${p.color}`,
+                    opacity,
+                    fontFamily: '"JetBrains Mono",monospace',
+                    fontSize: 14,
+                    fontWeight: 700,
+                    willChange: "transform, opacity",
+                  }}
+                >
+                  {p.ch}
+                </span>
+              );
+            })}
+          </div>
+
           {/* badge toasts */}
           <div className="pointer-events-none absolute right-3 top-3 flex flex-col gap-2">
             {toasts.map((t) => {
@@ -873,7 +903,7 @@ function Index() {
                 >
                   <span className="text-2xl" style={{ color: b.color, textShadow: `0 0 8px ${b.color}` }}>{b.icon}</span>
                   <div>
-                    <div style={{ color: b.color, textShadow: `0 0 4px ${b.color}` }}>★ {tr(b.key)}</div>
+                    <div style={{ color: b.color, textShadow: `0 0 4px ${b.color}` }}>★ <ScrambleText text={tr(b.key)} /></div>
                     <div className="text-[#c9d1d9]">{tr(b.descKey)}</div>
                   </div>
                 </div>
@@ -881,6 +911,7 @@ function Index() {
             })}
           </div>
         </div>
+
 
         {/* RIGHT PANEL */}
         <div className="flex w-72 flex-col border-l border-[#1a1f2e] bg-[#0f1419]">
