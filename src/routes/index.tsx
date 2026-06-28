@@ -394,6 +394,8 @@ function Index() {
     const fontSize = Math.max(8, Math.round(13 * z));
     ctx.font = `${fontSize}px "JetBrains Mono","Courier New",monospace`;
     ctx.textBaseline = "top";
+    const now = performance.now();
+    const drift = now / 1000;
 
     // grid: vertical lines every 4 chars
     const gridStepX = CELL_W * 4 * z;
@@ -413,14 +415,33 @@ function Index() {
       ctx.stroke();
     }
 
-    const drawText = (text: string, wx: number, wy: number, color: string, glow = false) => {
-      const { x, y } = w2s(wx, wy);
-      if (glow) {
-        ctx.shadowColor = color;
-        ctx.shadowBlur = 6;
-      } else {
-        ctx.shadowBlur = 0;
+    // background CRT char drift — sparse glyphs with slow hue shift
+    if (z >= 0.4) {
+      const cellPxX = CELL_W * z * 8;
+      const cellPxY = CELL_H * z * 4;
+      const bgGlyphs = [".", "·", "˙", "‧", "⋅"];
+      const baseHueShift = Math.sin(drift * 0.1) * 25;
+      for (let y = 0; y < rect.height; y += cellPxY) {
+        for (let x = 0; x < rect.width; x += cellPxX) {
+          const seed = Math.sin(x * 13.37 + y * 7.13);
+          if (seed < 0.55) continue;
+          const localDeg = baseHueShift + Math.sin(drift * 0.3 + seed * 6) * 30;
+          const c = shiftHue("#1e3a44", localDeg);
+          ctx.shadowColor = c;
+          ctx.shadowBlur = 2;
+          ctx.fillStyle = c;
+          ctx.fillText(bgGlyphs[Math.floor((seed + 1) * bgGlyphs.length) % bgGlyphs.length], x, y);
+        }
       }
+      ctx.shadowBlur = 0;
+    }
+
+    const hoverId = hoverIdRef.current;
+    const drawText = (text: string, wx: number, wy: number, color: string, boost = 1) => {
+      const { x, y } = w2s(wx, wy);
+      const blur = glowFor(color, boost);
+      ctx.shadowColor = color;
+      ctx.shadowBlur = blur;
       ctx.fillStyle = color;
       ctx.fillText(text, x, y);
       ctx.shadowBlur = 0;
@@ -438,60 +459,70 @@ function Index() {
       const a = elementCenter(from);
       const b = elementCenter(to);
       const isSel = f.id === selectedRef.current;
+      const isHover = f.id === hoverId;
       const color = isSel && blink ? COLORS.selected : COLORS.flow;
+      const boost = isHover ? 1.4 : 1;
       // attach to bounds edge
       const ab = elementBounds(from);
       const bb = elementBounds(to);
       let ax = a.cx, ay = a.cy, bx = b.cx, by = b.cy;
       if (ab) ax = a.cx < b.cx ? ab.x + ab.w : ab.x;
       if (bb) bx = a.cx < b.cx ? bb.x : bb.x + bb.w;
-      // horizontal flow line drawn with dashes & arrow
-      const steps = Math.max(2, Math.round(Math.abs(bx - ax)));
       const dir = bx > ax ? 1 : -1;
       const lineY = Math.round((ay + by) / 2);
+      const x0 = Math.min(ax, bx);
+      const x1 = Math.max(ax, bx);
+      const steps = Math.max(2, Math.round(x1 - x0));
+      // animated >>>>>> data-stream
+      const spacing = Math.max(2, flowSpacing);
+      const offset = Math.floor((now / 1000) * flowSpeed) % spacing;
+      const head = dir > 0 ? ">" : "<";
       let line = "";
-      for (let i = 0; i < steps; i++) line += "─";
-      drawText(line, Math.min(ax, bx), lineY, color, true);
+      for (let i = 0; i < steps; i++) {
+        const idx = dir > 0 ? i : steps - 1 - i;
+        line += ((idx + offset) % spacing === 0) ? head : "─";
+      }
+      drawText(line, x0, lineY, color, boost);
       // arrow head
-      drawText(dir > 0 ? "▶" : "◀", bx - (dir > 0 ? 1 : 0), lineY, color, true);
+      drawText(dir > 0 ? "▶" : "◀", bx - (dir > 0 ? 1 : 0), lineY, color, boost);
       // mid marker (variable ▼ / constant ○)
       const midX = Math.round((ax + bx) / 2) - 1;
-      drawText(f.isVariable ? "▼" : "○", midX, lineY - 1, color, true);
+      drawText(f.isVariable ? "▼" : "○", midX, lineY - 1, color, boost);
       // name + value
-      drawText(`${f.name}=${fmt(f.lastValue)}`, midX - 2, lineY + 1, color, false);
+      drawText(`${f.name}=${fmt(f.lastValue)}`, midX - 2, lineY + 1, color, boost);
       if (f.formulaError) {
-        drawText("!", midX + 2, lineY - 1, "#ff4444", true);
+        drawText("!", midX + 2, lineY - 1, "#ff4444", boost);
       }
     });
 
     // nodes
     els.forEach((el) => {
       const isSel = el.id === selectedRef.current;
+      const isHover = el.id === hoverId;
+      const boost = isHover ? 1.4 : 1;
       if (el.kind === "stock") {
         const s = el;
         const color = isSel && blink ? COLORS.selected : COLORS.stock;
         const inner = s.w - 2;
         const top = "┌" + "─".repeat(inner) + "┐";
         const bot = "└" + "─".repeat(inner) + "┘";
-        drawText(top, s.x, s.y, color, true);
-        drawText(bot, s.x, s.y + s.h - 1, color, true);
+        drawText(top, s.x, s.y, color, boost);
+        drawText(bot, s.x, s.y + s.h - 1, color, boost);
         for (let r = 1; r < s.h - 1; r++) {
-          drawText("│", s.x, s.y + r, color, true);
-          drawText("│", s.x + s.w - 1, s.y + r, color, true);
+          drawText("│", s.x, s.y + r, color, boost);
+          drawText("│", s.x + s.w - 1, s.y + r, color, boost);
         }
-        // contents
         const nameLine = ` ${s.name}`.padEnd(inner, " ").slice(0, inner);
         const valLine = ` ${fmt(s.currentValue)} ${s.units}`.padEnd(inner, " ").slice(0, inner);
-        drawText(nameLine, s.x + 1, s.y + 1, color, false);
-        drawText(valLine, s.x + 1, s.y + 2, COLORS.text, false);
-        // sparkline next to box
-        drawText(spark(s.history), s.x + s.w + 1, s.y + 2, COLORS.spark, true);
+        drawText(nameLine, s.x + 1, s.y + 1, color, boost);
+        drawText(valLine, s.x + 1, s.y + 2, COLORS.text, boost);
+        drawText(spark(s.history), s.x + s.w + 1, s.y + 2, COLORS.spark, boost);
       } else if (el.kind === "cloud") {
         const c = el;
         const color = isSel && blink ? COLORS.selected : COLORS.cloud;
-        drawText(" .--.", c.x, c.y, color, true);
-        drawText("(    )", c.x, c.y + 1, color, true);
-        drawText(" `--'", c.x, c.y + 2, color, true);
+        drawText(" .--.", c.x, c.y, color, boost);
+        drawText("(    )", c.x, c.y + 1, color, boost);
+        drawText(" `--'", c.x, c.y + 2, color, boost);
       }
     });
 
@@ -500,10 +531,11 @@ function Index() {
       const from = els.find((e) => e.id === flowFromId);
       if (from) {
         const c = elementCenter(from);
-        drawText("◆", c.cx, c.cy, COLORS.selected, true);
+        drawText("◆", c.cx, c.cy, COLORS.selected, 1.4);
       }
     }
-  }, [tool, flowFromId, w2s]);
+  }, [tool, flowFromId, w2s, flowSpeed, flowSpacing]);
+
 
   // --- mouse handling ---
   const dragRef = useRef<
