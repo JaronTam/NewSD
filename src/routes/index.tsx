@@ -761,9 +761,11 @@ function Index() {
     setRunning((r) => {
       const nr = !r;
       if (nr) unlockBadge("first_sim");
+      if (soundOnRef.current) blip(nr ? 660 : 220, 0.05, 0.08);
       return nr;
     });
   };
+
   const handleReset = () => {
     setRunning(false);
     simTimeRef.current = 0;
