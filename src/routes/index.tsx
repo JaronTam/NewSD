@@ -234,6 +234,7 @@ function Index() {
   // badges
   const [unlocked, setUnlocked] = useState<Set<string>>(new Set());
   const [toasts, setToasts] = useState<{ id: string; key: string }[]>([]);
+  const [lvlTrigger, setLvlTrigger] = useState(0);
 
   // refs for hot loop
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -300,6 +301,7 @@ function Index() {
       next.add(id);
       const toastId = `${id}-${Date.now()}`;
       setToasts((ts) => [...ts, { id: toastId, key: id }]);
+      setLvlTrigger((n) => n + 1);
       const badge = BADGES.find((b) => b.id === id);
       if (badge) {
         // splatter near toast anchor (top-right corner of viewport)
@@ -810,9 +812,11 @@ function Index() {
         <div className="mx-2 h-4 w-px bg-[#1a1f2e]" />
         <TermButton onClick={handleReset} color={COLORS.text}>⏹ {tr("reset")}</TermButton>
         <TermButton onClick={handleStep} color={COLORS.text}>⏭ {tr("step")}</TermButton>
-        <TermButton onClick={handlePlay} color={running ? COLORS.flow : COLORS.stock}>
-          {running ? `⏸ ${tr("pause")}` : `▶ ${tr("play")}`}
-        </TermButton>
+        {running ? (
+          <AsciiRainbowButton onClick={handlePlay} title={tr("pause")}>{`⏸ ${tr("pause")}`}</AsciiRainbowButton>
+        ) : (
+          <TermButton onClick={handlePlay} color={COLORS.stock}>{`▶ ${tr("play")}`}</TermButton>
+        )}
         <div className="mx-2 h-4 w-px bg-[#1a1f2e]" />
         <span className="text-[#4a5568]">{tr("dt")}:</span>
         {[0.01, 0.1, 0.5, 1.0].map((d) => (
@@ -922,11 +926,27 @@ function Index() {
 
 
         {/* RIGHT PANEL */}
-        <div className="flex w-72 flex-col border-l border-[#1a1f2e] bg-[#0f1419]">
-          <div className="border-b border-[#1a1f2e] px-3 py-2 text-xs" style={{ color: COLORS.stock, textShadow: `0 0 4px ${COLORS.stock}` }}>
+        <div className="relative flex w-72 flex-col border-l border-[#1a1f2e] bg-[#0f1419]">
+          {/* ASCII texture bg */}
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-0 select-none whitespace-pre overflow-hidden text-[10px] leading-[12px]"
+            style={{
+              color: "#141a26",
+              fontFamily: '"JetBrains Mono",monospace',
+              backgroundImage:
+                "repeating-linear-gradient(0deg, transparent 0 11px, rgba(0,255,213,0.03) 11px 12px)",
+            }}
+          >
+            {Array.from({ length: 80 }).map((_, i) => (
+              <div key={i}>{"░▒▓█▓▒░ .:;+= ░▒▓█▓▒░ .:;+= ░▒▓█▓▒░ .:;+="}</div>
+            ))}
+          </div>
+          <div className="relative border-b border-[#1a1f2e] px-3 py-2 text-xs" style={{ color: COLORS.stock, textShadow: `0 0 4px ${COLORS.stock}` }}>
             ┌─ {tr("properties")} ─┐
           </div>
-          <div className="flex-1 overflow-auto p-3 text-xs">
+          <div className="relative flex-1 overflow-auto p-3 text-xs">
+
             {!selected && <div className="text-[#4a5568]">{tr("noSelection")}</div>}
             {selected?.kind === "stock" && (
               <div className="space-y-2">
@@ -990,24 +1010,15 @@ function Index() {
                 ┌─ {tr("badges")} {unlocked.size}/{BADGES.length} ─┐
               </div>
               <div className="grid grid-cols-5 gap-2">
-                {BADGES.map((b) => {
-                  const got = unlocked.has(b.id);
-                  return (
-                    <div
-                      key={b.id}
-                      title={`${tr(b.key)} — ${tr(b.descKey)}`}
-                      className="flex aspect-square items-center justify-center rounded border text-xl"
-                      style={{
-                        borderColor: got ? b.color : "#1a1f2e",
-                        color: got ? b.color : "#2a3142",
-                        textShadow: got ? `0 0 6px ${b.color}` : "none",
-                        background: got ? "#0a0e14" : "transparent",
-                      }}
-                    >
-                      {b.icon}
-                    </div>
-                  );
-                })}
+                {BADGES.map((b) => (
+                  <AsciiBadge
+                    key={b.id}
+                    icon={b.icon}
+                    color={b.color}
+                    got={unlocked.has(b.id)}
+                    title={`${tr(b.key)} — ${tr(b.descKey)}`}
+                  />
+                ))}
               </div>
             </div>
           )}
@@ -1057,7 +1068,20 @@ function Index() {
           0%, 100% { box-shadow: 0 0 4px #7c3aed, inset 0 0 2px #7c3aed; }
           50%      { box-shadow: 0 0 14px #7c3aed, 0 0 22px #7c3aed, inset 0 0 6px #7c3aed; }
         }
+        @keyframes hueShift { 0% { filter: hue-rotate(0deg); } 100% { filter: hue-rotate(360deg); } }
+        @keyframes blink { 0%, 49% { opacity: 1; } 50%, 100% { opacity: 0.25; } }
+        @keyframes menuFlyIn {
+          from { transform: translateX(-8px); opacity: 0; }
+          to   { transform: translateX(0); opacity: 1; }
+        }
+        @keyframes lvlPop {
+          0%   { transform: scale(0.4); opacity: 0; }
+          25%  { transform: scale(1.15); opacity: 1; }
+          70%  { transform: scale(1); opacity: 1; }
+          100% { transform: scale(1.05); opacity: 0; }
+        }
       `}</style>
+      <LvlUpOverlay trigger={lvlTrigger} />
     </div>
   );
 }
@@ -1083,18 +1107,143 @@ function TermButton({ children, onClick, active, color = "#c9d1d9", breathing }:
 
 function TermMenu({ label, items }: { label: string; items: string[] }) {
   const [open, setOpen] = useState(false);
+  const [hover, setHover] = useState<number>(0);
+  const title = ` [ ${label.toUpperCase()} ] `;
+  const inner = Math.max(title.length, ...items.map((i) => i.length + 4));
+  const topBar = "┌" + "─".repeat(inner) + "┐";
+  const botBar = "└" + "─".repeat(inner) + "┘";
   return (
     <div className="relative">
-      <TermButton onClick={() => setOpen((o) => !o)}>{label}</TermButton>
+      <TermButton onClick={() => setOpen((o) => !o)} active={open}>{label}</TermButton>
       {open && (
-        <div className="absolute left-0 top-full z-40 mt-1 min-w-[120px] rounded border border-[#1a1f2e] bg-[#0f1419] py-1 text-xs" onMouseLeave={() => setOpen(false)}>
-          {items.map((it) => (
-            <div key={it} className="cursor-pointer px-3 py-1 hover:bg-[#1a1f2e] hover:text-[#00ffd5]" onClick={() => setOpen(false)}>
-              {it}
+        <div
+          className="absolute left-0 top-full z-40 mt-1 select-none whitespace-pre text-xs leading-tight"
+          style={{ color: "#00ffd5", textShadow: "0 0 6px #00ffd5", background: "#0a0e14" }}
+          onMouseLeave={() => setOpen(false)}
+        >
+          <div>{"┌" + title + "─".repeat(Math.max(0, inner - title.length)) + "┐"}</div>
+          {items.map((it, i) => (
+            <div
+              key={it}
+              className="cursor-pointer"
+              onMouseEnter={() => setHover(i)}
+              onClick={() => setOpen(false)}
+              style={{
+                color: hover === i ? "#ffd700" : "#c9d1d9",
+                textShadow: hover === i ? "0 0 6px #ffd700" : "none",
+                animation: `menuFlyIn 0.18s ease-out ${i * 40}ms both`,
+              }}
+            >
+              {`│ `}
+              <span style={{ color: "#ff5577", textShadow: "0 0 6px #ff5577", animation: "blink 0.9s steps(2) infinite" }}>
+                {hover === i ? ">" : " "}
+              </span>
+              {` ${it.padEnd(inner - 4, " ")} │`}
             </div>
           ))}
+          <div>{topBar.replace(/./g, (_, idx) => (idx === 0 ? "└" : idx === topBar.length - 1 ? "┘" : "─"))}</div>
+          <div className="sr-only">{botBar}</div>
         </div>
       )}
+    </div>
+  );
+}
+
+// ASCII rainbow button — each border char cycles hue via text-shadow
+function AsciiRainbowButton({ children, onClick, title }: { children: React.ReactNode; onClick?: () => void; title?: string }) {
+  const text = String(children);
+  const inner = text.length + 2;
+  const top = "┌" + "─".repeat(inner) + "┐";
+  const bot = "└" + "─".repeat(inner) + "┘";
+  const mid = `│ ${text} │`;
+  const renderHue = (s: string, base = 0) =>
+    s.split("").map((c, i) => (
+      <span
+        key={i}
+        style={{
+          color: "#fff",
+          textShadow: `0 0 6px hsl(${(i * 30 + base) % 360} 100% 60%), 0 0 12px hsl(${(i * 30 + base + 60) % 360} 100% 55%)`,
+          animation: `hueShift 1.4s linear infinite`,
+          animationDelay: `${(i * 60) % 1400}ms`,
+        }}
+      >
+        {c}
+      </span>
+    ));
+  return (
+    <button
+      onClick={onClick}
+      title={title}
+      className="select-none whitespace-pre text-[11px] leading-[1] cursor-pointer"
+      style={{ fontFamily: '"JetBrains Mono",monospace', background: "transparent", padding: 0 }}
+    >
+      <div>{renderHue(top, 0)}</div>
+      <div>{renderHue(mid, 90)}</div>
+      <div>{renderHue(bot, 180)}</div>
+    </button>
+  );
+}
+
+// ASCII badge with rotating scanner corners
+function AsciiBadge({ icon, color, got, title }: { icon: string; color: string; got: boolean; title: string }) {
+  const [phase, setPhase] = useState(0);
+  useEffect(() => {
+    if (!got) return;
+    const id = setInterval(() => setPhase((p) => (p + 1) % 4), 220);
+    return () => clearInterval(id);
+  }, [got]);
+  const scan = ["/", "─", "\\", "│"][phase];
+  const c = got ? color : "#2a3142";
+  const shadow = got ? `0 0 6px ${color}` : "none";
+  return (
+    <div
+      title={title}
+      className="relative flex aspect-square items-center justify-center text-xl"
+      style={{ color: c, textShadow: shadow, background: got ? "#0a0e14" : "transparent" }}
+    >
+      <span className="absolute left-0 top-0 text-[10px]">{got ? scan : "·"}</span>
+      <span className="absolute right-0 top-0 text-[10px]">{got ? scan : "·"}</span>
+      <span className="absolute left-0 bottom-0 text-[10px]">{got ? scan : "·"}</span>
+      <span className="absolute right-0 bottom-0 text-[10px]">{got ? scan : "·"}</span>
+      <span className="absolute inset-x-0 top-1 text-center text-[8px] opacity-60">╔══╗</span>
+      <span className="absolute inset-x-0 bottom-1 text-center text-[8px] opacity-60">╚══╝</span>
+      {icon}
+    </div>
+  );
+}
+
+// Large ASCII "LVL UP" overlay
+const LVL_UP_ART = [
+  "██╗  ██╗   ██╗   ██╗    ██████╗ ",
+  "██║  ██║   ██║   ██║   ██╔═══██╗",
+  "███████║   ██║   ██║   ██║   ██║",
+  "██╔══██║   ██║   ██║   ██║   ██║",
+  "██║  ██║   ╚██████╔╝   ╚██████╔╝",
+  "╚═╝  ╚═╝    ╚═════╝     ╚═════╝ ",
+];
+function LvlUpOverlay({ trigger }: { trigger: number }) {
+  const [show, setShow] = useState(false);
+  useEffect(() => {
+    if (!trigger) return;
+    setShow(true);
+    const t = setTimeout(() => setShow(false), 1300);
+    return () => clearTimeout(t);
+  }, [trigger]);
+  if (!show) return null;
+  return (
+    <div className="pointer-events-none absolute inset-0 z-50 flex items-center justify-center">
+      <pre
+        className="whitespace-pre text-center leading-none"
+        style={{
+          color: "#ffd700",
+          textShadow: "0 0 10px #ffd700, 0 0 22px #ff5577",
+          animation: "lvlPop 1.3s ease-out forwards, blink 0.3s steps(2) infinite",
+          fontFamily: '"JetBrains Mono",monospace',
+          fontSize: 14,
+        }}
+      >
+        {LVL_UP_ART.join("\n")}
+      </pre>
     </div>
   );
 }
@@ -1109,17 +1258,75 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 }
 
 function TermInput({ value, onChange, error }: { value: string; onChange: (v: string) => void; error?: boolean }) {
+  type Spark = { id: number; ch: string; x: number; y: number; vy: number; born: number; up: boolean };
+  const [sparks, setSparks] = useState<Spark[]>([]);
+  const sparkId = useRef(0);
+  const prev = useRef(value);
+  const emit = (up: boolean) => {
+    const arr: Spark[] = [];
+    const chars = up ? ["^", "*", "/", "|", "⚡"] : ["v", "*", "\\", "|", "."];
+    for (let i = 0; i < 6; i++) {
+      arr.push({
+        id: ++sparkId.current,
+        ch: chars[Math.floor(Math.random() * chars.length)],
+        x: 20 + Math.random() * 60,
+        y: 0,
+        vy: (up ? -1 : 1) * (20 + Math.random() * 30),
+        born: performance.now(),
+        up,
+      });
+    }
+    setSparks((s) => [...s, ...arr]);
+    setTimeout(() => {
+      const cutoff = performance.now() - 320;
+      setSparks((s) => s.filter((p) => p.born > cutoff));
+    }, 400);
+  };
   return (
-    <input
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      className="w-full rounded border bg-[#0a0e14] px-2 py-1 text-xs outline-none focus:border-[#00ffd5]"
-      style={{
-        borderColor: error ? "#ff4444" : "#1a1f2e",
-        color: error ? "#ff4444" : "#c9d1d9",
-        fontFamily: '"JetBrains Mono","Courier New",monospace',
-      }}
-    />
+    <div className="relative">
+      <input
+        value={value}
+        onChange={(e) => {
+          const v = e.target.value;
+          const pn = parseFloat(prev.current);
+          const nn = parseFloat(v);
+          if (Number.isFinite(pn) && Number.isFinite(nn) && pn !== nn) emit(nn > pn);
+          prev.current = v;
+          onChange(v);
+        }}
+        className="w-full rounded border bg-[#0a0e14] px-2 py-1 text-xs outline-none focus:border-[#00ffd5]"
+        style={{
+          borderColor: error ? "#ff4444" : "#1a1f2e",
+          color: error ? "#ff4444" : "#c9d1d9",
+          fontFamily: '"JetBrains Mono","Courier New",monospace',
+        }}
+      />
+      <div className="pointer-events-none absolute inset-0 overflow-visible">
+        {sparks.map((p) => {
+          const age = (performance.now() - p.born) / 320;
+          const ty = p.vy * age * 1.4;
+          const op = Math.max(0, 1 - age);
+          return (
+            <span
+              key={p.id}
+              style={{
+                position: "absolute",
+                left: p.x,
+                top: 8,
+                transform: `translateY(${ty}px)`,
+                color: p.up ? "#39ff14" : "#ff5577",
+                textShadow: `0 0 6px ${p.up ? "#39ff14" : "#ff5577"}`,
+                opacity: op,
+                fontSize: 11,
+                fontWeight: 700,
+              }}
+            >
+              {p.ch}
+            </span>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
