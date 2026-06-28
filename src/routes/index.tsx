@@ -992,24 +992,15 @@ function Index() {
                 ┌─ {tr("badges")} {unlocked.size}/{BADGES.length} ─┐
               </div>
               <div className="grid grid-cols-5 gap-2">
-                {BADGES.map((b) => {
-                  const got = unlocked.has(b.id);
-                  return (
-                    <div
-                      key={b.id}
-                      title={`${tr(b.key)} — ${tr(b.descKey)}`}
-                      className="flex aspect-square items-center justify-center rounded border text-xl"
-                      style={{
-                        borderColor: got ? b.color : "#1a1f2e",
-                        color: got ? b.color : "#2a3142",
-                        textShadow: got ? `0 0 6px ${b.color}` : "none",
-                        background: got ? "#0a0e14" : "transparent",
-                      }}
-                    >
-                      {b.icon}
-                    </div>
-                  );
-                })}
+                {BADGES.map((b) => (
+                  <AsciiBadge
+                    key={b.id}
+                    icon={b.icon}
+                    color={b.color}
+                    got={unlocked.has(b.id)}
+                    title={`${tr(b.key)} — ${tr(b.descKey)}`}
+                  />
+                ))}
               </div>
             </div>
           )}
