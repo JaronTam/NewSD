@@ -924,11 +924,27 @@ function Index() {
 
 
         {/* RIGHT PANEL */}
-        <div className="flex w-72 flex-col border-l border-[#1a1f2e] bg-[#0f1419]">
-          <div className="border-b border-[#1a1f2e] px-3 py-2 text-xs" style={{ color: COLORS.stock, textShadow: `0 0 4px ${COLORS.stock}` }}>
+        <div className="relative flex w-72 flex-col border-l border-[#1a1f2e] bg-[#0f1419]">
+          {/* ASCII texture bg */}
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-0 select-none whitespace-pre overflow-hidden text-[10px] leading-[12px]"
+            style={{
+              color: "#141a26",
+              fontFamily: '"JetBrains Mono",monospace',
+              backgroundImage:
+                "repeating-linear-gradient(0deg, transparent 0 11px, rgba(0,255,213,0.03) 11px 12px)",
+            }}
+          >
+            {Array.from({ length: 80 }).map((_, i) => (
+              <div key={i}>{"░▒▓█▓▒░ .:;+= ░▒▓█▓▒░ .:;+= ░▒▓█▓▒░ .:;+="}</div>
+            ))}
+          </div>
+          <div className="relative border-b border-[#1a1f2e] px-3 py-2 text-xs" style={{ color: COLORS.stock, textShadow: `0 0 4px ${COLORS.stock}` }}>
             ┌─ {tr("properties")} ─┐
           </div>
-          <div className="flex-1 overflow-auto p-3 text-xs">
+          <div className="relative flex-1 overflow-auto p-3 text-xs">
+
             {!selected && <div className="text-[#4a5568]">{tr("noSelection")}</div>}
             {selected?.kind === "stock" && (
               <div className="space-y-2">
