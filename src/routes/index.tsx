@@ -1113,8 +1113,8 @@ function TermInput({ value, onChange, error }: { value: string; onChange: (v: st
       }}
     />
   );
-  );
 }
+
 
 // --- text scramble (300ms glitch on change) ---
 const SCRAMBLE_POOL = "!@#$%^&*<>/\\|01234567890.?";
