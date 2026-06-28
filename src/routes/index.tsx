@@ -649,6 +649,8 @@ function Index() {
       setSelectedId(id);
       setTool("select");
       unlockBadge("first_stock");
+      if (soundOnRef.current) blip("S", 0.05, 0.07);
+
       return;
     }
     if (tool === "cloud") {
