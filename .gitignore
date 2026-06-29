@@ -25,8 +25,16 @@ dist-ssr
 !.vscode/extensions.json
 .idea
 .DS_Store
+Thumbs.db
 *.suo
 *.ntvs*
 *.njsproj
 *.sln
 *.sw?
+
+# BMAD / Claude 工具链（开发环境依赖，非项目源码）
+.claude/skills/
+.claude/settings.local.json
+
+# BMAD 框架内核（按需，当前不提交）
+_bmad/
