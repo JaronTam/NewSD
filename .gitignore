@@ -38,3 +38,7 @@ Thumbs.db
 
 # BMAD 框架内核（按需，当前不提交）
 _bmad/
+
+# Playwright MCP 工具产物 / 仿真截图（临时产物，不提交）
+.playwright-mcp/
+/sd-sim-*.png
