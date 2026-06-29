@@ -1005,9 +1005,19 @@ function Index() {
 
           {/* badges sidebar */}
           {gameOn && (
-            <div className="border-t border-[#1a1f2e] p-3 text-xs">
-              <div className="mb-2" style={{ color: COLORS.spark, textShadow: `0 0 4px ${COLORS.spark}` }}>
-                ┌─ {tr("badges")} {unlocked.size}/{BADGES.length} ─┐
+            <div className="border-t border-[#1a1f2e] px-3 pb-3 pt-4 text-xs">
+              <div
+                className="mb-3 whitespace-nowrap font-mono text-[13px] leading-[1.4] tracking-wide"
+                style={{ color: COLORS.spark, textShadow: `0 0 2px ${COLORS.spark}` }}
+              >
+                <span>┌─ </span>
+                <span>{tr("badges")}</span>
+                <span> </span>
+                <span style={{ color: COLORS.stock, textShadow: `0 0 2px ${COLORS.stock}` }}>
+                  {unlocked.size}
+                </span>
+                <span>/{BADGES.length}</span>
+                <span> ─┐</span>
               </div>
               <div className="grid grid-cols-5 gap-2">
                 {BADGES.map((b) => (
