@@ -42,11 +42,11 @@ prototype 是**单用户、显式欧拉、重度游戏质感的 ASCII SD 原型*
   1. PRD §5.1「MVP 包含」清单补一行 `✅ 小地图(FR-CANVAS-5)`;
   2. PRD §5.1 体量逃生阀警示:小地图为 MVP 第 5 项加码,且其 10k 图元性能与 B1 渲染裁决耦合——若架构裁决为 (b) 下调 FPS 目标,小地图须一并纳入性能预算。addendum §8.3 减负杠杆优先级不变(⑤>③>①),小地图不进入降级优先级(非数值内核,降级无意义),但可作为逃生阀触发时的最先可砍项。
 
-### A4. 新增 FR-UI-X 交互质感层规约(分两档)
+### A4. 新增 FR-UI-6 交互质感层规约(分两档)
 
 - **现状**:prototype 已验证 10 项游戏感创新,PRD §1.1 仅作为差异化口号提及、未落 FR。
 - **风险**:架构阶段若只读 PRD,这些已验证创新会全部丢失。
-- **修正动作**:PRD 新增 **FR-UI-X(交互质感层)**,10 项分两档:
+- **修正动作**:PRD 新增 **FR-UI-6(交互质感层)**,10 项分两档:
 
   **硬 FR(架构必须保证,与渲染方案无关的纯交互质感)**:
   1. 流量数据流动画(`>>>>>>>` 沿 flow 线行进,速度/间距可配)
@@ -62,7 +62,7 @@ prototype 是**单用户、显式欧拉、重度游戏质感的 ASCII SD 原型*
   9. CRT 背景漂移(稀疏背景字符 + 慢速色相偏移)—— B1 (a) 路径下用 Shader 复刻,B1 (b) 路径下保留 shadowBlur 实现
   10. per-glyph shadowBlur 辉光(glowFor / shiftHue 亮度绑定辉光)—— B1 (a) 路径下用辉光图集 + Shader 复刻,B1 (b) 路径下保留
 
-- **耦合说明**:第 9、10 项与 B1 渲染张力同源(per-glyph shadowBlur)。分档是为避免 FR-UI-X 硬 FR 与 B1 (a) 路径(禁用 per-glyph shadowBlur)正面冲突——这两项的可实现形态完全由 B1 裁决决定,故标"视 B1"。
+- **耦合说明**:第 9、10 项与 B1 渲染张力同源(per-glyph shadowBlur)。分档是为避免 FR-UI-6 硬 FR 与 B1 (a) 路径(禁用 per-glyph shadowBlur)正面冲突——这两项的可实现形态完全由 B1 裁决决定,故标"视 B1"。
 
 ---
 
@@ -121,7 +121,7 @@ prototype 是**单用户、显式欧拉、重度游戏质感的 ASCII SD 原型*
 | A1 | prd.md FR-ELEM-2 | 删 source/sink 双类型 → 单一 cloud | PRD 改 |
 | A2 | prd.md FR-SIM-4 | 追加"钳制结果"反例 | PRD 改 |
 | A3 | prd.md §3.1 + §5.1 | 新增 FR-CANVAS-5 小地图(进 MVP) | PRD 改 |
-| A4 | prd.md | 新增 FR-UI-X 交互质感层(硬 FR 8 项 + 视 B1 2 项) | PRD 改 |
+| A4 | prd.md | 新增 FR-UI-6 交互质感层(硬 FR 8 项 + 视 B1 2 项) | PRD 改 |
 | B1 | handoff-to-architecture.md | 新增第 8 条渲染裁决(可暂停) | handoff 补 |
 | B2 | handoff-to-architecture.md | 补公式 tokenizer 语法要求 | handoff 补 |
 | B3 | handoff-to-architecture.md | 补公式引用模型 id/name 分层 | handoff 补 |
