@@ -18,7 +18,7 @@
 - 事实：用户在面板配置复杂流量公式
 - 推导 → 前端必须动态解析代数环
 - 边界约束 → 防止 JavaScript 注入 + 提升高频迭代性能
-- 结论：Rust mexpr 库构建 AST，Wasm 层拓扑排序，检测到非法环立即断流抛出
+- 结论：Rust 手写递归下降 parser 构建 AST（mexpr/meval 不存在于 crates.io，已弃用）+ autodiff 0.7.0 自动微分 + faer 0.24.4 LU 分解；Wasm 层拓扑排序，检测到非法环立即断流抛出（详见 ARCHITECTURE-SPINE.md AD-6）
 
 ### 1.3 后端
 
