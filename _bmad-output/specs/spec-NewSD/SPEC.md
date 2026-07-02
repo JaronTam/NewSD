@@ -58,11 +58,11 @@ NewSD 要让用户在无限 ASCII 画布上用字符图元搭存量-流量模型
 
 - **CAP-8  多画板与跨画板剪贴板**
   - **intent:** 用户最多同时开 5 个画板,可跨画板复制粘贴图元,粘贴通道拒绝畸形/非法结构。
-  - **success:** 每客户端 ≤5 画板,超限提示(FR-BOARD-1);剪贴板 Base64+JSON + `SD_ASCII_ENGINE://` 协议头 + CRC32,结构白名单校验(字段类型合法 / UUIDv4 / fromId-toId 引用存在于 payload / 无未知字段)任一不合规拒绝(FR-BOARD-2);粘贴为单个 CRDT 插入事务(分配新 UUID 重映射连接 + 位置偏移),粘贴完成前**允许连线**(假设 3 = 选项 B),撤销时**级联删除**粘贴图元及其后所连流量;外部文件/图片/无协议头二进制静默拒绝(FR-BOARD-3);反指标"剪贴板畸形图元注入 = 0"(不经 eval,不承诺密码学认证)。
+  - **success:** 每客户端 ≤5 画板,超限提示(FR-BOARD-1);剪贴板 Base64+JSON + `SD_ASCII_ENGINE://` 协议头 + CRC32,结构白名单校验(字段类型合法 / UUIDv4 / fromId-toId 引用存在于 payload / 无未知字段)任一不合规拒绝(FR-BOARD-2);粘贴为单个 CRDT 插入事务(分配新 UUID 重映射连接 + 位置偏移);撤销粘贴删粘贴图元 + 内部重映射流量,外部流量及公式引用按统一删除 RI 规则处理(见 Constraints,方案 C,无跨事务 undo 归并);外部文件/图片/无协议头二进制静默拒绝(FR-BOARD-3);反指标"剪贴板畸形图元注入 = 0"(不经 eval,不承诺密码学认证)。
 
 - **CAP-9  画板独立撤销栈**
   - **intent:** 每个画板独立撤销/重做,粘贴等操作视为单一原子事务。
-  - **success:** 每画板独立 Y.UndoManager,撤销粒度用户操作级非按键级,栈限 100 步(FR-HISTORY-1);粘贴后连线的流量与粘贴图元绑定为级联删除组,撤销粘贴时一并删除(假设 3 = 选项 B,级联边界 = 粘贴事务插入的图元 + 其后在同一撤销窗口内连出的流量)。
+  - **success:** 每画板独立 Y.UndoManager,撤销粒度用户操作级非按键级,栈限 100 步(FR-HISTORY-1);撤销粘贴 = 删粘贴图元(单个 undo 条目),外部流量及公式引用按统一删除 RI 规则处理(见 Constraints,方案 C),无跨事务 undo 归并,与用户操作级粒度一致。
 
 - **CAP-10  赛博朋克界面 chrome 与双语**
   - **intent:** 用户在赛博朋克终端风界面里操作,中英双语可即时切换,工具栏/属性面板/状态栏齐全。
@@ -97,11 +97,12 @@ NewSD 要让用户在无限 ASCII 画布上用字符图元搭存量-流量模型
 - **待定节点 Y.Text + paren 旁路(AD-13/AD-14):** pending 节点 `{type:'pending', rawText:Y.Text, cursorHint:number|null}` 并发输入合并不丢字;paren 作 AST 外旁路 Y.Array of maps 按 nid(UUIDv4)引用,非 AST 内 group 节点;nid 单调递增计数器非 hash,子树重建旧 nid 保留语义。防止:string 键级 LWW 并发输入一边丢 / 显式 group 啰嗦+静默改写用户输入。
 - **非房主订阅非计算(AD-15):** 非房主客户端权威仿真显示态由房主广播驱动(订阅非计算),本地 Wasm 仅限非仿真预览(量纲/视觉)。防止:非房主本地算仿真步致与房主结果分叉 / 每次按键仿真显示闪烁。
 - **OAuth 认证(AD-16):** GitHub+Google 直连(零费用,不经 Auth0/Clerk),双 provider 共享 users 表 UNIQUE(oauth_provider, oauth_user_id);session token(非 JWT)双通道下发——HttpOnly Secure Cookie + JSON body(解 JS 不可读 cookie 致 WS 首帧 token 矛盾);Go 内存 + SQLite session 表持久化(进程重启会话不丢);WS 握手首帧 token 鉴权,token 仅存 JS 内存不可跨域读取致浏览器端 WS CSRF 不可行,Origin 头作 defense-in-depth;client_secret 走 server env 不入前端 bundle;MVP 不含自托管账号密码。防止:匿名前提致徽章跨设备丢失 / WS 网关无握手鉴权。
-- **画板权限模型(AD-17):** owner/editor/viewer 三角色,viewer CRDT op 网关拒收(非客户端自检);owner 转让与角色修改走认证 HTTP 端点(非 CRDT,防 editor 伪造提权);权限变更经 `role_change` WS frame 传播(drain 待处理 op 保原子性);share_token crypto/rand ≥128 bits + URL-safe base64 + owner 可轮换;CRDT 持久化表按 board_id 分区。防止:共享链接=共享编辑权 / 无 owner 致画板无主。
+- **画板权限模型(AD-17):** owner/editor/viewer 三角色,viewer CRDT op 网关拒收(非客户端自检);owner 转让与角色修改走认证 HTTP 端点(非 CRDT,防 editor 伪造提权);权限变更经 `role_change` WS frame 传播(drain 待处理 op 保原子性);share_token crypto/rand ≥128 bits + URL-safe base64 + owner 可轮换;CRDT 持久化表(CRDTSnapshot/OpLog)按 board_id 分区;PresenceSnapshot 为进程内存态按 board_id 键不落 SQLite(会话结束丢弃,FR-COLLAB-5)。防止:共享链接=共享编辑权 / 无 owner 致画板无主。
 - **单节点云托管部署(AD-18,演进 AD-2):** 部署目标 = 云托管单节点(Fly.io/Railway/Render/云 VM,实现期选),Dockerfile(多阶段 Rust→wasm + Go + 前端 dist)+ GitHub Actions CI/CD 必备;SQLite 持久卷挂载(平台不支持则提前触发 §3.2 PG 迁移);域名 + Let's Encrypt TLS;密钥走云平台 secret env;可观测走云平台内置(熔断事件经 WS 上报 stdout);垂直扩容优先,水平迁移走 §3.2 阈值。防止:裸机无 CI/CD / SaaS 无域名 TLS / 密钥无管理。
 - **七大数学约束(SD 域不变量,见 `math-constraints.md`):** 存量断路器 / 单次求值 / 非负钳制(速率级非存量结果级)/ DELAY 隐式存量 / 双时间轴分离 / NaN 熔断 / 两遍扫描初始化。这七条不是 AD 而是 SD 域工程不变量,由 Wasm 内核实现,PRD §2.2 与 addendum §2 为其机制出处。
 - **公式求值禁 eval():** 仅 Rust/Wasm 表达式解析器(安全约束,FR §4.3)。prototype 现有 formula.ts evalFormula 纯 TS 递归下降仅留作非仿真场景(UI 实时预览/量纲预览),仿真路径须替换(AD-5)。
 - **粘贴通道不经 eval,结构白名单校验:** 防护目标为"拒绝畸形/非法图元结构",非密码学认证(CRC32 仅防传输损坏不防伪造)(FR-BOARD-2)。
+- **统一删除引用完整性(RI)规则:** 删除存量 → 级联删除以其为端点(fromId/toId)的流量(endpoint RI,防悬空流量);公式 `@uuid` 引用被删存量但该存量非端点 → 该流量公式 AST ref 节点标 `dangling`,红色高亮 + 状态栏告警,不删流量(formula-reference RI,C2,与 CAP-2 重命名不断引用的友好取向一致)。撤销粘贴与普通删除统一适用此规则(方案 C,见 Assumptions §3)。
 - **浏览器要求:** 须支持 WebAssembly.Memory 64MB 上限 + WebGL 片段着色器(AD-5/AD-9 硬约束)。
 - **技术栈固定(见 `stack.md`):** React 19.2 / TanStack Start 1.168 / Vite 8 / Tailwind v4 / TS / bun(沿用 prototype) + Rust + wasm-pack + faer 0.24.4 + autodiff 0.7.0 + Go + yjs-go + SQLite WAL(greenfield-new)。
 
@@ -137,7 +138,7 @@ NewSD 要让用户在无限 ASCII 画布上用字符图元搭存量-流量模型
 
 - **模拟主机为第一个进入房间的用户**,断开时自动迁移(替代方案"服务器端统一计算"被否,见 PRD 假设 1 / AD-1 房主权威)。
 - **粘贴后不自动选中**——推迟到实现阶段,减少 Awareness 网络流量(PRD 假设 2)。
-- **粘贴原子性硬阻断**(选项 A:粘贴完成前禁止连线)——PRD 假设 3 的两个选项中按更安全的硬阻断假设推进,实现期可复核。
+- **粘贴为 CRDT 原子事务 + 统一删除 RI 规则(方案 C)**——粘贴为单个 CRDT 原子事务(FR-BOARD-2);PRD 选项 A 的「粘贴完成前禁止连线」block 在 CRDT 原子事务瞬时提交下窗口=0(死文本),选项 B 的「撤销级联删除组」须跨 undo 事务归并违 FR-HISTORY-1 用户操作级粒度;故采方案 C:撤销粘贴 = 删粘贴图元 + 内部重映射流量,外部流量及公式引用按统一删除 RI 规则处理(见 Constraints),无额外 undo 分组。PRD 假设 3 据此闭合(见 prd.md 假设 3 决策)。
 - **仿真态为会话级临时态**——会话内可经服务端仿真态快照恢复以支持房主迁移,不跨会话持久化,会话结束丢弃(PRD 决策,原开放问题 1 已闭合)。
 - **默认即 L1 体验**,L2/L3 能力按既有 FR 渐进暴露不新增切换 UI(PRD §1.3)。
 
@@ -146,7 +147,7 @@ NewSD 要让用户在无限 ASCII 画布上用字符图元搭存量-流量模型
 > 接纳 spine Deferred(实现期标定类,非 spec 阻断但须显式列)+ PRD 未闭合开放问题。
 
 - **[F5-perf]** 全重算雅可比 + 稀疏 LU 在 100 存量下能否达 100 步/秒?实测前不可定;若不达 Broyden 近似须重评(spine Deferred)。
-- **[F1-quality]** VRAM 图集辉光须复刻 prototype per-glyph shadowBlur 霓虹质感,验收口径已锁**目视不可区分**(spec 收口,严于 spine Deferred 的"待定");实现期跑图集辉光 vs shadowBlur 目视对比验证,达不到则按 FR-UI-6 不达标处理(不得回退 shadowBlur 违 AD-9)。建议此口径回写 spine F1-quality 同步一致(offer)。
+- **[F1-quality]** VRAM 图集辉光须复刻 prototype per-glyph shadowBlur 霓虹质感,验收口径已锁**目视不可区分**(spec 收口,严于 spine Deferred 的"待定");实现期跑图集辉光 vs shadowBlur 目视对比验证,达不到则按 FR-UI-6 不达标处理(不得回退 shadowBlur 违 AD-9)。此口径已回写 spine F1-quality 同步一致。
 - **[F6-threshold]** AST 冲突轻/重分级阈值须与 #4 待定节点合并规则联调,实现期枚举真实冲突场景校准(spine Deferred)。
 - **[F7-snapshot-freq]** FR-COLLAB-5"周期性上报"未给频率,须定快照上报频率平衡追赶成本 vs 房主启动延迟(spine Deferred)。
 - **[F15-op-quota]** 认证后 editor 角色 CRDT ops/stockId 伪造防御(viewer 已在网关拒收,#15,R3 medium)——editor op/s 配额 + Awareness 限制 + 房间容量硬限制(10 人)+ stockId 存在性验证 + delete 目标存在性,defer 到安全规约细化,实现期协作服务端上线前定阈值(spine Deferred)。
