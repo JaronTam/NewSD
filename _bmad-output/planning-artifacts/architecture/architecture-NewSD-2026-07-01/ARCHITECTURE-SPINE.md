@@ -8,7 +8,7 @@ scope: NewSD MVP — cyberpunk ASCII system-dynamics multiplayer collaborative m
 status: final
 created: '2026-07-01'
 updated: '2026-07-02'
-binds: FR-SIM-1/4/6/7/8, FR-COLLAB-1/2/3/4/5/6, FR-CANVAS-3/4/5, FR-UI-6, handoff open-high #1/#2/#3/#5/#6/#7/#8, addendum §3.1/§3.2/§7.3/§8.3
+binds: FR-SIM-1/4/6/7/8, FR-COLLAB-1/2/3/4/5/6, FR-CANVAS-3/4/5, FR-UI-6, FR-GAME-2, handoff open-high #1/#2/#3/#5/#6/#7/#8, addendum §3.1/§3.2/§7.3/§8.3, Q2 auth 决策, Q-cloud 决策
 sources:
   - '_bmad-output/planning-artifacts/prds/prd-NewSD-2026-06-26/prd.md'
   - '_bmad-output/planning-artifacts/prds/prd-NewSD-2026-06-26/addendum.md'
@@ -42,7 +42,7 @@ The composite paradigm is **Host-Authoritative CRDT Document Model with Wasm Num
 
 - **Binds:** F3, F2(#7 Wasm.Memory), F1(WebGL), addendum §3.1/§3.2
 - **Prevents:** 运行包络整维度空缺(skill Finalize 失败定义)/ MVP 过度工程化上容器+云+可观测栈
-- **Rule:** MVP 单节点单二进制 + SQLite WAL,无容器/云/独立可观测栈,迁移走 addendum §3.2 阈值
+- **Rule:** MVP 单节点单二进制 + SQLite WAL,无独立可观测栈;部署目标 = 云托管单节点(AD-18 详),Dockerfile + CI/CD 必备,裸机直跑仍可但不作 MVP 目标;水平迁移(多实例/PG/Redis)走 addendum §3.2 阈值
 
 ### AD-3 — F3: Go monolith backend
 
@@ -122,6 +122,24 @@ The composite paradigm is **Host-Authoritative CRDT Document Model with Wasm Num
 - **Prevents:** 非房主客户端本地跑 Wasm 仿真步致与房主结果分叉 / 每次按键仿真显示闪烁
 - **Rule:** 非房主客户端权威仿真显示态由房主计算结果经服务端中继广播驱动(订阅非计算); 本地 Wasm 仅限非仿真预览(量纲/视觉实时预览, 非仿真步求值)
 
+### AD-16 — F-Auth: OAuth(GitHub + Google) + session token
+
+- **Binds:** FR-COLLAB-1(房间归属), FR-GAME-2(徽章跨设备持久化), Q2 决策, PRD §4.3(修订后), addendum §3.2(修订后)
+- **Prevents:** 匿名前提致徽章跨设备丢失 / 无权限模型致共享链接=共享编辑权 / WS 网关无握手鉴权
+- **Rule:** 认证走 OAuth 直连 GitHub + Google(零费用,不经 Auth0/Clerk 中间商),双 provider 共享同一 users 表(`oauth_provider` + `oauth_user_id` UNIQUE 联合); 登录后发 server-side session token(非 JWT),双通道下发:OAuth callback 同时 Set-Cookie(HttpOnly Secure SameSite=Lax,供 HTTP 请求自动携带)+ JSON 响应体返回 token(供 JS 取用——HttpOnly 致 JS 不可读 cookie,故 WS 鉴权 token 须从响应体取); Go 进程内存 + SQLite session 表持久化(进程重启会话不丢); WS 握手鉴权用首帧显式 token(客户端从登录响应体取 token 存 JS 内存,WS 升级请求不依赖 Cookie 鉴权,首 frame 校验失败拒连);token 仅存 JS 内存不可跨域读取,浏览器端 WS CSRF 不可行,Origin 头校验作 defense-in-depth 保留(覆盖非浏览器客户端); 同源 Cookie + SameSite=Lax 防 HTTP CSRF,不另加 CSRF token; 徽章触发(绑 FR-GAME-2)由服务端判定:服务端在 CRDT relay 路径观察文档状态、从 op 流推断建模动作完成时刻,客户端仅上报 op,服务端判定后写 `user_badges`(防客户端伪造解锁); `[SYSTEM HALTED]` 熔断事件(AD-5,客户端 Wasm 触发)须以结构化日志经 WS 上报服务端写 stdout,供云平台日志捕获(AD-18); MVP 不含自托管账号密码,SaaS 规模化后补(届时邮件服务已就位); client_secret 走 server env,不入前端 bundle
+
+### AD-17 — F-Permission: CRDT 权限模型(owner/editor/viewer)
+
+- **Binds:** AD-16(认证后授权), FR-COLLAB-1, FR-COLLAB-4, 场景 C(只读分享)
+- **Prevents:** 共享链接=共享编辑权 / 无 owner 致画板无主无法管理
+- **Rule:** 画板创建者为 owner;三角色 owner(全部+删+转让+改权限)/ editor(编辑 CRDT)/ viewer(只读,不发 CRDT op,仅订阅); 权限映射到 WS 网关:viewer 的 CRDT op 在网关拒收(非客户端自检), room 加入走 owner 邀请或 share token; 所有 owner 转让与角色修改操作必须走认证 HTTP 端点(验证当前 session 对应 user_id = `boards.owner_user_id` 后更新 SQLite),CRDT 通道不承载权限变更(防 editor 伪造 CRDT op 自提权); 权限变更须传播到已连接客户端:服务端推送 `role_change` WS frame(新角色 + 可选断开指令),变更前先 drain 该连接待处理 op 保原子性(防降级 viewer 本地 Y.Doc 残留旧 op 竞态); 画板归属存 SQLite boards 表(owner_user_id + share_token),share_token 由 crypto/rand 生成 ≥128 bits 熵 URL-safe base64 编码,owner 可随时重新生成使旧链接失效,分享页配 `Referrer-Policy: no-referrer` 防 token 经 Referer 泄漏; CRDT 文档本身不变,权限是网关层准入控制(非 CRDT 内嵌); CRDT 持久化表(CRDTSnapshot/OpLog/PresenceSnapshot)按 `board_id` 分区(见 ERD); 房主迁移(AD-11)与画板 owner 解耦:owner 是画板归属,host 是仿真权威,两者可不同人
+
+### AD-18 — F-Cloud: 单节点云托管部署包络(AD-2 演进)
+
+- **Binds:** AD-2(演进非推翻), Q-cloud 决策, addendum §3.2(阈值表 auth 不入)
+- **Prevents:** 裸机部署无 CI/CD / SaaS 无域名 TLS / 密钥无管理
+- **Rule:** AD-2 Rule 演进:MVP 仍单节点单 Go 二进制,Go 单二进制本身无云依赖、裸机直跑技术可行,但官方部署目标限云托管(Fly.io/Railway/Render/云 VM,实现期选); 加 Dockerfile(多阶段构建:Rust→wasm + Go binary + 前端 dist,单镜像) + CI/CD(GitHub Actions:lint→test→build→deploy); SQLite 仍可用(单实例,持久卷挂载)——云平台选型须支持持久卷挂载,若所选平台不支持持久卷(如 Render Web Service)则 SQLite 不可用,须视为 addendum §3.2 PostgreSQL 迁移提前触发条件; 多实例仍走 addendum §3.2 阈值,垂直扩容优先(先升云平台机器规格至最高档,仍不满足再水平迁移); 域名 + TLS(Let's Encrypt 自动)必须,可观测栈 MVP 不上独立产品走云平台内置日志/监控(客户端熔断事件经 WS 上报服务端写 stdout,见 AD-16); 密钥(OAuth client_secret / 邮件 API key)走云平台 secret env,不入 git; addendum §3.2 阈值表:auth 不入(已 MVP),云托管本身不触发水平迁移
+
 **Dependency direction (who may depend on whom):**
 
 ```mermaid
@@ -154,8 +172,9 @@ flowchart TD
     YjsRelay --> SQLite
     YjsRelay --> MemState
 
-    Client <-->|WebSocket| WSGateway
+    Client <-->|WebSocket + handshake auth (AD-16)| WSGateway
     WSGateway --> YjsRelay
+    WSGateway --> AuthGate["Auth/Permission Gate\n(session token + role check, AD-16/17)"]
 ```
 
 ## Consistency Conventions
@@ -173,6 +192,11 @@ flowchart TD
 | State — CRDT single source of truth | Y.Doc CRDT is the single source of truth for the model. |
 | State — host-authoritative sim state | Server relays CRDT only; does not run simulation (AD-3, AD-4). Host client owns sim state and snapshots. |
 | State — SQLite persistence | SQLite WAL single file, in-process (no separate DB process) (AD-2). |
+| State — session token | Server-side session (HttpOnly Secure Cookie, non-JWT); Go process memory + SQLite session table for restart survival (AD-16). |
+| Naming — users table | `users(id, username, oauth_provider, oauth_user_id, created_at)` with UNIQUE(oauth_provider, oauth_user_id) for multi-provider OAuth linkage (AD-16). |
+| Naming — boards ownership | `boards(id, owner_user_id, share_token)`; permission enforced at WS gateway not in CRDT (AD-17). |
+| Naming — share_token entropy | `share_token` generated via crypto/rand, ≥128 bits entropy, URL-safe base64; owner-regenerable to revoke old links (AD-17). |
+| Data & formats — CRDT persistence scoping | `CRDTSnapshot` / `OpLog` / `PresenceSnapshot` each carry `board_id` FK to scope multi-board persistence (AD-17). |
 
 ## Stack
 
@@ -207,13 +231,14 @@ flowchart LR
     end
 
     subgraph Server["Go Server (single binary)"]
-        WS["WebSocket Gateway"]
+        WS["WebSocket Gateway\n+ handshake auth (AD-16)"]
         YjsRelay["yjs-go CRDT Relay"]
         SQLite["SQLite WAL"]
         Presence["In-memory Presence\n/ Sim-state Snapshot"]
+        AuthMW["Auth Middleware\n(OAuth callback + session, AD-16)\n+ Permission Gate (AD-17)"]
     end
 
-    Browser <-->|WebSocket| Server
+    Browser <-->|WebSocket + session token| Server
     Wasm -->|exports| ReactUI
     YDoc <--> YjsRelay
     YjsRelay --> SQLite
@@ -224,14 +249,20 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    subgraph Production["Single Linux Node"]
-        GoBin["Go binary (single process)"]
-        SQLiteFile["SQLite WAL file"]
+    subgraph Production["Cloud-hosted Single Node (AD-18)"]
+        GoBin["Go binary (single process)\nin Docker container"]
+        SQLiteFile["SQLite WAL file\n(persistent volume)"]
+        CI["CI/CD: GitHub Actions\nlint→test→build→deploy"]
+        Secrets["Secret env\n(OAuth client_secret, etc.)"]
     end
 
-    Client1["Browser Client 1"] -->|WebSocket| GoBin
-    Client2["Browser Client 2"] -->|WebSocket| GoBin
-    ClientN["Browser Client N"] -->|WebSocket| GoBin
+    Client1["Browser Client 1"] -->|WebSocket + TLS + session| GoBin
+    Client2["Browser Client 2"] -->|WebSocket + TLS + session| GoBin
+    ClientN["Browser Client N"] -->|WebSocket + TLS + session| GoBin
+    OAuth["GitHub / Google OAuth\n(zero fee, direct)"] <-.->|OAuth callback| GoBin
+    GoBin --- SQLiteFile
+    GoBin --- Secrets
+    CI -.->|deploy| GoBin
 ```
 
 ### Core-Entity ERD
@@ -258,20 +289,48 @@ erDiagram
     SQLite ||--o{ CRDTSnapshot : "persists"
     SQLite ||--o{ OpLog : "persists"
     SQLite ||--o{ PresenceSnapshot : "persists"
+    Board ||--o{ CRDTSnapshot : "scopes (board_id)"
+    Board ||--o{ OpLog : "scopes (board_id)"
+    Board ||--o{ PresenceSnapshot : "scopes (board_id)"
     CRDTSnapshot {
+        uuid board_id FK "scopes per board (AD-17)"
         string versionVector "clientID+clock"
         datetime simulationTime
         json docState
     }
     OpLog {
         int id PK
+        uuid board_id FK "scopes per board (AD-17)"
         string opData "Yjs update"
         datetime timestamp
     }
     PresenceSnapshot {
+        uuid board_id FK "scopes per board (AD-17)"
         string hostClientId
         string simState
         datetime capturedAt
+    }
+    User {
+        uuid id PK
+        string username
+        string oauth_provider "github|google"
+        string oauth_user_id
+        datetime created_at
+    }
+    Session {
+        string token PK "HttpOnly Secure Cookie"
+        uuid user_id FK
+        datetime expires_at
+    }
+    Board {
+        uuid id PK
+        uuid owner_user_id FK
+        string share_token "nullable, for share-link join"
+    }
+    UserBadge {
+        uuid user_id FK
+        string badge_id
+        datetime unlocked_at
     }
 ```
 
@@ -289,9 +348,11 @@ erDiagram
     src/                # Rust solver kernel: parser, autodiff, faer LU, BDF integrator, Newton solver, dimension check, non-negative clamp, DELAY expansion
     Cargo.toml
   server/
-    main.go             # Go single binary: WebSocket gateway, yjs-go CRDT relay, SQLite persistence, in-memory presence
+    main.go             # Go single binary: WebSocket gateway (handshake auth AD-16), yjs-go CRDT relay, SQLite persistence (users/sessions/boards/badges), in-memory presence, auth middleware + permission gate (AD-16/17)
     go.mod
   package.json          # brownfield: React + TanStack Start + Vite + Tailwind
+  Dockerfile            # multi-stage build: Rust→wasm + Go binary + frontend dist, single image (AD-18)
+  .github/workflows/    # CI/CD: lint→test→build→deploy (AD-18)
 ```
 
 ## Capability → Architecture Map
@@ -316,6 +377,9 @@ erDiagram
 | FR-CANVAS-4 (canvas viewport) | `src/lib/render/` | AD-9, AD-2 |
 | FR-CANVAS-5 (mini-map) | `src/lib/render/` | AD-9 |
 | FR-UI-6 (CRT background drift, per-glyph glow) | `src/lib/render/` (glow atlas) | AD-9 |
+| FR-GAME-2 (behavior badges, cross-device persistence) | Go server SQLite `user_badges` table (bound to account) | AD-16 |
+| Auth & permission (OAuth GitHub+Google, owner/editor/viewer, WS handshake auth) | Go server `server/` (auth middleware + WS gateway gate) | AD-16, AD-17 |
+| Cloud deployment (Dockerfile, CI/CD, TLS, secret env) | repo root `Dockerfile` + `.github/workflows/` | AD-18 |
 
 ## Deferred
 
@@ -327,12 +391,16 @@ The following are intentionally not decided at this altitude:
 - **F7-snapshot-freq (snapshot upload frequency):** FR-COLLAB-5 specifies "periodic" without concrete frequency. Open question from memlog. Implementation-time calibration balancing replay cost vs host startup latency.
 - **Adaptive step-size:** Lives inside the FR-SIM-8 degradation chain. Not an MVP requirement; deferred to implementation within that chain.
 - **Broyden re-evaluation:** Only triggered if F5-perf fails the 100 steps/s target. Not an architecture decision.
-- **Observability stack / cloud migration / multi-node WS gateway:** Addendum section 3.2 threshold-triggered. Not MVP.
+- **Observability stack (independent product) / multi-node WS gateway / PostgreSQL / Redis:** Addendum section 3.2 threshold-triggered. Not MVP. (Auth is now MVP per AD-16/17; cloud hosting per AD-18; neither triggers horizontal migration.)
 - **AST conflict light/heavy threshold enumeration:** Implementation-time calibration against real conflict scenarios.
-- **VRAM glow quality acceptance criteria:** Implementation-time visual prototype vs shadowBlur comparison.
+- **VRAM glow quality acceptance criteria:** Implementation-time visual prototype vs shadowBlur comparison. (Note: spec has locked this to "visually indistinguishable" — stricter than spine's open status; offer to re-sync spine F1-quality with spec.)
 - **Go SQLite driver choice:** Implementation-time decision, constrained by single-binary envelope (AD-2).
 - **Snapshot upload frequency:** Implementation-time calibration (deferred from F7-snapshot-freq).
 - **Rust async runtime for Wasm:** No decision needed at MVP — Wasm solver kernel is synchronous compute, not I/O-bound.
-- **Authentication / authorization model:** Not scoped to MVP. Addendum section 3.2 threshold-triggered.
+- **Self-hosted username/password auth:** Not MVP. SaaS scale-up complements OAuth (GitHub+Google) once email service is in place. AD-16 governs MVP auth.
 - **Snapshot quiescence protocol (Reviewer Gate hole #3):** Whether snapshot capture must drain in-flight CRDT sync before reading, vs idempotent replay guard. AD-11's version vector + current-CRDT-wins replay already prevents double-application of ops on host handoff; the quiescence-vs-guard choice is an implementation-time concurrency decision, not an architecture invariant.
 - **Prettier config baseline:** Inherit `lovable/prototype`'s `eslint-plugin-prettier` implicit defaults (no explicit `.prettierrc` on prototype today). Establish root `.prettierrc` at implementation kickoff before first TS/JS code lands on `main`, so editor/CI format-on-save activates deterministically instead of no-op'ing. Implementation-time tooling decision, not an architecture invariant.
+- **CRDT op semantic validation / editor rate-limit (Reviewer Gate security finding):** AD-17 gateway rejects viewer ops, but editor retains full CRDT write and may send malicious ops (mass delete / forged stockId / oversized Awareness / op flooding). MVP gateway does minimal role-check only; per-client op/s quota, Awareness size/freq limits, room-capacity hard cap (10 users), and delete-target-existence checks are deferred to the implementation-time security spec. Revisit before MVP launch.
+- **Server-restart recovery protocol (Reviewer Gate data-integrity finding):** Session survives restart (SQLite session table, AD-16) but in-memory sim state and hostClientId are lost. AD-11 host-migration governs live handoff; the restart-recovery case (auto-elect new host from connected editors via CRDT version vector, resume from persisted CRDTSnapshot) is deferred to implementation. Revisit before MVP launch.
+- **Host-migration trigger protocol detail (Reviewer Gate data-integrity finding):** Who detects host disconnect (server heartbeat timeout), election priority (editor with newest CRDT version), and original-host-reconnect arbitration are deferred to implementation. CRDT version vector (AD-11) provides the ordering invariant; the trigger timing/threshold is an operational parameter. Revisit before MVP launch.
+- **SQLite backup/restore & zero-downtime deploy (Reviewer Gate deployment finding):** Single-node SQLite has no backup strategy and each deploy has a downtime window. Both are deferred: backup path (e.g. daily `sqlite3 .backup` to object storage) must be defined before MVP launch; zero-downtime deploy is non-MVP (deploy-window downtime acceptable, documented in ops runbook). Revisit backup before launch.
