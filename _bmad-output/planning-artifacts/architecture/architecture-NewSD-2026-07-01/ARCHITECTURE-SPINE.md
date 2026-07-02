@@ -132,7 +132,7 @@ The composite paradigm is **Host-Authoritative CRDT Document Model with Wasm Num
 
 - **Binds:** AD-16(认证后授权), FR-COLLAB-1, FR-COLLAB-4, 场景 C(只读分享)
 - **Prevents:** 共享链接=共享编辑权 / 无 owner 致画板无主无法管理
-- **Rule:** 画板创建者为 owner;三角色 owner(全部+删+转让+改权限)/ editor(编辑 CRDT)/ viewer(只读,不发 CRDT op,仅订阅); 权限映射到 WS 网关:viewer 的 CRDT op 在网关拒收(非客户端自检), room 加入走 owner 邀请或 share token; 所有 owner 转让与角色修改操作必须走认证 HTTP 端点(验证当前 session 对应 user_id = `boards.owner_user_id` 后更新 SQLite),CRDT 通道不承载权限变更(防 editor 伪造 CRDT op 自提权); 权限变更须传播到已连接客户端:服务端推送 `role_change` WS frame(新角色 + 可选断开指令),变更前先 drain 该连接待处理 op 保原子性(防降级 viewer 本地 Y.Doc 残留旧 op 竞态); 画板归属存 SQLite boards 表(owner_user_id + share_token),share_token 由 crypto/rand 生成 ≥128 bits 熵 URL-safe base64 编码,owner 可随时重新生成使旧链接失效,分享页配 `Referrer-Policy: no-referrer` 防 token 经 Referer 泄漏; CRDT 文档本身不变,权限是网关层准入控制(非 CRDT 内嵌); CRDT 持久化表(CRDTSnapshot/OpLog/PresenceSnapshot)按 `board_id` 分区(见 ERD); 房主迁移(AD-11)与画板 owner 解耦:owner 是画板归属,host 是仿真权威,两者可不同人
+- **Rule:** 画板创建者为 owner;三角色 owner(全部+删+转让+改权限)/ editor(编辑 CRDT)/ viewer(只读,不发 CRDT op,仅订阅); 权限映射到 WS 网关:viewer 的 CRDT op 在网关拒收(非客户端自检), room 加入走 owner 邀请或 share token; 所有 owner 转让与角色修改操作必须走认证 HTTP 端点(验证当前 session 对应 user_id = `boards.owner_user_id` 后更新 SQLite),CRDT 通道不承载权限变更(防 editor 伪造 CRDT op 自提权); 权限变更须传播到已连接客户端:服务端推送 `role_change` WS frame(新角色 + 可选断开指令),变更前先 drain 该连接待处理 op 保原子性(防降级 viewer 本地 Y.Doc 残留旧 op 竞态); 画板归属存 SQLite boards 表(owner_user_id + share_token),share_token 由 crypto/rand 生成 ≥128 bits 熵 URL-safe base64 编码,owner 可随时重新生成使旧链接失效,分享页配 `Referrer-Policy: no-referrer` 防 token 经 Referer 泄漏; CRDT 文档本身不变,权限是网关层准入控制(非 CRDT 内嵌); CRDT 持久化表(CRDTSnapshot/OpLog)按 `board_id` 分区;PresenceSnapshot 为进程内存态按 `board_id` 键不落 SQLite(会话结束丢弃,FR-COLLAB-5)(见 ERD); 房主迁移(AD-11)与画板 owner 解耦:owner 是画板归属,host 是仿真权威,两者可不同人
 
 ### AD-18 — F-Cloud: 单节点云托管部署包络(AD-2 演进)
 
@@ -196,7 +196,7 @@ flowchart TD
 | Naming — users table | `users(id, username, oauth_provider, oauth_user_id, created_at)` with UNIQUE(oauth_provider, oauth_user_id) for multi-provider OAuth linkage (AD-16). |
 | Naming — boards ownership | `boards(id, owner_user_id, share_token)`; permission enforced at WS gateway not in CRDT (AD-17). |
 | Naming — share_token entropy | `share_token` generated via crypto/rand, ≥128 bits entropy, URL-safe base64; owner-regenerable to revoke old links (AD-17). |
-| Data & formats — CRDT persistence scoping | `CRDTSnapshot` / `OpLog` / `PresenceSnapshot` each carry `board_id` FK to scope multi-board persistence (AD-17). |
+| Data & formats — CRDT persistence scoping | `CRDTSnapshot` / `OpLog` each carry `board_id` FK to scope multi-board persistence (AD-17); `PresenceSnapshot` carries `board_id` as in-memory key (not persisted, dropped on session end, FR-COLLAB-5). |
 
 ## Stack
 
@@ -288,10 +288,9 @@ erDiagram
     }
     SQLite ||--o{ CRDTSnapshot : "persists"
     SQLite ||--o{ OpLog : "persists"
-    SQLite ||--o{ PresenceSnapshot : "persists"
     Board ||--o{ CRDTSnapshot : "scopes (board_id)"
     Board ||--o{ OpLog : "scopes (board_id)"
-    Board ||--o{ PresenceSnapshot : "scopes (board_id)"
+    Board ||--o{ PresenceSnapshot : "in-memory keyed by board_id"
     CRDTSnapshot {
         uuid board_id FK "scopes per board (AD-17)"
         string versionVector "clientID+clock"
@@ -305,7 +304,7 @@ erDiagram
         datetime timestamp
     }
     PresenceSnapshot {
-        uuid board_id FK "scopes per board (AD-17)"
+        uuid board_id FK "in-memory key (AD-17), not persisted"
         string hostClientId
         string simState
         datetime capturedAt
@@ -386,14 +385,14 @@ erDiagram
 The following are intentionally not decided at this altitude:
 
 - **F5-perf (Jacobian full recompute performance):** Whether full Jacobian recompute + sparse LU can meet PRD section 1.4's 100 steps/s target for 100-stock scale. Open question from memlog. Implementation-time calibration; if target not met, Broyden approximation must be re-evaluated.
-- **F1-quality (glow atlas vs shadowBlur visual parity):** Whether VRAM atlas glow can reproduce prototype per-glyph shadowBlur neon quality. Open question from memlog. Implementation-time visual prototype comparison required before closing FR-UI-6 acceptance criteria.
+- **F1-quality (glow atlas vs shadowBlur visual parity):** VRAM atlas glow must reproduce prototype per-glyph shadowBlur neon quality to **visually indistinguishable** acceptance (synced with spec CAP-11, locked stricter than prior open status). Implementation-time visual prototype vs shadowBlur comparison required; if not met, treat as FR-UI-6 non-conformance (no shadowBlur fallback, violates AD-9).
 - **F6-threshold (light/heavy conflict enumeration):** The light vs heavy conflict classification threshold cannot be exhaustively enumerated at architecture time. Open question from memlog. Implementation-time calibration against real conflict scenarios.
 - **F7-snapshot-freq (snapshot upload frequency):** FR-COLLAB-5 specifies "periodic" without concrete frequency. Open question from memlog. Implementation-time calibration balancing replay cost vs host startup latency.
 - **Adaptive step-size:** Lives inside the FR-SIM-8 degradation chain. Not an MVP requirement; deferred to implementation within that chain.
 - **Broyden re-evaluation:** Only triggered if F5-perf fails the 100 steps/s target. Not an architecture decision.
 - **Observability stack (independent product) / multi-node WS gateway / PostgreSQL / Redis:** Addendum section 3.2 threshold-triggered. Not MVP. (Auth is now MVP per AD-16/17; cloud hosting per AD-18; neither triggers horizontal migration.)
 - **AST conflict light/heavy threshold enumeration:** Implementation-time calibration against real conflict scenarios.
-- **VRAM glow quality acceptance criteria:** Implementation-time visual prototype vs shadowBlur comparison. (Note: spec has locked this to "visually indistinguishable" — stricter than spine's open status; offer to re-sync spine F1-quality with spec.)
+- **VRAM glow quality acceptance criteria:** **Visually indistinguishable** (locked, synced with spec CAP-11). Implementation-time visual prototype vs shadowBlur comparison required; no shadowBlur fallback if not met (AD-9).
 - **Go SQLite driver choice:** Implementation-time decision, constrained by single-binary envelope (AD-2).
 - **Snapshot upload frequency:** Implementation-time calibration (deferred from F7-snapshot-freq).
 - **Rust async runtime for Wasm:** No decision needed at MVP — Wasm solver kernel is synchronous compute, not I/O-bound.

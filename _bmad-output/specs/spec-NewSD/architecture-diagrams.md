@@ -124,14 +124,13 @@ erDiagram
     }
     SQLite ||--o{ CRDTSnapshot : "persists"
     SQLite ||--o{ OpLog : "persists"
-    SQLite ||--o{ PresenceSnapshot : "persists"
     SQLite ||--o{ User : "persists"
     SQLite ||--o{ Session : "persists"
     SQLite ||--o{ Board : "persists"
     SQLite ||--o{ UserBadge : "persists"
     Board ||--o{ CRDTSnapshot : "partitions by board_id"
     Board ||--o{ OpLog : "partitions by board_id"
-    Board ||--o{ PresenceSnapshot : "partitions by board_id"
+    Board ||--o{ PresenceSnapshot : "in-memory keyed by board_id"
     User ||--o{ Session : "owns"
     User ||--o{ Board : "owns (owner_user_id)"
     User ||--o{ UserBadge : "earns"
@@ -148,7 +147,7 @@ erDiagram
         datetime timestamp
     }
     PresenceSnapshot {
-        uuid board_id FK
+        uuid board_id FK "in-memory key (AD-17), not persisted"
         string hostClientId
         string simState
         datetime capturedAt
