@@ -30,6 +30,10 @@ The composite paradigm is **Host-Authoritative CRDT Document Model with Wasm Num
 | **Wasm Numeric Core** | All simulation-step numeric evaluation passes through Rust+Wasm kernel (BDF integrator, Newton solver, autodiff, sparse LU, dimension check, non-negative clamp, DELAY expansion). TS side is a thin Solver boundary calling Wasm exports. | `wasm/` (Rust) + TS boundary in `src/lib/solver/` |
 | **Canvas 2D Fixed-Point Render** | VRAM double-buffer (char-code buffer + color-index buffer) with glow atlas pre-rendered per ASCII char x brightness tier; hue-shift GPU fragment shader, nearest sampling, no per-glyph shadowBlur. Dirty-region updates per FR-CANVAS-4. | `src/lib/render/` |
 
+## Architecture-as-Content Aesthetic Paradigm
+
+NewSD 遵循“形式即内容”(form is content)美学原理 — 与 17 世纪具象诗(赫伯特《复活节翅膀》文字排成翅膀形状)及 20 世纪 ASCII 艺术(字符拼出可辨认图形)的美学亲缘一致。三原理:(1)形式即内容 — ASCII 字符排列既是建模语言(存量/流量/公式 AST 可读语义)又是视觉图像(系统拓扑可看图形);(2)等宽网格为画布 — 等宽字体终端网格是共同创作画布,图元/连线/公式网格对齐;(3)阅读与观看双重性 — 用户可逐字符读语义,也可退一步看系统拓扑图形。此美学范式是四 pillar 的美学统摄:Canvas 2D Fixed-Point Render(AD-9 VRAM 双缓冲+辉光图集)+ 禁 per-glyph shadowBlur 是维护此美学完整性的技术铁律(保等宽网格+字符堆叠视觉不被光栅化模糊破坏,非“技术架构 vs 内容”二分);此为产品级美学不变量,PRD §1.1“结构即内容”特点与“架构即内容”硬约束是产品层渊源,spine AD-9 是此铁律的架构落地。
+
 ## Invariants & Rules
 
 ### AD-1 [ADOPTED] — F-Paradigm: Four-pillar design paradigm
