@@ -38,7 +38,7 @@ NewSD 遵循“形式即内容”(form is content)美学原理 — 与 17 世纪
 
 - **FR-CANVAS-1** 无限画布导航:中键拖拽或空格+左键平移;滚轮/双指捏合/缩放控件缩放;minZoom=0.05,maxZoom=20;Float64 世界坐标系 + 3×2 仿射投影矩阵。
 - **FR-CANVAS-2** 网格吸附对齐:1 世界单位 = 1 字符格;屏幕空间吸附容差恒 8px(`snapTolerance = 8 / currentZoom`,换算回屏幕恒 8px);网格步长可配。
-- **FR-CANVAS-3** ASCII 字符渲染:等宽字体(Courier New 等效);3 类图元——源/汇 cloud(`.--.`/`(    )`/`` '--' ``)、存量 stock(方框 `┌┐└┘─│`)、流量 flow 箭头 `→`(可变 `▼`/常数 `○` 变体);▼/○ 为 flow 渲染变体非独立图元;反馈回路为涌现结果非独立标记;文本标签对齐字符网格。
+- **FR-CANVAS-3** ASCII 字符渲染:等宽字体(Courier New 等效);3 类图元——源/汇 cloud(`.--.`/`(    )`/`'--'`)、存量 stock(方框 `┌┐└┘─│`)、流量 flow 箭头 `→`(可变 `▼`/常数 `○` 变体);▼/○ 为 flow 渲染变体非独立图元;反馈回路为涌现结果非独立标记;文本标签对齐字符网格。
 - **FR-CANVAS-4** 空间索引与视口剔除:R 树空间索引;每帧仅查询绘制与视口相交元素;脏矩形追踪仅重绘变化区域;目标 10000 图元 ≥ 30 FPS。
 - **FR-CANVAS-5** 小地图(MVP):角落常驻缩略图,低精度采样投影全部图元;高亮框指示当前视口;点击/拖拽跳转主视口;采样粒度与更新频率架构期定,须与脏矩形(FR-CANVAS-4)联动增量更新,避免 10000 图元全量重绘。
 
@@ -299,6 +299,15 @@ So that 我能在超大世界坐标系下定位建模区域。
 **When** 加载期间 / 运行时未捕获错误
 **Then** 加载期间显 loading skeleton(非空白屏卡死,用户知在加载);运行时错误全局 error boundary 兜底(显错误 toast + 不白屏,可回首页)
 **And** error boundary 捕获前端渲染异常非吞;worker crash(E23)/FR-SIM-6 熔断 toast 在 1b 域,本 story 提供全局兜底基座
+
+**Acceptance Criteria(美学段 — 机制A② per-story 美学 AC 首落地 + 视觉 gate ③):**
+
+**Given** 1a.1 无限画布导航落地(Float64 pan/zoom + 网格渲染)
+**When** 用户首次访问应用并操作画布(中键/空格+左键平移、滚轮缩放)
+**Then** 画布渲染全程 on-palette:背景 --ns-bg(#0a0e14)、网格 --ns-grid(#1a1f2e)、原点轴 --ns-stock(#00ffd5)低 alpha,单一真源为 tokens.css(computed style 运行时读取,artifact: _bmad-output/design-system/ascii-design-system.md)
+**And** 画布表面禁 per-glyph shadowBlur(CAP-11):1a.1 仅矢量网格 + 原点十字,字符辉光图集留待 1a.2 VRAM 渲染基座(AD-9)
+**And** loading skeleton 为 ASCII 等宽 art(INITIALIZING CANVAS)on-palette,加载期间非空白(F4);全局 error boundary(SYSTEM FAULT 面板)复用 sub-PR #1 兜底基座,同为 on-palette
+**And** 本 story 首落地机制 A② per-story 美学 AC + 视觉 gate ③:本地 Playwright 截图验证平移/缩放后网格与原点轴稳定、无空白/错位/精度退化(E7 ±1e15 clamp 生效),方判美学 AC② 达标
 
 #### Story 1a.2: VRAM 渲染基座与 F1-quality spike
 
@@ -1587,6 +1596,7 @@ So that 建模动作有奖励反馈且可关闭游戏化层。
 > 决策:5 项 UX-state 并入各相关 story AC,不新增独立 UX-state story。依据:每项 UX-state 有自然 story 归属,独立 UX-state story 是“技术层”故事违 step-02 用户价值导向;并入保 UX 状态与功能 story 同验收。
 >
 > 映射:
+>
 > - 板加载(≤2s 窗 + loading skeleton UX)→ Story 1a.1(PERF-4 KPI + 加载骨架/进度 UX)
 > - WS 重连(NFR-REL-3 +“重连中”状态 UX)→ Story 3.1/3.2(REL-3 已含 auto-reconnect + 重连中状态)
 > - 空画板(空态引导)→ Story 1a.4(空画板占位 + 引导用户建首图元)
