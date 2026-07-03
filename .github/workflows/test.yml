@@ -1,0 +1,43 @@
+name: test
+
+on:
+  push:
+    branches: [main, "feat/**"]
+  pull_request:
+    branches: [main]
+
+# Story 1a.1 foundation: minimal three-language test CI. The deploy stage
+# (lint→test→build→deploy on main merge, AD-18) arrives in sub-PR #4. Locally
+# only vitest/build/lint/typecheck are runnable (go/rust/wasm-pack not installed
+# on the dev machine); this workflow is the authoritative gate for the go and
+# wasm test suites.
+jobs:
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+      - run: bun run lint
+      - run: bun run test
+      - run: bun run build
+      - run: bun run typecheck
+
+  go:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+      - run: go test ./...
+
+  wasm:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: jetli/wasm-pack-action@v0.4.0
+      - run: wasm-pack test --node wasm

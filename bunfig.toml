@@ -1,0 +1,4 @@
+[install]
+# Supply-chain guard: only allow deps published >= 24h ago.
+# NewSD carries no @lovable.dev packages, so no excludes are needed.
+minimumReleaseAge = 86400
