@@ -6,11 +6,13 @@ on:
   pull_request:
     branches: [main]
 
-# Story 1a.1 foundation: minimal three-language test CI. The deploy stage
-# (lint→test→build→deploy on main merge, AD-18) arrives in sub-PR #4. Locally
-# only vitest/build/lint/typecheck are runnable (go/rust/wasm-pack not installed
-# on the dev machine); this workflow is the authoritative gate for the go and
-# wasm test suites.
+# Story 1a.1 three-language test CI. The go job embeds the frontend dist
+# (go:embed) so it depends on the frontend build artifact (uploaded by the
+# frontend job, downloaded into dist/ before go vet/test/build). The deploy
+# stage (lint→test→build→deploy on main merge, AD-18) arrives in sub-PR #4.
+# Locally only vitest/build/lint/typecheck are runnable (go/rust/wasm-pack not
+# installed on the dev machine); this workflow is the authoritative gate for
+# the go and wasm test suites.
 jobs:
   frontend:
     runs-on: ubuntu-latest
@@ -22,15 +24,34 @@ jobs:
       - run: bun run test
       - run: bun run build
       - run: bun run typecheck
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist
 
   go:
+    needs: frontend
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
           go-version: "1.24"
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist
+      - run: go vet ./...
       - run: go test ./...
+      - name: build + smoke
+        run: |
+          go build -o /tmp/newsd .
+          /tmp/newsd &
+          sleep 1
+          curl -sf http://localhost:8080/__health
+          curl -sf http://localhost:8080/__version
+          curl -sf http://localhost:8080/
+          kill %1 2>/dev/null || true
 
   wasm:
     runs-on: ubuntu-latest
