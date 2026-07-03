@@ -21,6 +21,8 @@ pub fn core_version() -> String {
 mod tests {
     use wasm_bindgen_test::*;
 
+    use crate::core_version;
+
     #[wasm_bindgen_test]
     fn core_version_is_nonempty() {
         assert!(!core_version().is_empty());
