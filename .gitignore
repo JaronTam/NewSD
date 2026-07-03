@@ -42,3 +42,12 @@ _bmad/
 # Playwright MCP 工具产物 / 仿真截图（临时产物，不提交）
 .playwright-mcp/
 /sd-sim-*.png
+
+# Go / Rust / Wasm 构建产物（Story 1a.1 三语言基座）
+/target
+/wasm/target
+/wasm/pkg
+*.tsbuildinfo
+
+# 测试覆盖率
+/coverage

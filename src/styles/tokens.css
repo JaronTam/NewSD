@@ -1,0 +1,40 @@
+/* NewSD cyberpunk ASCII design tokens.
+   Single source of truth for the design system; the human-readable artifact is
+   _bmad-output/design-system/ascii-design-system.md. Tailwind wiring lives in
+   ../styles.css (@theme inline maps these into bg-/text- utilities). */
+:root {
+  /* ---- surface palette ---- */
+  --ns-bg: #0a0e14; /* terminal void */
+  --ns-bg-elev: #0f1419; /* elevated panel / toolbar */
+  --ns-grid: #1a1f2e; /* canvas grid lines */
+  --ns-border: #1a1f2e; /* hairline borders */
+
+  /* ---- glyph palette (semantic) ---- */
+  --ns-fg: #c9d1d9; /* default glyph */
+  --ns-fg-dim: #4a5568; /* muted glyph */
+  --ns-stock: #00ffd5; /* stock — cyan phosphor */
+  --ns-flow: #ff5577; /* flow — magenta */
+  --ns-cloud: #7c3aed; /* cloud / source-sink — violet */
+  --ns-spark: #39ff14; /* sparkline / success — neon green */
+  --ns-sel: #ffd700; /* selection — amber */
+  --ns-err: #ff4444; /* error — red */
+
+  /* ---- typography ---- */
+  --ns-font-mono: "JetBrains Mono", "Courier New", monospace;
+
+  /* ---- character grid (monospace canvas) ---- */
+  --ns-cell-w: 9px; /* px per char column at zoom 1 */
+  --ns-cell-h: 16px; /* px per char row at zoom 1 */
+
+  /* ---- glow bounds (AD-1: luminance-bound, no per-glyph shadowBlur abuse) ---- */
+  --ns-glow-min: 2px;
+  --ns-glow-max: 11px;
+
+  --radius: 2px;
+}
+
+/* NewSD's aesthetic is inherently dark. The .dark class inherits :root (cyberpunk)
+   so shadcn-style `dark:` variants stay on-palette — no token overrides needed. */
+.dark {
+  color-scheme: dark;
+}
