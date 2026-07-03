@@ -33,10 +33,22 @@
 
 ```bash
 bun install
-bun run dev        # 前端 dev
-bun run build      # 生成 dist(routeTree.gen.ts 作为副作用生成并提交)
-bun run typecheck  # tsc --noEmit
+bun run dev          # 前端 dev
+bun run build        # 生成 dist(routeTree.gen.ts 作为副作用生成并提交)
+bun run typecheck    # tsc --noEmit
 ```
+
+### 单二进制(Go serve dist,sub-PR #2)
+
+```bash
+bun run build        # 先生成 dist/(go:embed 编译期要求)
+go build -o newsd .  # 嵌入 dist → 单二进制(AD-3 无 Node 运行时)
+PORT=8080 ./newsd    # 默认 :8080
+```
+
+端点:`GET /`(SPA)、`GET /__version`(版本戳,接 `internal/version`)、`GET /__health`(存活)。
+未知 `/__*` 保留命名空间 → 404;客户端路由回退 index.html。`go test ./...` 需 dist/
+存在(CI 由 frontend job 产出 artifact 供 go job 下载)。
 
 ## 部署(双轨,sub-PR #4 落地)
 
@@ -52,4 +64,8 @@ bun run typecheck  # tsc --noEmit
 ## 进度
 
 - ✅ 规划全阶段合并 main(@7c96479):架构 18 ADs + spec 13 CAPs + epics 6 epic/35 story + IR ✅ READY
-- 🚧 Story 1a.1 应用骨架与无限画布导航(本 PR:foundation sub-PR #1)
+- ✅ Story 1a.1 foundation sub-PR #1 合并 main(@03a1919):brownfield carry + SPA shell + 三语言测试基座 + 设计系统 token 基座
+- 🚧 Story 1a.1 sub-PR #2(本 PR):Go serve dist(单二进制 + /__version + /__health + F1/F2/F3 清理)
+- ⏳ Story 1a.1 sub-PR #3:无限画布导航(Float64 pan/zoom + 3×2 仿射)+ 美学机制 A②③ 落地
+- ⏳ Story 1a.1 sub-PR #4:Dockerfile 多阶段 + CI/CD 双轨(Cloudflare Containers + docker-compose)
+- ⏳ Story 1a.1 sub-PR #5:SQLite WAL 备份原语(AR#15 三选一 + 恢复 E2E)

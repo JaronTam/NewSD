@@ -1,0 +1,6 @@
+# Normalize all text files to LF on checkout + commit (cross-platform).
+# Overrides local core.autocrlf so Windows checkouts no longer introduce CRLF,
+# which previously made `bun run lint` (prettier/prettier endOfLine:lf) fail
+# locally even though the repo HEAD is LF and CI is green.
+# Binary files are auto-detected (NUL-byte heuristic) and left untouched.
+* text=auto eol=lf
