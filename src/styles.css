@@ -118,4 +118,95 @@
     font-size: 0.7rem;
     max-width: 28rem;
   }
+
+  /* Story 1a.1 sub-PR #3 — infinite canvas shell (FR-CANVAS-1).
+     On-palette via tokens.css; no per-glyph shadowBlur on the canvas surface
+     (CAP-11) — glow lives in the HTML skeleton/axes only. */
+  .ns-canvas {
+    position: relative;
+    width: 100%;
+    height: 100vh;
+    overflow: hidden;
+    background-color: var(--ns-bg);
+    color: var(--ns-fg);
+    font-family: var(--ns-font-mono);
+    outline: none;
+  }
+  .ns-canvas__surface {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    display: block;
+    /* We handle pan/zoom/pinch ourselves; stop the browser from stealing them. */
+    touch-action: none;
+    cursor: default;
+  }
+  .ns-canvas__hud {
+    position: absolute;
+    top: 0.5rem;
+    left: 0.6rem;
+    color: var(--ns-fg-dim);
+    font-size: 0.7rem;
+    letter-spacing: 0.02em;
+    pointer-events: none;
+    white-space: pre;
+    user-select: none;
+  }
+  .ns-canvas__skeleton {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+    background-color: var(--ns-bg);
+    pointer-events: none;
+  }
+  .ns-canvas__skeleton .ns-ascii {
+    color: var(--ns-stock);
+    text-shadow: 0 0 6px var(--ns-stock);
+    font-size: 0.75rem;
+    line-height: 1.1;
+    white-space: pre;
+  }
+  .ns-canvas__hint {
+    color: var(--ns-fg-dim);
+    font-size: 0.7rem;
+    letter-spacing: 0.05em;
+  }
+
+  /* Zoom controls (+/-) — on-palette, no shadowBlur, HTML/CSS only (CAP-11).
+     Positioned bottom-right so the HUD (top-left) stays uncluttered. */
+  .ns-canvas__ctrl {
+    position: absolute;
+    right: 0.6rem;
+    bottom: 0.6rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    z-index: 2;
+  }
+  .ns-canvas__btn {
+    width: 1.8rem;
+    height: 1.8rem;
+    background: transparent;
+    border: 1px solid var(--ns-border);
+    color: var(--ns-fg-dim);
+    font-family: var(--ns-font-mono);
+    font-size: 1rem;
+    line-height: 1;
+    padding: 0;
+    cursor: pointer;
+    user-select: none;
+  }
+  .ns-canvas__btn:hover {
+    color: var(--ns-stock);
+    border-color: var(--ns-stock);
+  }
+  .ns-canvas__btn:focus-visible {
+    outline: 1px solid var(--ns-stock);
+    outline-offset: 1px;
+  }
 }

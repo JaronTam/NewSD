@@ -1,25 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
 
-// Story 1a.1 foundation: minimal boot screen. The infinite canvas (stock/cloud/
-// flow rendering, Float64 pan/zoom, 3x2 affine projection) arrives in sub-PR #3.
-// This screen exists to (a) prove the SPA build pipeline end-to-end and
-// (b) carry the cyberpunk "form-is-content" aesthetic from the first paint.
-export const Route = createFileRoute("/")({
-  component: BootScreen,
-});
+import { CanvasView } from "../lib/render/CanvasView";
 
-function BootScreen() {
-  return (
-    <div className="ns-center">
-      <pre className="ns-ascii ns-boot-art">{`  ╔═══════════════════════╗
-  ║  ░█▀▀░█░█░█▀▄░█▀▄░▀█▀  ║
-  ║  ░▀▀█░█▀█░█░█░█▀▄░░█   ║
-  ║  ░▀▀▀░▀░▀░▀▀░▀▀░░░▀   ║
-  ╚═══════════════════════╝`}</pre>
-      <p className="ns-boot-status">system-dynamics · collaborative · ascii</p>
-      <p className="ns-boot-note">
-        canvas not yet wired — Story 1a.1 sub-PR #3 (infinite canvas navigation)
-      </p>
-    </div>
-  );
-}
+// Story 1a.1 sub-PR #3 (FR-CANVAS-1): infinite canvas navigation — Float64
+// world coords, middle-mouse / space+left pan, wheel zoom (0.05-20), 3x2
+// affine projection, loading skeleton (F4) + global error boundary (兜底基座
+// in __root.tsx). The previous BootScreen is retired; the canvas is the shell.
+export const Route = createFileRoute("/")({
+  component: CanvasView,
+});

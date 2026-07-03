@@ -1,4 +1,11 @@
-import { createRootRoute, Link, Outlet, useRouter } from "@tanstack/react-router";
+import {
+  HeadContent,
+  Link,
+  Outlet,
+  Scripts,
+  createRootRoute,
+  useRouter,
+} from "@tanstack/react-router";
 import { useEffect } from "react";
 
 import "../styles.css";
@@ -27,9 +34,11 @@ function RootShell({ children }: { children: React.ReactNode }) {
           href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap"
           rel="stylesheet"
         />
+        <HeadContent />
       </head>
       <body>
         <div className="ns-root">{children}</div>
+        <Scripts />
       </body>
     </html>
   );
