@@ -10,9 +10,9 @@ on:
 # (go:embed) so it depends on the frontend build artifact (uploaded by the
 # frontend job, downloaded into dist/ before go vet/test/build). The deploy
 # stage (lint→test→build→deploy on main merge, AD-18) arrives in sub-PR #4.
-# Locally only vitest/build/lint/typecheck are runnable (go/rust/wasm-pack not
-# installed on the dev machine); this workflow is the authoritative gate for
-# the go and wasm test suites.
+# Toolchains (go/rust/wasm-pack) are installed on the dev machine, so the go
+# and wasm suites also run locally; this workflow remains the authoritative
+# merge gate (CI is the source of truth for PR green).
 jobs:
   frontend:
     runs-on: ubuntu-latest
