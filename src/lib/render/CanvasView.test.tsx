@@ -1,5 +1,5 @@
 import { render, fireEvent, waitFor, cleanup } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { CanvasView } from "./CanvasView";
 
@@ -180,5 +180,39 @@ describe("CanvasView — FR-CANVAS-1 zoom control buttons (+/-)", () => {
     const zoomIn = container.querySelector('[aria-label="zoom in"]') as HTMLButtonElement;
     for (let i = 0; i < 40; i++) fireEvent.click(zoomIn);
     expect(zoomPercent(hudText(container))).toBe(2000);
+  });
+});
+
+// Story 1a.2 sub-PR #2 — VRAM glyph overlay (AD-9) + WebGL2 graceful degrade.
+// jsdom has no WebGL2 (and no 2D canvas context), so the renderer constructor
+// throws and CanvasView must catch it and fall back to the grid-only surface.
+// The WebGL2-present path is verified end-to-end via the Playwright visual gate.
+describe("CanvasView — VRAM overlay + WebGL2 graceful degrade (1a.2 sub-PR #2)", () => {
+  afterEach(() => {
+    cleanup();
+    vi.restoreAllMocks();
+  });
+
+  it("mounts both the 2D surface and the WebGL2 glyph overlay canvas", async () => {
+    const { container } = await renderReady();
+    expect(container.querySelector("canvas.ns-canvas__surface")).not.toBeNull();
+    expect(container.querySelector("canvas.ns-canvas__gl")).not.toBeNull();
+  });
+
+  it("marks the WebGL2 overlay aria-hidden (the HUD is the live region)", async () => {
+    const { container } = await renderReady();
+    const gl = container.querySelector("canvas.ns-canvas__gl");
+    expect(gl?.getAttribute("aria-hidden")).toBe("true");
+  });
+
+  it("degrades to grid-only when WebGL2 is unavailable (jsdom) without throwing", async () => {
+    // The VRAMRenderer constructor throws "WebGL2 context unavailable" in jsdom;
+    // CanvasView catches it and logs a DEV-only warn. Assert the degrade path is
+    // actually taken (the warn fires) and the grid-only surface still mounts.
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const { container } = await renderReady();
+    const messages = warnSpy.mock.calls.map((c) => String(c[0]));
+    expect(messages.some((m) => m.includes("WebGL2 unavailable"))).toBe(true);
+    expect(container.querySelector("canvas.ns-canvas__surface")).not.toBeNull();
   });
 });

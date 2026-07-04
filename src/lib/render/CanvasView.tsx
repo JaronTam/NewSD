@@ -9,13 +9,17 @@ import {
   type Camera,
   type Viewport,
 } from "./camera";
+import { readPalette } from "./palette";
+import { GLYPH_H, LUMA_LEVELS, bakeGlowAtlasCanvas, charToGlyphIdx } from "./vram/glowAtlas";
+import { VRAMRenderer, type RenderInstance } from "./vram/renderer";
 
 // Story 1a.1 sub-PR #3 — FR-CANVAS-1: infinite canvas navigation.
 //
 // Pure Float64 camera math lives in camera.ts (unit-tested there). This
 // component is the view layer: it owns the <canvas>, wires pointer/wheel/keyboard
 // input to panBy/zoomAt, draws an on-palette adaptive grid (no shadowBlur —
-// CAP-11), and shows a loading skeleton during the mount phase (F4). Runtime
+// CAP-11), overlays VRAM glyphs on a second WebGL2 canvas (AD-9; Story 1a.2
+// sub-PR #2), and shows a loading skeleton during the mount phase (F4). Runtime
 // render errors fall through to the global error boundary in __root.tsx
 // (RootErrorComponent — the "兜底基座" from sub-PR #1), not handled here.
 //
@@ -105,10 +109,46 @@ function distance(a: { x: number; y: number }, b: { x: number; y: number }): num
   return Math.sqrt(dx * dx + dy * dy);
 }
 
+// First-screen placeholder glyphs (Story 1a.2 sub-PR #2). Business glyphs
+// (stock/cloud/flow shapes) land in 1a.3/1a.4; this static ASCII proves the
+// VRAM real-time path is wired into the real CanvasView (not just the DEV
+// /vram route). Centered on the world origin so it sits under the crosshair.
+// ASCII-only (charset is ASCII 32-126 + box glyphs); non-charset chars are
+// skipped by charToGlyphIdx returning -1.
+function buildBootInstances(): RenderInstance[] {
+  const out: RenderInstance[] = [];
+  const pushLine = (text: string, y: number, colorIdx: number, baseLuma: number) => {
+    const x0 = -text.length / 2;
+    for (let i = 0; i < text.length; i++) {
+      const glyphIdx = charToGlyphIdx(text[i]);
+      if (glyphIdx < 0) continue; // skip chars outside the baked charset
+      out.push({
+        glyphIdx,
+        lumaIdx: (baseLuma + i) % LUMA_LEVELS,
+        colorIdx,
+        worldX: x0 + i,
+        worldY: y,
+      });
+    }
+  };
+  pushLine("NewSD", -2, 0, 3); // title — stock cyan, max glow
+  pushLine("1a.2 vram canvas", 0, 3, 1); // subtitle — fg, low glow
+  pushLine("┌──────────────┐", 2, 2, 2); // cloud violet frame
+  pushLine("└──────────────┘", 3, 2, 2);
+  return out;
+}
+
 export function CanvasView() {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const hudRef = useRef<HTMLSpanElement>(null);
+  // VRAM glyph overlay (AD-9). glCanvas is a second <canvas> stacked above the
+  // 2D surface; renderer is null when WebGL2 is unavailable (jsdom / old
+  // browsers) -> degrade to grid-only. instances holds the first-screen
+  // placeholder glyphs (business glyphs arrive in 1a.3/1a.4).
+  const glCanvasRef = useRef<HTMLCanvasElement>(null);
+  const rendererRef = useRef<VRAMRenderer | null>(null);
+  const instancesRef = useRef<RenderInstance[]>([]);
 
   const camRef = useRef<Camera>({ x: 0, y: 0, zoom: 1 });
   const vpRef = useRef<Viewport>({ width: 0, height: 0 });
@@ -181,6 +221,14 @@ export function CanvasView() {
     ctx.lineTo(Math.round(ox) + 0.5, Math.round(oy) + 5);
     ctx.stroke();
     ctx.globalAlpha = 1;
+
+    // 5. VRAM glyph overlay (AD-9). Renders the pre-baked glow atlas via the
+    // WebGL2 instanced pipeline on the stacked gl canvas. No-op when WebGL2 is
+    // unavailable — rendererRef stays null and the grid-only surface above is
+    // the final frame (no shadowBlur fallback; AD-9/CAP-11). The renderer sizes
+    // its own backing store from the viewport, so it stays in lockstep with the
+    // 2D surface via the shared vpRef/camRef.
+    rendererRef.current?.render(cam, vp, instancesRef.current);
   };
 
   // ---- viewport + tokens + ready transition (mount) ----
@@ -190,6 +238,32 @@ export function CanvasView() {
     if (!el || !canvas) return;
 
     tokensRef.current = readTokens();
+
+    // VRAM glyph overlay (AD-9): construct the WebGL2 instanced pipeline and
+    // bake the glow atlas once on mount. WebGL2 is unavailable in jsdom and
+    // old browsers — catch and degrade to grid-only (rendererRef stays null).
+    // No shadowBlur fallback is ever introduced (AD-9/CAP-11). The bake uses
+    // shadowBlur OFF-SCREEN and ONE-TIME — the canonical AD-9 mechanism, not
+    // a per-frame per-glyph violation.
+    const glCanvas = glCanvasRef.current;
+    if (glCanvas) {
+      try {
+        const renderer = new VRAMRenderer({ canvas: glCanvas, palette: readPalette() });
+        const baked = bakeGlowAtlasCanvas({
+          font: `${GLYPH_H}px "JetBrains Mono", "Courier New", monospace`,
+          glyphColor: "#ffffff", // neutral luminance map; palette shades in-shader
+          glowColor: "#ffffff",
+        });
+        renderer.setAtlas(baked);
+        rendererRef.current = renderer;
+        instancesRef.current = buildBootInstances();
+      } catch (err) {
+        rendererRef.current = null;
+        if (import.meta.env.DEV) {
+          console.warn("[CanvasView] WebGL2 unavailable — rendering grid-only", err);
+        }
+      }
+    }
 
     const measure = () => {
       const w = Math.max(1, Math.floor(el.clientWidth));
@@ -213,6 +287,8 @@ export function CanvasView() {
     return () => {
       clearTimeout(readyTimer);
       ro?.disconnect();
+      rendererRef.current?.dispose();
+      rendererRef.current = null;
     };
   }, []);
 
@@ -391,6 +467,10 @@ export function CanvasView() {
         onPointerUp={endPan}
         onPointerCancel={endPan}
       />
+      {/* WebGL2 glyph overlay (AD-9). Stacked above the 2D surface; transparent
+          and pointer-events:none so all pan/zoom/wheel input still hits the 2D
+          canvas below. aria-hidden: the HUD is the accessible live region. */}
+      <canvas ref={glCanvasRef} className="ns-canvas__gl" aria-hidden="true" />
       <span ref={hudRef} className="ns-canvas__hud" aria-live="polite" />
       <div className="ns-canvas__ctrl" role="group" aria-label="zoom controls">
         <button
