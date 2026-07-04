@@ -1,0 +1,8 @@
+.git
+.github
+.claude
+_bmad-output
+node_modules
+dist
+target
+.playwright-mcp
