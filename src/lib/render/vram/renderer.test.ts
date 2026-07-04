@@ -139,10 +139,10 @@ describe("quadWorldSize — quad spans the glow-padded cell in world units", () 
     expect(qh).toBeCloseTo(CELL_H / GLYPH_H, 10);
   });
 
-  it("matches the concrete baked layout (33/9, 40/16)", () => {
+  it("matches the concrete baked layout (41/9, 48/16)", () => {
     const [qw, qh] = quadWorldSize();
-    expect(qw).toBeCloseTo(33 / 9, 10);
-    expect(qh).toBeCloseTo(40 / 16, 10);
+    expect(qw).toBeCloseTo(41 / 9, 10);
+    expect(qh).toBeCloseTo(48 / 16, 10);
   });
 });
 

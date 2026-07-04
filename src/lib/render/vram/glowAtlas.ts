@@ -19,17 +19,26 @@ export const GLYPH_W = 9;
 export const GLYPH_H = 16;
 
 // Glow padding: must be >= --ns-glow-max (11px) so a band's shadowBlur halo
-// never bleeds into the neighbor cell. 12 leaves a 1px margin.
-export const GLOW_PAD = 12;
-export const CELL_W = GLYPH_W + 2 * GLOW_PAD; // 33
-export const CELL_H = GLYPH_H + 2 * GLOW_PAD; // 40
+// never bleeds into the neighbor cell. 16 gives the stacked halo (GLOW_PASSES)
+// room to bloom before clipping at the cell edge.
+export const GLOW_PAD = 16;
+export const CELL_W = GLYPH_W + 2 * GLOW_PAD; // 41
+export const CELL_H = GLYPH_H + 2 * GLOW_PAD; // 48
 
 // Luminance bands: 0 = crisp (no halo), 1 = dim, 2 = normal, 3 = bright.
 // The value is the shadowBlur radius (px) used at bake time. Band 0 is the
 // unblurred glyph so the renderer can draw non-glowing chrome (grid, frames)
 // from the same atlas without a second texture.
 export const LUMA_LEVELS = 4;
-export const LUMA_BLUR_PX = [0, 3, 6, 10] as const;
+export const LUMA_BLUR_PX = [0, 4, 8, 14] as const;
+
+// Halo stacking passes (F1-quality tuning): for blur>0 bands the baker draws
+// the shadowed glyph N times so the halo alpha accumulates (source-over stacks
+// → peak ~1-(1-α)^N). A single pass left the halo at ~0.3α, which read as a
+// dim "sticker" under additive blending (contribution ≈ base·α²). 3 passes
+// lift the peak to ~0.66 — a real glow without a second texture. Band 0
+// (crisp, no halo) is always 1 pass.
+export const GLOW_PASSES = 3;
 
 // Box-drawing glyphs (U+2500–U+256C) for 1a.3 stock frames. Included now so
 // the atlas layout is stable across 1a.3 (no re-bake/re-UV churn later).
@@ -145,7 +154,10 @@ export function bakeGlowAtlasCanvas(opts: BakeOptions): HTMLCanvasElement {
       ctx.shadowBlur = blur;
       ctx.shadowColor = blur > 0 ? opts.glowColor : "transparent";
       ctx.fillStyle = opts.glyphColor;
-      ctx.fillText(CHARSET[g], cx, cy);
+      // Stack the halo (GLOW_PASSES) for blur>0 bands so the alpha accumulates
+      // into a real glow instead of a single-pass dim sticker.
+      const passes = blur > 0 ? GLOW_PASSES : 1;
+      for (let p = 0; p < passes; p++) ctx.fillText(CHARSET[g], cx, cy);
     }
   }
   ctx.shadowBlur = 0;
