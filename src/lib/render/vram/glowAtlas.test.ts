@@ -6,6 +6,7 @@ import {
   CELL_W,
   CHAR_COUNT,
   CHARSET,
+  GLOW_PAD,
   GLOW_PASSES,
   LUMA_BLUR_PX,
   LUMA_LEVELS,
@@ -48,8 +49,19 @@ describe("glowAtlas — halo tuning constants", () => {
     }
   });
 
-  it("GLOW_PASSES >= 1 (band 0 always single-pass; >1 stacks the halo)", () => {
-    expect(GLOW_PASSES).toBeGreaterThanOrEqual(1);
+  // F1-quality spike-calibrated values (PR#21 @b8332f4). These knobs bake the
+  // halo measured at halo:core ≈ 2.5× on both /vram (2.55) and CanvasView
+  // zoom=2000% (2.49) — the operational bar for spec [F1-quality]'s "visually
+  // indistinguishable" acceptance (epics.md Story 1a.2 收尾备注). Pinning the
+  // exact values prevents the halo fix from being silently reverted: a
+  // single-pass GLOW_PASSES=1 or flatter LUMA_BLUR_PX passes the structural
+  // invariants above but regresses the glow to a dim "sticker" (the spike's
+  // root cause). Changing them requires re-running the local Playwright
+  // halo:core gate.
+  it("F1-quality spike-calibrated halo knobs are pinned (PR#21)", () => {
+    expect(GLOW_PAD).toBe(16);
+    expect([...LUMA_BLUR_PX]).toEqual([0, 4, 8, 14]);
+    expect(GLOW_PASSES).toBe(3);
   });
 });
 
