@@ -142,6 +142,19 @@
     touch-action: none;
     cursor: default;
   }
+  /* Story 1a.2 sub-PR #2 — VRAM glyph overlay (AD-9). Stacked above the 2D
+     surface, transparent + pointer-events:none so input still hits the 2D
+     canvas below. No shadowBlur on this surface (CAP-11); glow is pre-baked
+     into the atlas off-screen. */
+  .ns-canvas__gl {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    display: block;
+    pointer-events: none;
+    background: transparent;
+  }
   .ns-canvas__hud {
     position: absolute;
     top: 0.5rem;
