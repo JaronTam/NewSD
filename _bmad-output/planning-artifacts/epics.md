@@ -333,6 +333,16 @@ So that 渲染从开始即走 VRAM 路径(AD-9)非 shadowBlur,且早验证图集
 **And** spike 段以"结论记录产出"为完成判据,不论结论正负
 **And** 若结论为不可达,标记触发 Epic 5 第 9/10 项逃生阀(可 deferred,见 Decision Log ADR-EPIC-1)
 
+**Story 1a.2 收尾备注(F1-quality 标定 + AC 核对 + spike verdict):**
+
+- **Spike verdict(2026-07-04 多模态判定)**:AD-9 生产路径(预烘 glow atlas + WebGL2 instanced + NEAREST 采样)视觉成立,可达 spec [F1-quality] 锁定口径"目视不可区分";运行时 shadowBlur 基线反因 additive+blur 稀释主体更差(亮点数与 avgRGB 客观均劣于 AD-9),且每帧成本本就是 AD-9 拒绝它的核心动因,不复议。spike 分支 `spike/1a.2-f1-quality-shadowblur-compare`(@3b10556)保留不合并。
+- **F1-quality 标定(可回归口径)**:"目视不可区分"操作化为三项可度量:① halo:core ≈2.5×(halo 面积 / 核心 glyph 面积,双路径 `/vram` 2.55 + `/` CanvasView zoom=2000% 2.49,一致);② palette avgRGB 精确(on-palette,computed style 运行时读取);③ 字符锐利(NEAREST 采样 + band 0 无 blur)。标定常量 `GLOW_PAD=16` / `LUMA_BLUR_PX=[0,4,8,14]` / `GLOW_PASSES=3` 由 `src/lib/render/vram/glowAtlas.test.ts` 锁定防静默回退;视觉重验证 gate = 改动 halo 旋钮后跑本地 Playwright 像素分析重测 halo:core(截图归档 `.playwright-mcp/`,gitignored)。
+- **AC 逐条核对**:
+  - 基座段(交付物 5 项,已交付 PR#19 @3033177 + PR#20 @c235a3b):VRAM 双缓冲(字符码 + 颜色索引)/ 离屏预烘辉光图集(每字符 ×4 亮度档)/ hue-shift fragment shader NEAREST 采样 / 禁 per-glyph shadowBlur(AD-9,CanvasView 双层 canvas + palette 单源运行时守)/ 本 story 交付基座 FR-CANVAS-3 图元渲染留 1a.3-1a.4
+  - spike 段(验证性 4 项,结论已记录):图集辉光 vs shadowBlur 目视对比原型:spike harness @3b10556;可行性结论记录:本备注;"结论记录产出"为完成判据:结论为正(可达);若不可达触发逃生阀:N/A(结论为可达,不触发)
+  - halo 调优落地 PR#21 @b8332f4(`GLOW_PAD` 12→16 + `LUMA_BLUR_PX` [0,3,6,10]→[0,4,8,14] + `GLOW_PASSES=3` 多遍堆叠,halo:core 双路径 ≈2.5×)
+- **Story 1a.2 闭合**。下一步 `[SP]` bmad-sprint-planning 正式化,Story 1a.3 起按 CS→VS→DS→CR story-cycle 推进。
+
 #### Story 1a.3: 网格吸附与存量/源汇图元
 
 As a 单人建模者,
