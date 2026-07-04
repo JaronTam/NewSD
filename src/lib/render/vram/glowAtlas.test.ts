@@ -6,6 +6,8 @@ import {
   CELL_W,
   CHAR_COUNT,
   CHARSET,
+  GLOW_PASSES,
+  LUMA_BLUR_PX,
   LUMA_LEVELS,
   atlasDims,
   cellIndex,
@@ -36,6 +38,21 @@ describe("glowAtlas — charset", () => {
   });
 });
 
+describe("glowAtlas — halo tuning constants", () => {
+  it("LUMA_BLUR_PX has one entry per band, band 0 is crisp (no blur)", () => {
+    expect(LUMA_BLUR_PX.length).toBe(LUMA_LEVELS);
+    expect(LUMA_BLUR_PX[0]).toBe(0);
+    // bands are monotonically steeper so higher luma = wider halo
+    for (let i = 1; i < LUMA_BLUR_PX.length; i++) {
+      expect(LUMA_BLUR_PX[i]).toBeGreaterThan(LUMA_BLUR_PX[i - 1]);
+    }
+  });
+
+  it("GLOW_PASSES >= 1 (band 0 always single-pass; >1 stacks the halo)", () => {
+    expect(GLOW_PASSES).toBeGreaterThanOrEqual(1);
+  });
+});
+
 describe("glowAtlas — atlas layout", () => {
   const dims = atlasDims();
 
@@ -46,15 +63,15 @@ describe("glowAtlas — atlas layout", () => {
   });
 
   it("cell size = glyph + 2*glow pad", () => {
-    expect(dims.cellW).toBe(CELL_W); // 33
-    expect(dims.cellH).toBe(CELL_H); // 40
+    expect(dims.cellW).toBe(CELL_W); // 41
+    expect(dims.cellH).toBe(CELL_H); // 48
   });
 
   it("texture size = cols*cellW × rows*cellH", () => {
-    expect(dims.texW).toBe(dims.cols * dims.cellW); // 32*33 = 1056
-    expect(dims.texH).toBe(dims.rows * dims.cellH); // 15*40 = 600
-    expect(dims.texW).toBe(1056);
-    expect(dims.texH).toBe(600);
+    expect(dims.texW).toBe(dims.cols * dims.cellW); // 32*41 = 1312
+    expect(dims.texH).toBe(dims.rows * dims.cellH); // 15*48 = 720
+    expect(dims.texW).toBe(1312);
+    expect(dims.texH).toBe(720);
   });
 
   it("every cell fits within the texture (no overflow)", () => {
