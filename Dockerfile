@@ -8,10 +8,10 @@
 # bundle) — not built in 1a.1 (no wasm consumed yet).
 
 # ---------- Stage 1: frontend (bun → dist/) ----------
-# Pin Bun 1.3.14 to match CI's setup-bun@v2. Bun 1.2.x's `bun run build`
-# prerender fails with ConnectionRefused inside buildx (the spawned SSR
-# server won't bind on localhost); fixed in 1.3.x. CI proved 1.3.14
-# prerenders `/` cleanly (Prerendered 1 page). No network: host needed.
+# Bun 1.3.14 matches CI's setup-bun@v2 (CI host prerenders `/` cleanly).
+# Inside buildx the prerender's Vite preview server + fetch previously hit
+# ConnectionRefused on `localhost` (IPv4/IPv6 stack mismatch); that is fixed
+# in vite.config.ts (preview.host=127.0.0.1), not here. No network: host needed.
 FROM oven/bun:1.3.14 AS frontend
 WORKDIR /app
 COPY package.json bun.lock bunfig.toml ./
