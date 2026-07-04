@@ -21,9 +21,13 @@ RUN bun run build
 # → dist/client (static assets) + dist/server (prerender, build-time only)
 
 # ---------- Stage 2: Go build (embed dist → binary) ----------
-FROM golang:1.24 AS builder
+# Go 1.25: modernc.org/sqlite v1.53.0 (sub-PR #5 SQLite WAL backup primitive)
+# sets `go 1.25.0` in go.mod, so the builder toolchain must be >= 1.25.
+# CGO_ENABLED=0 → pure-Go modernc driver (mattn would need CGO + a C
+# toolchain; the alpine runtime has none).
+FROM golang:1.25 AS builder
 WORKDIR /src
-COPY go.mod ./
+COPY go.mod go.sum ./
 RUN go mod download
 COPY main.go ./
 COPY internal/ ./internal/
