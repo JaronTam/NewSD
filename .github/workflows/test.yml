@@ -92,12 +92,6 @@ jobs:
         with:
           context: .
           file: ./Dockerfile
-          # network: host — TanStack Start prerender spawns a localhost SSR
-          # server during `bun run build`; buildx's default bridge blocks the
-          # loopback (ConnectionRefused). Host net matches the CI frontend
-          # job where prerender succeeds. Dockerfile itself stays portable
-          # (plain `docker build` on a VPS hits no such quirk).
-          network: host
           push: ${{ github.ref == 'refs/heads/main' }}
           tags: |
             ghcr.io/jarontam/newsd:latest

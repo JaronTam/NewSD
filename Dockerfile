@@ -8,7 +8,11 @@
 # bundle) — not built in 1a.1 (no wasm consumed yet).
 
 # ---------- Stage 1: frontend (bun → dist/) ----------
-FROM oven/bun:1.2 AS frontend
+# Pin Bun 1.3.14 to match CI's setup-bun@v2. Bun 1.2.x's `bun run build`
+# prerender fails with ConnectionRefused inside buildx (the spawned SSR
+# server won't bind on localhost); fixed in 1.3.x. CI proved 1.3.14
+# prerenders `/` cleanly (Prerendered 1 page). No network: host needed.
+FROM oven/bun:1.3.14 AS frontend
 WORKDIR /app
 COPY package.json bun.lock bunfig.toml ./
 RUN bun install --frozen-lockfile
