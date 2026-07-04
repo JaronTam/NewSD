@@ -216,3 +216,58 @@ describe("CanvasView — VRAM overlay + WebGL2 graceful degrade (1a.2 sub-PR #2)
     expect(container.querySelector("canvas.ns-canvas__surface")).not.toBeNull();
   });
 });
+
+// CAP-11 runtime guard: prove the 2D draw path never assigns ctx.shadowBlur.
+//
+// jsdom's getContext returns null globally (src/test/setup.ts), so CanvasView's
+// draw early-returns and never executes. To exercise it we override getContext
+// to return a Proxy mock ctx that records every shadowBlur assignment, then
+// render CanvasView — the mount effect calls measure() -> drawRef.current(),
+// which runs the full 2D draw (background + drawGrid x/y + origin axes).
+//
+// The override returns null for non-"2d" contexts, so VRAMRenderer's
+// getContext("webgl2") returns null -> the constructor throws -> the bake
+// (bakeGlowAtlasCanvas, which legitimately sets shadowBlur off-screen) is
+// skipped -> the ONLY 2D ctx in play is CanvasView's surface, and the spy
+// observes exactly the runtime draw path. This complements the source-level
+// grep guard in cap11-shadowblur-guard.test.ts.
+describe("CanvasView — CAP-11 runtime guard (no shadowBlur in the 2D draw path)", () => {
+  afterEach(() => cleanup());
+
+  it("the runtime 2D draw path never assigns ctx.shadowBlur (only the off-screen bake may)", () => {
+    const sets: number[] = [];
+    const mockCtx = new Proxy(
+      { shadowBlur: 0 },
+      {
+        get: (target, prop) => {
+          if (prop === "shadowBlur") return target.shadowBlur;
+          // Every method is a no-op; every other prop read returns undefined.
+          return typeof prop === "string" ? () => {} : undefined;
+        },
+        set: (target, prop, value) => {
+          if (prop === "shadowBlur") {
+            target.shadowBlur = value as number;
+            sets.push(value as number);
+          }
+          return true;
+        },
+      },
+    );
+    const origGetContext = HTMLCanvasElement.prototype.getContext;
+    HTMLCanvasElement.prototype.getContext = ((type: string) =>
+      type === "2d" ? mockCtx : null) as unknown as typeof HTMLCanvasElement.prototype.getContext;
+    try {
+      render(<CanvasView />);
+      // The mount effect fires synchronously under act(): measure() runs the
+      // full 2D draw. vp is {1,1} (jsdom clientWidth 0 -> max(1,0)); ctx is the
+      // Proxy (truthy), so the vp.width===0 early-return is bypassed and
+      // drawGrid executes end-to-end through the Proxy.
+    } finally {
+      HTMLCanvasElement.prototype.getContext = origGetContext;
+    }
+    expect(
+      sets,
+      `CAP-11 violated: 2D draw path set ctx.shadowBlur to [${sets.join(", ")}]`,
+    ).toEqual([]);
+  });
+});
