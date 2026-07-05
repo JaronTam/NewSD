@@ -128,11 +128,10 @@ action item:   open → in-progress → done
 ## 4. PR 工作流 (NewSD 特化)
 
 - 禁直推 main; 改 main 走 PR
-- `gh pr create` → CI 全绿 (frontend/go/wasm/build-image) → `gh pr merge --merge --delete-branch`
+- `gh pr create` → 本地 `tsc --noEmit` + `vitest run` 自检通过 (CI 与 husky hooks 已于 PR #29 移除; 合并门仅 main 分支保护 Require PR, 无 required checks) → `gh pr merge --squash --delete-branch`
 - 提交前核暂存区 (`git diff --cached --stat`); 禁止清单: `.claude/` / `package-lock.json` / `.playwright-mcp/` 非白名单 PNG / 根级 PNG (命中则 `git restore --staged <file>`)
 - 禁 `git add -A` (用 `git add <显式路径>`)
-- ✅ 以上已由 pre-commit hook 强制 (husky: forbidden-files 守卫 + lint-staged, 见 `.husky/pre-commit`); pre-push hook 另挡 lockfile drift + lint + typecheck (见 `.husky/pre-push`) — 纪律规则现转为自动门
-- 合并后卫生: `sh scripts/post-merge-cleanup.sh` (回 main + 拉取 + 剪枝 + 列已合并的本地分支)
+- 合并后卫生 (手动, `scripts/` 已于 PR #29 移除): `git checkout main && git pull --ff-only origin main && git fetch --prune origin && git branch -D <已合并分支>` (squash 合并后分支 tip 非祖先, 须 `-D` 强删; 删前先 `gh pr view <N> --json state` 确认 MERGED)
 - 提交信息: 标题 + 要点 + `Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>`
 - PR 描述: 总结 + 测试计划 + 末尾 `🤖 Generated with [Claude Code](https://claude.com/claude-code)`
 
