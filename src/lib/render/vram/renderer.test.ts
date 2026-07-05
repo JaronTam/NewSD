@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi, type Mock } from "vitest";
 
 import {
   affineToMat3,
@@ -210,7 +210,17 @@ describe("RenderInstance — A2 field contract", () => {
 // (getShaderParameter/getProgramParameter) return true so the constructor's
 // heavy setup completes. We only assert on setInstance's gl calls.
 
-function makeMockGL(): any {
+// MockGL = a WebGL2 context whose createBuffer / bindBuffer / bufferSubData are
+// vi.fn mocks the tests assert on (.mockClear / .mock.calls / .mock.results).
+// The Proxy synthesizes any other GL member on demand, so the cast below is
+// the static boundary.
+type MockGL = WebGL2RenderingContext & {
+  bindBuffer: Mock;
+  bufferSubData: Mock;
+  createBuffer: Mock;
+};
+
+function makeMockGL(): MockGL {
   let n = 0;
   const distinct = () => ({ __id: ++n });
   const fn = (impl?: () => unknown) => vi.fn(impl ?? (() => {}));
@@ -274,7 +284,7 @@ function makeMockGL(): any {
       }
       return target[`__fn_${prop}`];
     },
-  });
+  }) as unknown as MockGL;
 }
 
 /** Construct a real VRAMRenderer against a mock GL; capture the 5 createBuffer
