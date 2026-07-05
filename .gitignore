@@ -33,8 +33,10 @@ Thumbs.db
 *.sw?
 
 # BMAD / Claude 工具链（开发环境依赖，非项目源码）
-.claude/skills/
-.claude/settings.local.json
+.claude/
+
+# npm lockfile（repo 用 bun.lock，禁止 npm 残留）
+package-lock.json
 
 # BMAD 框架内核（按需，当前不提交）
 _bmad/
