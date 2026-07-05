@@ -129,8 +129,10 @@ action item:   open → in-progress → done
 
 - 禁直推 main; 改 main 走 PR
 - `gh pr create` → CI 全绿 (frontend/go/wasm/build-image) → `gh pr merge --merge --delete-branch`
-- 提交前核暂存区 (`git diff --cached --stat`), 禁 `.playwright-mcp/` 非白名单 PNG (`git restore --staged`)
-- 禁 `git add -A`
+- 提交前核暂存区 (`git diff --cached --stat`); 禁止清单: `.claude/` / `package-lock.json` / `.playwright-mcp/` 非白名单 PNG / 根级 PNG (命中则 `git restore --staged <file>`)
+- 禁 `git add -A` (用 `git add <显式路径>`)
+- ✅ 以上已由 pre-commit hook 强制 (husky: forbidden-files 守卫 + lint-staged, 见 `.husky/pre-commit`); pre-push hook 另挡 lockfile drift + lint + typecheck (见 `.husky/pre-push`) — 纪律规则现转为自动门
+- 合并后卫生: `sh scripts/post-merge-cleanup.sh` (回 main + 拉取 + 剪枝 + 列已合并的本地分支)
 - 提交信息: 标题 + 要点 + `Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>`
 - PR 描述: 总结 + 测试计划 + 末尾 `🤖 Generated with [Claude Code](https://claude.com/claude-code)`
 
