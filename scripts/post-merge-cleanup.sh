@@ -11,4 +11,4 @@ echo "✓ main 已同步,远端已剪枝"
 
 echo ""
 echo "已合并但未删的本地分支(手动 git branch -d <name> 删除):"
-git branch --merged main | grep -vE '^\*\|main\|lovable' || echo "  (无)"
+git branch --merged main | grep -vE '^\*|main|lovable' || echo "  (无)"
