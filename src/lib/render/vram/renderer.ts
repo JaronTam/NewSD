@@ -27,6 +27,27 @@ export interface RenderInstance {
   colorIdx: number;
   worldX: number;
   worldY: number;
+  /**
+   * Element type discriminator: 0=stock, 1=cloud, 2=flow. CPU-side enum.
+   * TODO(A1 scaffold): not yet consumed by any shader attrib or render logic;
+   * carried for future per-type styling. Activate when needed.
+   */
+  entityType: number;
+  /**
+   * CPU-side draw-order key (sort ascending before render). Not a shader attrib.
+   * TODO(A1 scaffold): render() currently draws instances in array order and
+   * does NOT sort by zOrder. Activate the sort when explicit layering is required.
+   */
+  zOrder: number;
+  /**
+   * Per-instance quad rotation in radians (shader attrib).
+   * TODO(A2 scaffold): shader path is live (a_rotation consumed in VERT_SRC),
+   * but CPU always sets rotation=0 (see elements.ts pushChar). Wire non-zero
+   * input when rotation interaction lands.
+   */
+  rotation: number;
+  /** Selected state — luma level +1 in vertex shader when true (shader attrib). */
+  selected: boolean;
 }
 
 export interface VRAMRendererOptions {
@@ -144,6 +165,8 @@ export class VRAMRenderer {
   private readonly glyphLumaBuf: WebGLBuffer; // Int32 x2 per instance
   private readonly worldPosBuf: WebGLBuffer; // Float32 x2 per instance
   private readonly colorIdxBuf: WebGLBuffer; // Int32 x1 per instance
+  private readonly rotationBuf: WebGLBuffer; // Float32 x1 per instance (A2)
+  private readonly selectedBuf: WebGLBuffer; // Int32 x1 per instance (A2)
   private readonly atlasTex: WebGLTexture;
   private capacity = INITIAL_CAPACITY;
   private hueShift: number;
@@ -163,6 +186,8 @@ export class VRAMRenderer {
   private scratchGlyphLuma = new Int32Array(this.capacity * 2);
   private scratchWorldPos = new Float32Array(this.capacity * 2);
   private scratchColorIdx = new Int32Array(this.capacity);
+  private scratchRotation = new Float32Array(this.capacity);
+  private scratchSelected = new Int32Array(this.capacity);
 
   constructor(opts: VRAMRendererOptions) {
     this.canvas = opts.canvas;
@@ -222,6 +247,28 @@ export class VRAMRenderer {
     gl.enableVertexAttribArray(a_colorIdx);
     gl.vertexAttribIPointer(a_colorIdx, 1, gl.INT, 4, 0);
     gl.vertexAttribDivisor(a_colorIdx, 1);
+
+    // rotation buffer (A2: per-instance quad rotation in radians)
+    const rotationBuf = gl.createBuffer();
+    if (!rotationBuf) throw new Error("gl.createBuffer(rotation) returned null");
+    this.rotationBuf = rotationBuf;
+    gl.bindBuffer(gl.ARRAY_BUFFER, rotationBuf);
+    gl.bufferData(gl.ARRAY_BUFFER, this.capacity * 4, gl.DYNAMIC_DRAW);
+    const a_rotation = gl.getAttribLocation(this.program, "a_rotation");
+    gl.enableVertexAttribArray(a_rotation);
+    gl.vertexAttribPointer(a_rotation, 1, gl.FLOAT, false, 4, 0);
+    gl.vertexAttribDivisor(a_rotation, 1);
+
+    // selected buffer (A2: per-instance selected flag → luma boost)
+    const selectedBuf = gl.createBuffer();
+    if (!selectedBuf) throw new Error("gl.createBuffer(selected) returned null");
+    this.selectedBuf = selectedBuf;
+    gl.bindBuffer(gl.ARRAY_BUFFER, selectedBuf);
+    gl.bufferData(gl.ARRAY_BUFFER, this.capacity * 4, gl.DYNAMIC_DRAW);
+    const a_selected = gl.getAttribLocation(this.program, "a_selected");
+    gl.enableVertexAttribArray(a_selected);
+    gl.vertexAttribIPointer(a_selected, 1, gl.INT, 4, 0);
+    gl.vertexAttribDivisor(a_selected, 1);
 
     gl.bindVertexArray(null);
 
@@ -289,6 +336,10 @@ export class VRAMRenderer {
     const sg = this.scratchGlyphLuma;
     const sw = this.scratchWorldPos;
     const sc = this.scratchColorIdx;
+    const sr = this.scratchRotation;
+    const ss = this.scratchSelected;
+    // NOTE: instances are drawn in array order; zOrder is NOT applied here
+    // (see RenderInstance.zOrder TODO). Callers must pre-sort if layering matters.
     for (let i = 0; i < n; i++) {
       const it = instances[i];
       sg[i * 2 + 0] = it.glyphIdx;
@@ -296,6 +347,8 @@ export class VRAMRenderer {
       sw[i * 2 + 0] = it.worldX;
       sw[i * 2 + 1] = it.worldY;
       sc[i] = it.colorIdx;
+      sr[i] = it.rotation;
+      ss[i] = it.selected ? 1 : 0;
     }
 
     gl.bindBuffer(gl.ARRAY_BUFFER, this.glyphLumaBuf);
@@ -304,6 +357,10 @@ export class VRAMRenderer {
     gl.bufferSubData(gl.ARRAY_BUFFER, 0, sw.subarray(0, n * 2));
     gl.bindBuffer(gl.ARRAY_BUFFER, this.colorIdxBuf);
     gl.bufferSubData(gl.ARRAY_BUFFER, 0, sc.subarray(0, n));
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.rotationBuf);
+    gl.bufferSubData(gl.ARRAY_BUFFER, 0, sr.subarray(0, n));
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.selectedBuf);
+    gl.bufferSubData(gl.ARRAY_BUFFER, 0, ss.subarray(0, n));
 
     this.resize(viewport);
     gl.viewport(0, 0, this.canvas.width, this.canvas.height);
@@ -359,10 +416,16 @@ export class VRAMRenderer {
     gl.bufferData(gl.ARRAY_BUFFER, this.capacity * 8, gl.DYNAMIC_DRAW);
     gl.bindBuffer(gl.ARRAY_BUFFER, this.colorIdxBuf);
     gl.bufferData(gl.ARRAY_BUFFER, this.capacity * 4, gl.DYNAMIC_DRAW);
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.rotationBuf);
+    gl.bufferData(gl.ARRAY_BUFFER, this.capacity * 4, gl.DYNAMIC_DRAW);
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.selectedBuf);
+    gl.bufferData(gl.ARRAY_BUFFER, this.capacity * 4, gl.DYNAMIC_DRAW);
     gl.bindVertexArray(null);
     this.scratchGlyphLuma = new Int32Array(this.capacity * 2);
     this.scratchWorldPos = new Float32Array(this.capacity * 2);
     this.scratchColorIdx = new Int32Array(this.capacity);
+    this.scratchRotation = new Float32Array(this.capacity);
+    this.scratchSelected = new Int32Array(this.capacity);
   }
 
   dispose(): void {
@@ -370,8 +433,79 @@ export class VRAMRenderer {
     gl.deleteBuffer(this.glyphLumaBuf);
     gl.deleteBuffer(this.worldPosBuf);
     gl.deleteBuffer(this.colorIdxBuf);
+    gl.deleteBuffer(this.rotationBuf);
+    gl.deleteBuffer(this.selectedBuf);
     gl.deleteTexture(this.atlasTex);
     gl.deleteVertexArray(this.vao);
     gl.deleteProgram(this.program);
+  }
+
+  // -----------------------------------------------------------------------
+  // A1 per-instance mutation API
+  // -----------------------------------------------------------------------
+
+  /** Current buffer capacity (max instances without realloc). */
+  getCapacity(): number {
+    return this.capacity;
+  }
+
+  /** Ensure the buffers can hold at least `n` instances. */
+  ensureCapacity(n: number): void {
+    if (n <= this.capacity) return;
+    this.capacity = nextPow2(n);
+    this.reallocBuffers();
+  }
+
+  /**
+   * Update a single instance's fields in the GPU buffers without rebuilding
+   * the entire scratch array. Only the changed fields are touched.
+   *
+   * Caller must ensure `index < instanceCount` (no bounds check for perf).
+   * For bulk updates, prefer `render()` with a full instances array instead.
+   */
+  setInstance(index: number, partial: Partial<RenderInstance>): void {
+    const gl = this.gl;
+
+    if (partial.glyphIdx !== undefined || partial.lumaIdx !== undefined) {
+      if (partial.glyphIdx !== undefined) this.scratchGlyphLuma[index * 2] = partial.glyphIdx;
+      if (partial.lumaIdx !== undefined) this.scratchGlyphLuma[index * 2 + 1] = partial.lumaIdx;
+      gl.bindBuffer(gl.ARRAY_BUFFER, this.glyphLumaBuf);
+      gl.bufferSubData(
+        gl.ARRAY_BUFFER,
+        index * 8,
+        this.scratchGlyphLuma.subarray(index * 2, index * 2 + 2),
+      );
+    }
+
+    if (partial.worldX !== undefined || partial.worldY !== undefined) {
+      if (partial.worldX !== undefined) this.scratchWorldPos[index * 2] = partial.worldX;
+      if (partial.worldY !== undefined) this.scratchWorldPos[index * 2 + 1] = partial.worldY;
+      gl.bindBuffer(gl.ARRAY_BUFFER, this.worldPosBuf);
+      gl.bufferSubData(
+        gl.ARRAY_BUFFER,
+        index * 8,
+        this.scratchWorldPos.subarray(index * 2, index * 2 + 2),
+      );
+    }
+
+    if (partial.colorIdx !== undefined) {
+      this.scratchColorIdx[index] = partial.colorIdx;
+      gl.bindBuffer(gl.ARRAY_BUFFER, this.colorIdxBuf);
+      gl.bufferSubData(gl.ARRAY_BUFFER, index * 4, this.scratchColorIdx.subarray(index, index + 1));
+    }
+
+    if (partial.rotation !== undefined) {
+      this.scratchRotation[index] = partial.rotation;
+      gl.bindBuffer(gl.ARRAY_BUFFER, this.rotationBuf);
+      gl.bufferSubData(gl.ARRAY_BUFFER, index * 4, this.scratchRotation.subarray(index, index + 1));
+    }
+
+    if (partial.selected !== undefined) {
+      this.scratchSelected[index] = partial.selected ? 1 : 0;
+      gl.bindBuffer(gl.ARRAY_BUFFER, this.selectedBuf);
+      gl.bufferSubData(gl.ARRAY_BUFFER, index * 4, this.scratchSelected.subarray(index, index + 1));
+    }
+
+    // entityType and zOrder are CPU-side — no GPU buffer to update.
   }
 }

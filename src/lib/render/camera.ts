@@ -143,3 +143,35 @@ function clamp(v: number, lo: number, hi: number): number {
   if (v > hi) return hi;
   return v;
 }
+
+/**
+ * Snap a world coordinate to the nearest grid multiple.
+ *
+ * AC-1/AC-3: 1 world unit == 1 char cell. Grid snap operates in world space.
+ * World coords are Float64 (E7 precision guard — WORLD_CLAMP).
+ *
+ * @param world The world coordinate to snap.
+ * @param step  Grid step in world units. Must be > 0 (throws otherwise).
+ *              Default 1 = 1 char cell per grid line.
+ */
+export function snapToGrid(world: number, step = 1): number {
+  if (step <= 0) throw new Error("Grid step must be > 0");
+  return Math.round(world / step) * step;
+}
+
+/**
+ * Whether a world coordinate is close enough to a grid line to "snap" visually.
+ *
+ * AC-2: screen-space snap tolerance is always 8 px regardless of zoom.
+ * That translates to `snapTolerance = tolPx / zoom` in world units.
+ *
+ * @param world The world coordinate to test.
+ * @param zoom  Current camera zoom (screen pixels per world unit).
+ * @param step  Grid step in world units (default 1).
+ * @param tolPx Screen-space snap tolerance in pixels (default 8).
+ */
+export function shouldSnap(world: number, zoom: number, step = 1, tolPx = 8): boolean {
+  const nearest = snapToGrid(world, step);
+  const dist = Math.abs(world - nearest);
+  return dist <= tolPx / zoom;
+}

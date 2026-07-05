@@ -13,6 +13,8 @@
 // multiplies by a palette[colorIdx] and applies a hue shift (Rodrigues
 // rotation about the (1,1,1) axis) for the cyberpunk drift effect.
 
+export const PALETTE_SIZE = 8;
+
 export const VERT_SRC = /* glsl */ `#version 300 es
 precision highp float;
 
@@ -21,6 +23,8 @@ in int a_glyphIdx;
 in int a_lumaIdx;
 in vec2 a_worldPos;
 in int a_colorIdx;
+in float a_rotation;  // A2: per-instance quad rotation (radians)
+in int a_selected;    // A2: selected flag -> luma +1
 
 // camera + atlas layout uniforms
 uniform mat3 u_proj;           // world -> screen (camera.ts affine as mat3, column-major)
@@ -47,11 +51,22 @@ vec2 cornerOf(int vid) {
 void main() {
   int vid = gl_VertexID - 6 * (gl_VertexID / 6); // vid % 6
   vec2 corner = cornerOf(vid);
-  vec2 worldPos = a_worldPos + (corner - 0.5) * u_quadWorldSize;
+
+  // A2: rotate quad corner around the cell center
+  vec2 offset = corner - 0.5;
+  float c = cos(a_rotation);
+  float s = sin(a_rotation);
+  vec2 rotated = vec2(offset.x * c - offset.y * s, offset.x * s + offset.y * c);
+
+  vec2 worldPos = a_worldPos + rotated * u_quadWorldSize;
   vec3 screen = u_proj * vec3(worldPos, 1.0);
   gl_Position = vec4(screen.xy, 0.0, 1.0);
 
-  int idx = a_glyphIdx * LUMA_LEVELS + a_lumaIdx;
+  // A2: selected bumps effective luma level by 1 (clamped)
+  int effectiveLuma = a_lumaIdx + a_selected;
+  if (effectiveLuma >= LUMA_LEVELS) effectiveLuma = LUMA_LEVELS - 1;
+
+  int idx = a_glyphIdx * LUMA_LEVELS + effectiveLuma;
   int col = idx - (idx / u_atlasCols) * u_atlasCols; // idx % u_atlasCols
   int row = idx / u_atlasCols;
   vec2 uvMin = vec2(float(col), float(row)) * u_atlasCellSize / u_atlasTexelSize;
@@ -69,7 +84,7 @@ flat in int v_colorIdx;
 in vec2 v_uv;
 
 uniform sampler2D u_atlas;
-uniform vec4 u_palette[8]; // color index -> RGBA (8-entry cyberpunk palette)
+uniform vec4 u_palette[${PALETTE_SIZE}]; // color index -> RGBA (8-entry cyberpunk palette)
 uniform float u_hueShift;  // radians (Rodrigues hue rotation)
 
 out vec4 fragColor;
@@ -92,5 +107,3 @@ void main() {
   fragColor = vec4(color, texel.a);
 }
 `;
-
-export const PALETTE_SIZE = 8;

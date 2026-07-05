@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { DEFAULT_PALETTE, PALETTE_TOKENS, hexToRGBA, readPalette } from "./palette";
+import { PALETTE_SIZE } from "./vram/shaders";
 
 // hexToRGBA + readPalette are pure CSS-free logic; the WebGL2 draw path is
 // verified via Playwright. Here we assert the palette contract (8 entries,
@@ -36,9 +37,9 @@ describe("hexToRGBA — #rrggbb / #rgb -> [0..1] tuple (alpha 1)", () => {
 });
 
 describe("DEFAULT_PALETTE — 8-entry fallback mirroring tokens.css", () => {
-  it("has exactly 8 entries (PALETTE_SIZE contract)", () => {
-    expect(DEFAULT_PALETTE.length).toBe(8);
-    expect(PALETTE_TOKENS.length).toBe(8);
+  it("has exactly PALETTE_SIZE entries (PALETTE_SIZE contract)", () => {
+    expect(DEFAULT_PALETTE.length).toBe(PALETTE_SIZE);
+    expect(PALETTE_TOKENS.length).toBe(PALETTE_SIZE);
   });
 
   it("entry 0 is stock cyan #00ffd5", () => {
@@ -67,9 +68,9 @@ describe("readPalette — runtime token read with per-entry fallback", () => {
     vi.restoreAllMocks();
   });
 
-  it("returns 8 RGBA entries", () => {
+  it("returns PALETTE_SIZE RGBA entries", () => {
     const pal = readPalette();
-    expect(pal.length).toBe(8);
+    expect(pal.length).toBe(PALETTE_SIZE);
     for (const c of pal) expect(c.length).toBe(4);
   });
 

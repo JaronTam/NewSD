@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi, type Mock } from "vitest";
 
 import {
   affineToMat3,
@@ -6,9 +6,11 @@ import {
   quadWorldSize,
   screenAffineToClipMat3,
   type RGBA,
+  type RenderInstance,
   VRAMRenderer,
 } from "./renderer";
 import { CELL_H, CELL_W, GLYPH_H, GLYPH_W } from "./glowAtlas";
+import { PALETTE_SIZE } from "./shaders";
 import type { Affine } from "../camera";
 
 // Pure-logic helpers (camera->mat3, palette flatten, quad world size) are
@@ -114,7 +116,12 @@ describe("screenAffineToClipMat3 — compose world->screen affine with screen->N
 
 describe("paletteToUniform — flatten 8 RGBA -> uniform array", () => {
   it("packs 8 entries into a length-32 Float32Array in row order", () => {
-    const palette: RGBA[] = Array.from({ length: 8 }, (_, i) => [i / 8, 0, 0, 1]);
+    const palette: RGBA[] = Array.from({ length: PALETTE_SIZE }, (_, i) => [
+      i / PALETTE_SIZE,
+      0,
+      0,
+      1,
+    ]);
     const u = paletteToUniform(palette);
     expect(u).toBeInstanceOf(Float32Array);
     expect(u.length).toBe(32);
@@ -125,10 +132,10 @@ describe("paletteToUniform — flatten 8 RGBA -> uniform array", () => {
   });
 
   it("rejects a palette of the wrong length", () => {
-    const tooShort: RGBA[] = Array.from({ length: 7 }, () => [0, 0, 0, 1]);
-    expect(() => paletteToUniform(tooShort)).toThrow(/8 entries/);
-    const tooLong: RGBA[] = Array.from({ length: 9 }, () => [0, 0, 0, 1]);
-    expect(() => paletteToUniform(tooLong)).toThrow(/8 entries/);
+    const tooShort: RGBA[] = Array.from({ length: PALETTE_SIZE - 1 }, () => [0, 0, 0, 1]);
+    expect(() => paletteToUniform(tooShort)).toThrow(new RegExp(`${PALETTE_SIZE} entries`));
+    const tooLong: RGBA[] = Array.from({ length: PALETTE_SIZE + 1 }, () => [0, 0, 0, 1]);
+    expect(() => paletteToUniform(tooLong)).toThrow(new RegExp(`${PALETTE_SIZE} entries`));
   });
 });
 
@@ -149,7 +156,216 @@ describe("quadWorldSize — quad spans the glow-padded cell in world units", () 
 describe("VRAMRenderer — constructor WebGL2 gate", () => {
   it("throws when WebGL2 is unavailable (jsdom has no WebGL2)", () => {
     const canvas = document.createElement("canvas");
-    const palette: RGBA[] = Array.from({ length: 8 }, () => [1, 1, 1, 1]);
+    const palette: RGBA[] = Array.from({ length: PALETTE_SIZE }, () => [1, 1, 1, 1]);
     expect(() => new VRAMRenderer({ canvas, palette })).toThrow(/WebGL2/);
+  });
+});
+
+describe("RenderInstance — A2 field contract", () => {
+  it("has all 9 fields including A2 additions", () => {
+    const ri: RenderInstance = {
+      glyphIdx: 0,
+      lumaIdx: 0,
+      colorIdx: 0,
+      worldX: 0,
+      worldY: 0,
+      entityType: 0,
+      zOrder: 0,
+      rotation: 0,
+      selected: false,
+    };
+    expect(ri.entityType).toBe(0);
+    expect(ri.zOrder).toBe(0);
+    expect(ri.rotation).toBe(0);
+    expect(ri.selected).toBe(false);
+  });
+
+  it("entityType and zOrder are CPU-side (not shader attribs)", () => {
+    const ri: RenderInstance = {
+      glyphIdx: 0,
+      lumaIdx: 0,
+      colorIdx: 0,
+      worldX: 0,
+      worldY: 0,
+      entityType: 2, // flow
+      zOrder: 99,
+      rotation: Math.PI / 2,
+      selected: true,
+    };
+    // CPU-side fields accept any value without constraint
+    expect(ri.entityType).toBe(2);
+    expect(ri.zOrder).toBe(99);
+    expect(ri.rotation).toBeCloseTo(Math.PI / 2);
+    expect(ri.selected).toBe(true);
+  });
+});
+
+// ---- setInstance (A1 per-instance mutation API, AC-14) ---------------------
+//
+// jsdom has no WebGL2, so the existing tests avoid constructing VRAMRenderer.
+// setInstance is pure CPU-logic + targeted gl.bufferSubData — it does not need
+// a real GPU, only GL *call* assertions. We stub getContext to return a mock
+// WebGL2 context whose create* methods return distinct objects (so we can
+// assert WHICH buffer a bufferSubData targeted) and whose param-check stubs
+// (getShaderParameter/getProgramParameter) return true so the constructor's
+// heavy setup completes. We only assert on setInstance's gl calls.
+
+// MockGL = a WebGL2 context whose createBuffer / bindBuffer / bufferSubData are
+// vi.fn mocks the tests assert on (.mockClear / .mock.calls / .mock.results).
+// The Proxy synthesizes any other GL member on demand, so the cast below is
+// the static boundary.
+type MockGL = WebGL2RenderingContext & {
+  bindBuffer: Mock;
+  bufferSubData: Mock;
+  createBuffer: Mock;
+};
+
+function makeMockGL(): MockGL {
+  let n = 0;
+  const distinct = () => ({ __id: ++n });
+  const fn = (impl?: () => unknown) => vi.fn(impl ?? (() => {}));
+  // Explicit stubs for the calls setInstance asserts on / the constructor checks.
+  // Everything else falls through to a no-op vi.fn() via the Proxy below, so the
+  // constructor's heavy GL setup never hits an "is not a function" wall.
+  const explicit: Record<string, unknown> = {
+    // creation — distinct objects so buffer identity can be asserted
+    createShader: fn(() => distinct()),
+    createProgram: fn(() => distinct()),
+    createVertexArray: fn(() => distinct()),
+    createBuffer: fn(() => distinct()),
+    createTexture: fn(() => distinct()),
+    // shader/program pipeline (no-ops; param checks return true → construct OK)
+    shaderSource: fn(),
+    compileShader: fn(),
+    getShaderParameter: fn(() => true),
+    getShaderInfoLog: fn(() => ""),
+    deleteShader: fn(),
+    attachShader: fn(),
+    linkProgram: fn(),
+    getProgramParameter: fn(() => true),
+    getProgramInfoLog: fn(() => ""),
+    deleteProgram: fn(),
+    // VAO / buffers / attribs / texture / uniforms
+    bindVertexArray: fn(),
+    bindBuffer: fn(),
+    bufferData: fn(),
+    bufferSubData: fn(),
+    getAttribLocation: fn(() => 0),
+    enableVertexAttribArray: fn(),
+    vertexAttribIPointer: fn(),
+    vertexAttribPointer: fn(),
+    vertexAttribDivisor: fn(),
+    bindTexture: fn(),
+    texParameteri: fn(),
+    getUniformLocation: fn(() => distinct()),
+    // constants (real WebGL2 numeric values; ARRAY_BUFFER is read by setInstance)
+    VERTEX_SHADER: 35633,
+    FRAGMENT_SHADER: 35632,
+    COMPILE_STATUS: 35713,
+    LINK_STATUS: 35714,
+    ARRAY_BUFFER: 34962,
+    DYNAMIC_DRAW: 35048,
+    INT: 5124,
+    FLOAT: 5126,
+    TEXTURE_2D: 3553,
+    TEXTURE_MIN_FILTER: 10241,
+    TEXTURE_MAG_FILTER: 10240,
+    NEAREST: 9728,
+    CLAMP_TO_EDGE: 33071,
+    TEXTURE_WRAP_S: 10242,
+    TEXTURE_WRAP_T: 10243,
+  };
+  return new Proxy(explicit, {
+    get(target, prop: string) {
+      if (prop in target) return target[prop];
+      // any unmocked GL method → fresh shared no-op (memoized per-prop)
+      if (!(target[`__fn_${prop}`] instanceof Function)) {
+        target[`__fn_${prop}`] = fn();
+      }
+      return target[`__fn_${prop}`];
+    },
+  }) as unknown as MockGL;
+}
+
+/** Construct a real VRAMRenderer against a mock GL; capture the 5 createBuffer
+ * results so tests can assert which buffer a setInstance call targeted. */
+function makeRenderer() {
+  const gl = makeMockGL();
+  const canvas = document.createElement("canvas");
+  vi.spyOn(canvas, "getContext").mockReturnValue(gl);
+  const palette: RGBA[] = Array.from({ length: PALETTE_SIZE }, () => [1, 1, 1, 1]);
+  const renderer = new VRAMRenderer({ canvas, palette });
+  // createBuffer is called 5× in order: glyphLuma, worldPos, colorIdx, rotation, selected
+  const buffers = {
+    glyphLuma: gl.createBuffer.mock.results[0].value,
+    worldPos: gl.createBuffer.mock.results[1].value,
+    colorIdx: gl.createBuffer.mock.results[2].value,
+    rotation: gl.createBuffer.mock.results[3].value,
+    selected: gl.createBuffer.mock.results[4].value,
+  };
+  return { gl, renderer, buffers };
+}
+
+describe("setInstance — per-instance bufferSubData (AC-14)", () => {
+  it("setInstance(5, {worldX}) uploads only the worldPos sub-range at offset 5*8", () => {
+    const { gl, renderer, buffers } = makeRenderer();
+    gl.bindBuffer.mockClear();
+    gl.bufferSubData.mockClear();
+
+    renderer.setInstance(5, { worldX: 10 });
+
+    // exactly one GPU upload — only the worldPos path fired
+    expect(gl.bufferSubData).toHaveBeenCalledTimes(1);
+    const [target, offset, data] = gl.bufferSubData.mock.calls[0];
+    expect(target).toBe(gl.ARRAY_BUFFER);
+    expect(offset).toBe(5 * 8); // Float32×2 = 8 bytes/instance
+    // the bound buffer is worldPosBuf (createBuffer call #2), and it's the only bind
+    expect(gl.bindBuffer).toHaveBeenCalledTimes(1);
+    expect(gl.bindBuffer).toHaveBeenLastCalledWith(gl.ARRAY_BUFFER, buffers.worldPos);
+    // uploaded sub-range carries worldX=10; worldY untouched (scratch zero-init)
+    expect(Array.from(data as Float32Array)).toEqual([10, 0]);
+  });
+
+  it("setInstance(5, {entityType}) makes no GPU calls (CPU-only field)", () => {
+    const { gl, renderer } = makeRenderer();
+    gl.bindBuffer.mockClear();
+    gl.bufferSubData.mockClear();
+
+    renderer.setInstance(5, { entityType: 1 });
+
+    // entityType/zOrder are CPU-side — no buffer to update
+    expect(gl.bufferSubData).not.toHaveBeenCalled();
+    expect(gl.bindBuffer).not.toHaveBeenCalled();
+  });
+
+  it("setInstance(5, {selected:true}) uploads selectedBuf at offset 5*4 with value 1", () => {
+    const { gl, renderer, buffers } = makeRenderer();
+    gl.bindBuffer.mockClear();
+    gl.bufferSubData.mockClear();
+
+    renderer.setInstance(5, { selected: true });
+
+    expect(gl.bufferSubData).toHaveBeenCalledTimes(1);
+    const [target, offset, data] = gl.bufferSubData.mock.calls[0];
+    expect(target).toBe(gl.ARRAY_BUFFER);
+    expect(offset).toBe(5 * 4); // Int32×1 = 4 bytes/instance
+    expect(gl.bindBuffer).toHaveBeenLastCalledWith(gl.ARRAY_BUFFER, buffers.selected);
+    expect(Array.from(data as Int32Array)).toEqual([1]); // true → 1
+  });
+
+  it("setInstance(3, {worldX, colorIdx}) uploads worldPos then colorIdx (two distinct buffers)", () => {
+    const { gl, renderer, buffers } = makeRenderer();
+    gl.bindBuffer.mockClear();
+    gl.bufferSubData.mockClear();
+
+    renderer.setInstance(3, { worldX: 7, colorIdx: 2 });
+
+    // two GPU uploads: worldPos (offset 3*8) then colorIdx (offset 3*4)
+    expect(gl.bufferSubData).toHaveBeenCalledTimes(2);
+    expect(gl.bufferSubData.mock.calls[0][1]).toBe(3 * 8);
+    expect(gl.bufferSubData.mock.calls[1][1]).toBe(3 * 4);
+    // buffers bound in the same order
+    expect(gl.bindBuffer).toHaveBeenNthCalledWith(1, gl.ARRAY_BUFFER, buffers.worldPos);
+    expect(gl.bindBuffer).toHaveBeenNthCalledWith(2, gl.ARRAY_BUFFER, buffers.colorIdx);
   });
 });

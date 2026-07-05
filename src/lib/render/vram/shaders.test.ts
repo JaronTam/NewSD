@@ -26,7 +26,7 @@ describe("shaders — GLSL ES 3.00 version + pipeline shape", () => {
     expect(VERT_SRC).toContain("uniform int u_atlasCols;");
     expect(VERT_SRC).toContain("uniform vec2 u_atlasCellSize;");
     expect(VERT_SRC).toContain("uniform vec2 u_atlasTexelSize;");
-    expect(VERT_SRC).toContain("a_glyphIdx * LUMA_LEVELS + a_lumaIdx");
+    expect(VERT_SRC).toContain("a_glyphIdx * LUMA_LEVELS + effectiveLuma");
   });
 
   it("vertex shader consumes the camera affine as a mat3 uniform", () => {
@@ -44,7 +44,7 @@ describe("shaders — fragment shader (AD-9: nearest atlas + palette + hue shift
   });
 
   it("applies palette[colorIdx] then hue shift, discards transparent texels", () => {
-    expect(FRAG_SRC).toContain("uniform vec4 u_palette[8];");
+    expect(FRAG_SRC).toContain(`uniform vec4 u_palette[${PALETTE_SIZE}];`);
     expect(FRAG_SRC).toContain("u_palette[v_colorIdx]");
     expect(FRAG_SRC).toContain("uniform float u_hueShift;");
     expect(FRAG_SRC).toContain("hueShift(color, u_hueShift)");
@@ -57,6 +57,32 @@ describe("shaders — fragment shader (AD-9: nearest atlas + palette + hue shift
   });
 
   it("palette size is exported for the renderer to size its uniform array", () => {
-    expect(PALETTE_SIZE).toBe(8);
+    // A4: basic positive guard — cross-file invariant is tested in palette.test.ts
+    expect(PALETTE_SIZE).toBeGreaterThanOrEqual(1);
+  });
+});
+
+describe("shaders — A2 rotation and selected attribs", () => {
+  it("vertex shader declares a_rotation and a_selected per-instance attribs", () => {
+    expect(VERT_SRC).toContain("in float a_rotation;");
+    expect(VERT_SRC).toContain("in int a_selected;");
+  });
+
+  it("vertex shader rotates quad corner by a_rotation", () => {
+    expect(VERT_SRC).toContain("cos(a_rotation)");
+    expect(VERT_SRC).toContain("sin(a_rotation)");
+    expect(VERT_SRC).toContain("rotated");
+  });
+
+  it("vertex shader bumps effective luma when selected", () => {
+    expect(VERT_SRC).toContain("effectiveLuma = a_lumaIdx + a_selected");
+  });
+
+  it("does not declare a dead v_selected varying (M1: luma bump is vertex-only)", () => {
+    // M1: v_selected was a dead varying — the fragment shader never read it
+    // (the luma bump happens in the vertex shader via effectiveLuma). Removed
+    // to avoid an unused-varying warning. This guard prevents re-introducing it.
+    expect(VERT_SRC).not.toContain("v_selected");
+    expect(FRAG_SRC).not.toContain("v_selected");
   });
 });
