@@ -217,6 +217,227 @@ describe("CanvasView — VRAM overlay + WebGL2 graceful degrade (1a.2 sub-PR #2)
   });
 });
 
+// ---- Story 1a.3 Task 7: element interaction (AC-7) --------------------------
+
+import { elementStore } from "./CanvasView";
+
+describe("CanvasView — element interaction (Story 1a.3 Task 7)", () => {
+  afterEach(() => {
+    cleanup();
+    // Reset store to the default seed so other tests don't see side-effects.
+    elementStore.setElements([]);
+  });
+
+  it("left-click on a stock selects it (smoke — no crash, no pan)", async () => {
+    const { container } = await renderReady();
+    const canvas = container.querySelector("canvas")!;
+    const before = zoomPercent(hudText(container));
+
+    // Create a stock at a known position.
+    elementStore.setElements([
+      {
+        id: "test-s1",
+        kind: "stock",
+        name: "Test",
+        x: 0,
+        y: 0,
+        width: 10,
+        height: 5,
+        initialValue: 100,
+        currentValue: 100,
+        units: "",
+        allowNegative: false,
+        history: [100],
+      },
+    ]);
+
+    // Click at world (5, 2.5) — center of the stock.
+    // screenToWorld with default cam (0,0,1) and vp={1,1}: wx = sx - 0.5
+    // So to hit world (5, 2.5), clientX = 5.5, clientY = 3.
+    fireEvent.pointerDown(canvas, { button: 0, pointerId: 50, clientX: 5.5, clientY: 3 });
+    fireEvent.pointerUp(canvas, { pointerId: 50, clientX: 5.5, clientY: 3 });
+
+    // Zoom must stay at 100% — left click on element does NOT pan.
+    expect(zoomPercent(hudText(container))).toBe(100);
+  });
+
+  it("left-click on empty space clears selection (no crash)", async () => {
+    const { container } = await renderReady();
+    const canvas = container.querySelector("canvas")!;
+
+    // Click far from any element — world (100, 100).
+    fireEvent.pointerDown(canvas, { button: 0, pointerId: 51, clientX: 100.5, clientY: 100.5 });
+    fireEvent.pointerUp(canvas, { pointerId: 51, clientX: 100.5, clientY: 100.5 });
+
+    // Still renders without crash.
+    expect(zoomPercent(hudText(container))).toBe(100);
+  });
+
+  it("dragging a stock moves it with grid snap applied", async () => {
+    const { container } = await renderReady();
+    const canvas = container.querySelector("canvas")!;
+
+    elementStore.setElements([
+      {
+        id: "test-drag",
+        kind: "stock",
+        name: "DragMe",
+        x: 0,
+        y: 0,
+        width: 10,
+        height: 5,
+        initialValue: 1,
+        currentValue: 1,
+        units: "",
+        allowNegative: false,
+        history: [1],
+      },
+    ]);
+
+    // pointerDown at world (5, 2.5) → hit test finds the stock → begin drag.
+    fireEvent.pointerDown(canvas, { button: 0, pointerId: 52, clientX: 5.5, clientY: 3 });
+
+    // Drag to world (15, 0.5): rawX = 15 + offsetX(-5) = 10, rawY = 0.5 + offsetY(-2.5) = -2
+    // snapToGrid: 10 → 10, -2 → -2. Stock moves from (0, 0) to (10, -2).
+    fireEvent.pointerMove(canvas, { pointerId: 52, clientX: 15.5, clientY: 1 });
+    fireEvent.pointerUp(canvas, { pointerId: 52, clientX: 15.5, clientY: 1 });
+
+    const elements = elementStore.getElements();
+    const dragged = elements.find((e) => e.id === "test-drag");
+    expect(dragged).toBeDefined();
+    if (!dragged) throw new Error("unreachable: element not found");
+    expect(dragged.kind).toBe("stock");
+    if (dragged!.kind === "stock") {
+      expect(dragged.x).toBe(10);
+      expect(dragged.y).toBe(-2);
+    }
+  });
+
+  it("left-drag without Space does NOT pan the camera", async () => {
+    // This re-validates the existing invariant with element interaction active:
+    // dragging an element must not pan the underlying camera.
+    const { container } = await renderReady();
+    const canvas = container.querySelector("canvas")!;
+
+    elementStore.setElements([
+      {
+        id: "test-nopan",
+        kind: "stock",
+        name: "NoPan",
+        x: 0,
+        y: 0,
+        width: 10,
+        height: 5,
+        initialValue: 1,
+        currentValue: 1,
+        units: "",
+        allowNegative: false,
+        history: [1],
+      },
+    ]);
+
+    const before = hudText(container);
+    fireEvent.pointerDown(canvas, { button: 0, pointerId: 53, clientX: 5.5, clientY: 3 });
+    fireEvent.pointerMove(canvas, { pointerId: 53, clientX: 25.5, clientY: 3 });
+    fireEvent.pointerUp(canvas, { pointerId: 53, clientX: 25.5, clientY: 3 });
+
+    // Camera must not have panned — zoom stays 100%.
+    expect(zoomPercent(hudText(container))).toBe(100);
+  });
+});
+
+describe("CanvasView — double-click edit name (AC-7)", () => {
+  afterEach(() => {
+    cleanup();
+    elementStore.setElements([]);
+  });
+
+  it("double-click on a stock opens a prompt to edit its name", async () => {
+    const { container } = await renderReady();
+    const canvas = container.querySelector("canvas")!;
+
+    elementStore.setElements([
+      {
+        id: "test-dbl",
+        kind: "stock",
+        name: "OldName",
+        x: 0,
+        y: 0,
+        width: 10,
+        height: 5,
+        initialValue: 1,
+        currentValue: 1,
+        units: "",
+        allowNegative: false,
+        history: [1],
+      },
+    ]);
+
+    const promptSpy = vi.spyOn(window, "prompt").mockReturnValue("NewName");
+
+    // First click — selects the element.
+    fireEvent.pointerDown(canvas, { button: 0, pointerId: 60, clientX: 5.5, clientY: 3 });
+    fireEvent.pointerUp(canvas, { pointerId: 60, clientX: 5.5, clientY: 3 });
+
+    // Second click within 300 ms on same element → double-click → prompt.
+    fireEvent.pointerDown(canvas, { button: 0, pointerId: 61, clientX: 5.5, clientY: 3 });
+    fireEvent.pointerUp(canvas, { pointerId: 61, clientX: 5.5, clientY: 3 });
+
+    expect(promptSpy).toHaveBeenCalledWith("Edit name:", "OldName");
+
+    // The name should be updated.
+    const elements = elementStore.getElements();
+    const edited = elements.find((e) => e.id === "test-dbl");
+    expect(edited).toBeDefined();
+    if (!edited) throw new Error("unreachable: element not found");
+    if (edited.kind === "stock") {
+      expect(edited.name).toBe("NewName");
+    }
+
+    promptSpy.mockRestore();
+  });
+
+  it("double-click with cancelled prompt does NOT change the name", async () => {
+    const { container } = await renderReady();
+    const canvas = container.querySelector("canvas")!;
+
+    elementStore.setElements([
+      {
+        id: "test-cancel",
+        kind: "stock",
+        name: "KeepMe",
+        x: 0,
+        y: 0,
+        width: 10,
+        height: 5,
+        initialValue: 1,
+        currentValue: 1,
+        units: "",
+        allowNegative: false,
+        history: [1],
+      },
+    ]);
+
+    const promptSpy = vi.spyOn(window, "prompt").mockReturnValue(null);
+
+    fireEvent.pointerDown(canvas, { button: 0, pointerId: 62, clientX: 5.5, clientY: 3 });
+    fireEvent.pointerUp(canvas, { pointerId: 62, clientX: 5.5, clientY: 3 });
+    fireEvent.pointerDown(canvas, { button: 0, pointerId: 63, clientX: 5.5, clientY: 3 });
+    fireEvent.pointerUp(canvas, { pointerId: 63, clientX: 5.5, clientY: 3 });
+
+    expect(promptSpy).toHaveBeenCalled();
+    const elements = elementStore.getElements();
+    const unchanged = elements.find((e) => e.id === "test-cancel");
+    expect(unchanged).toBeDefined();
+    if (!unchanged) throw new Error("unreachable: element not found");
+    if (unchanged.kind === "stock") {
+      expect(unchanged.name).toBe("KeepMe");
+    }
+
+    promptSpy.mockRestore();
+  });
+});
+
 // CAP-11 runtime guard: prove the 2D draw path never assigns ctx.shadowBlur.
 //
 // jsdom's getContext returns null globally (src/test/setup.ts), so CanvasView's

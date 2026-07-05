@@ -33,6 +33,28 @@ jobs:
           name: dist
           path: dist
 
+  # Story 1a.3 C3 fold: Playwright e2e runs in parallel with frontend/go/wasm.
+  # webServer config in playwright.config.ts starts `npx vite` so no dependency
+  # on the frontend build-artifact job. SwiftShader enables headless WebGL2.
+  playwright:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+      - run: bunx playwright install chromium --with-deps
+      - run: bun run test:e2e
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: playwright-report/
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-test-results
+          path: test-results/
+
   go:
     needs: frontend
     runs-on: ubuntu-latest

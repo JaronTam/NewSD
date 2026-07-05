@@ -43,6 +43,11 @@ _bmad/
 .playwright-mcp/
 /sd-sim-*.png
 
+# Playwright e2e output (Story 1a.3 C3 fold)
+playwright-report/
+test-results/
+~/.cache/ms-playwright/
+
 # Go / Rust / Wasm 构建产物（Story 1a.1 三语言基座）
 /target
 /wasm/target

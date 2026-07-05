@@ -4,13 +4,18 @@ import {
   clampCamera,
   panBy,
   screenToWorld,
+  shouldSnap,
+  snapToGrid,
   worldToScreen,
   zoomAt,
   type Camera,
   type Viewport,
 } from "./camera";
+import { cloudToInstances, findElementAt, getElementBounds, stockToInstances } from "./elements";
 import { readPalette } from "./palette";
-import { GLYPH_H, LUMA_LEVELS, bakeGlowAtlasCanvas, charToGlyphIdx } from "./vram/glowAtlas";
+import { createElementStore } from "../sd/store";
+import type { SDElement, Stock } from "../sd/types";
+import { GLYPH_H, bakeGlowAtlasCanvas } from "./vram/glowAtlas";
 import { VRAMRenderer, type RenderInstance } from "./vram/renderer";
 
 // Story 1a.1 sub-PR #3 — FR-CANVAS-1: infinite canvas navigation.
@@ -109,32 +114,60 @@ function distance(a: { x: number; y: number }, b: { x: number; y: number }): num
   return Math.sqrt(dx * dx + dy * dy);
 }
 
-// First-screen placeholder glyphs (Story 1a.2 sub-PR #2). Business glyphs
-// (stock/cloud/flow shapes) land in 1a.3/1a.4; this static ASCII proves the
-// VRAM real-time path is wired into the real CanvasView (not just the DEV
-// /vram route). Centered on the world origin so it sits under the crosshair.
-// ASCII-only (charset is ASCII 32-126 + box glyphs); non-charset chars are
-// skipped by charToGlyphIdx returning -1.
-function buildBootInstances(): RenderInstance[] {
+// Element store (module-level singleton — single-user local app).
+// Swap out for Y.Doc in Story 1a.4 / collab AD-10.
+const elementStore = createElementStore();
+export { elementStore };
+
+// Seed sample stocks for development / first screen (replaces the old
+// `buildBootInstances` static ASCII placeholder).
+function seedSampleStocks() {
+  elementStore.createStock({
+    name: "Population",
+    x: -8,
+    y: -6,
+    width: 14,
+    height: 5,
+    initialValue: 1_000_000,
+    units: "people",
+    allowNegative: false,
+  });
+  elementStore.createStock({
+    name: "CO₂",
+    x: 6,
+    y: -6,
+    width: 12,
+    height: 5,
+    initialValue: 420,
+    units: "ppm",
+    allowNegative: false,
+  });
+  elementStore.createStock({
+    name: "GDP",
+    x: -2,
+    y: 3,
+    width: 14,
+    height: 5,
+    initialValue: 25000,
+    units: "B$",
+    allowNegative: false,
+  });
+}
+seedSampleStocks();
+
+function buildInstancesFromStore(selectedId: string | null): RenderInstance[] {
   const out: RenderInstance[] = [];
-  const pushLine = (text: string, y: number, colorIdx: number, baseLuma: number) => {
-    const x0 = -text.length / 2;
-    for (let i = 0; i < text.length; i++) {
-      const glyphIdx = charToGlyphIdx(text[i]);
-      if (glyphIdx < 0) continue; // skip chars outside the baked charset
-      out.push({
-        glyphIdx,
-        lumaIdx: (baseLuma + i) % LUMA_LEVELS,
-        colorIdx,
-        worldX: x0 + i,
-        worldY: y,
-      });
+  for (const el of elementStore.getElements()) {
+    if (el.kind === "stock") {
+      const selected = el.id === selectedId;
+      const instances = stockToInstances(el as Stock, false, selected);
+      for (const ri of instances) out.push(ri);
+    } else if (el.kind === "cloud") {
+      const instances = cloudToInstances(el);
+      for (const ri of instances) out.push(ri);
     }
-  };
-  pushLine("NewSD", -2, 0, 3); // title — stock cyan, max glow
-  pushLine("1a.2 vram canvas", 0, 3, 1); // subtitle — fg, low glow
-  pushLine("┌──────────────┐", 2, 2, 2); // cloud violet frame
-  pushLine("└──────────────┘", 3, 2, 2);
+    // flow rendering added in 1a.4 (edges)
+  }
   return out;
 }
 
@@ -164,6 +197,18 @@ export function CanvasView() {
   // taps, but two-finger touch always zooms regardless of the space gate.
   const pointersRef = useRef<Map<number, { x: number; y: number }>>(new Map());
   const pinchRef = useRef<{ active: boolean; prevDist: number }>({ active: false, prevDist: 0 });
+
+  // Element interaction state (Task 7, AC-7).
+  const selectedIdRef = useRef<string | null>(null);
+  // Drag state: when active, tracks the world-offset from pointer to element origin.
+  const dragRef = useRef<{
+    active: boolean;
+    pointerId: number;
+    offsetX: number; // world offset: element.x - worldX_at_pointerDown
+    offsetY: number;
+  }>({ active: false, pointerId: -1, offsetX: 0, offsetY: 0 });
+  // Double-click detection: timestamp of last click + clicked element id.
+  const clickRef = useRef<{ time: number; id: string }>({ time: 0, id: "" });
 
   const [phase, setPhase] = useState<Phase>("loading");
 
@@ -256,7 +301,7 @@ export function CanvasView() {
         });
         renderer.setAtlas(baked);
         rendererRef.current = renderer;
-        instancesRef.current = buildBootInstances();
+        instancesRef.current = buildInstancesFromStore(null);
       } catch (err) {
         rendererRef.current = null;
         if (import.meta.env.DEV) {
@@ -264,6 +309,12 @@ export function CanvasView() {
         }
       }
     }
+
+    // Subscribe to element store changes: rebuild instances and redraw.
+    const unsubStore = elementStore.subscribe(() => {
+      instancesRef.current = buildInstancesFromStore(selectedIdRef.current);
+      drawRef.current();
+    });
 
     const measure = () => {
       const w = Math.max(1, Math.floor(el.clientWidth));
@@ -286,6 +337,7 @@ export function CanvasView() {
     const readyTimer = setTimeout(() => setPhase("ready"), 0);
     return () => {
       clearTimeout(readyTimer);
+      unsubStore();
       ro?.disconnect();
       rendererRef.current?.dispose();
       rendererRef.current = null;
@@ -367,21 +419,78 @@ export function CanvasView() {
 
     const middle = e.button === 1;
     const spaceLeft = e.button === 0 && panRef.current.spaceDown;
-    if (!middle && !spaceLeft) return;
-    e.preventDefault();
-    try {
-      (e.target as HTMLCanvasElement).setPointerCapture(e.pointerId);
-    } catch {
-      // capture unsupported (jsdom) or already captured; pan still works.
+
+    // ---- pan gate: middle button or Space+left ----
+    if (middle || spaceLeft) {
+      e.preventDefault();
+      try {
+        (e.target as HTMLCanvasElement).setPointerCapture(e.pointerId);
+      } catch {
+        // capture unsupported (jsdom) or already captured; pan still works.
+      }
+      panRef.current = {
+        ...panRef.current,
+        active: true,
+        pointerId: e.pointerId,
+        lastX: e.clientX,
+        lastY: e.clientY,
+      };
+      containerRef.current?.style.setProperty("cursor", "grabbing");
+      return;
     }
-    panRef.current = {
-      ...panRef.current,
-      active: true,
-      pointerId: e.pointerId,
-      lastX: e.clientX,
-      lastY: e.clientY,
-    };
-    containerRef.current?.style.setProperty("cursor", "grabbing");
+
+    // ---- element interaction: plain left click (Task 7, AC-7) ----
+    if (e.button === 0) {
+      const sx = e.clientX - rect.left;
+      const sy = e.clientY - rect.top;
+      const cam = camRef.current;
+      const vp = vpRef.current;
+      const [wx, wy] = screenToWorld(cam, vp, sx, sy);
+
+      const elements = elementStore.getElements();
+      const hit = findElementAt(wx, wy, elements);
+
+      if (hit && hit.kind !== "flow") {
+        // Double-click detection: same element within 300 ms → edit name.
+        const now = performance.now();
+        if (clickRef.current.id === hit.id && now - clickRef.current.time < 300) {
+          clickRef.current = { time: 0, id: "" };
+          const currentName = (hit as { name?: string }).name ?? "";
+          const newName = window.prompt("Edit name:", currentName);
+          if (newName !== null && newName.trim().length > 0) {
+            elementStore.updateElement(hit.id, { name: newName.trim() } as Partial<SDElement>);
+          }
+          e.preventDefault();
+          return;
+        }
+        clickRef.current = { time: now, id: hit.id };
+
+        // Select + begin drag (AC-7, AC-14).
+        selectedIdRef.current = hit.id;
+        dragRef.current = {
+          active: true,
+          pointerId: e.pointerId,
+          offsetX: hit.x - wx,
+          offsetY: hit.y - wy,
+        };
+        try {
+          (e.target as HTMLCanvasElement).setPointerCapture(e.pointerId);
+        } catch {
+          // jsdom — drag still works via bubbling.
+        }
+        instancesRef.current = buildInstancesFromStore(hit.id);
+        drawRef.current();
+        e.preventDefault();
+        return;
+      }
+
+      // Miss: clear selection.
+      if (selectedIdRef.current !== null) {
+        selectedIdRef.current = null;
+        instancesRef.current = buildInstancesFromStore(null);
+        drawRef.current();
+      }
+    }
   };
 
   const movePan = (e: React.PointerEvent<HTMLCanvasElement>) => {
@@ -408,6 +517,23 @@ export function CanvasView() {
         camRef.current = zoomAt(camRef.current, vpRef.current, midX, midY, factor);
       }
       pinchRef.current.prevDist = newDist;
+      drawRef.current();
+      return;
+    }
+
+    // ---- element drag (AC-7: snapToGrid + shouldSnap tolerance) ----
+    if (dragRef.current.active && dragRef.current.pointerId === e.pointerId) {
+      const cam = camRef.current;
+      const vp = vpRef.current;
+      const [wx, wy] = screenToWorld(cam, vp, sx, sy);
+      const rawX = wx + dragRef.current.offsetX;
+      const rawY = wy + dragRef.current.offsetY;
+      const newX = shouldSnap(rawX, cam.zoom) ? snapToGrid(rawX) : rawX;
+      const newY = shouldSnap(rawY, cam.zoom) ? snapToGrid(rawY) : rawY;
+      const id = selectedIdRef.current;
+      if (id) {
+        elementStore.updateElement(id, { x: newX, y: newY } as Partial<SDElement>);
+      }
       drawRef.current();
       return;
     }
@@ -442,6 +568,11 @@ export function CanvasView() {
     if (p.active && p.pointerId === e.pointerId) {
       e.preventDefault();
       p.active = false;
+    }
+
+    // End element drag.
+    if (dragRef.current.active && dragRef.current.pointerId === e.pointerId) {
+      dragRef.current.active = false;
     }
     containerRef.current?.style.setProperty("cursor", p.spaceDown ? "grab" : "default");
   };

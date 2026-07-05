@@ -36,6 +36,10 @@ function buildSampleInstances(): RenderInstance[] {
         colorIdx,
         worldX: x0 + i,
         worldY: y,
+        entityType: 0, // placeholder: stock
+        zOrder: 0,
+        rotation: 0,
+        selected: false,
       });
     }
   };

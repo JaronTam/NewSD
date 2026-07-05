@@ -30,7 +30,7 @@ development_status:
   epic-1a: in-progress
   1a-1-app-skeleton-infinite-canvas-nav: done
   1a-2-vram-render-base-f1-quality-spike: done
-  1a-3-grid-snap-stock-source-sink: backlog # 起算 story: 下一 CS 生成 story 文件 -> ready-for-dev
+  1a-3-grid-snap-stock-source-sink: done # 起算 story: CS→VS→DS→CR 完成, 单 PR, 2026-07-05
   1a-4-flow-connector-port-snap: backlog
   1a-5-spatial-index-viewport-cull: backlog
   1a-6-minimap: backlog

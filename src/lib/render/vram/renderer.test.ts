@@ -6,9 +6,11 @@ import {
   quadWorldSize,
   screenAffineToClipMat3,
   type RGBA,
+  type RenderInstance,
   VRAMRenderer,
 } from "./renderer";
 import { CELL_H, CELL_W, GLYPH_H, GLYPH_W } from "./glowAtlas";
+import { PALETTE_SIZE } from "./shaders";
 import type { Affine } from "../camera";
 
 // Pure-logic helpers (camera->mat3, palette flatten, quad world size) are
@@ -114,7 +116,12 @@ describe("screenAffineToClipMat3 — compose world->screen affine with screen->N
 
 describe("paletteToUniform — flatten 8 RGBA -> uniform array", () => {
   it("packs 8 entries into a length-32 Float32Array in row order", () => {
-    const palette: RGBA[] = Array.from({ length: 8 }, (_, i) => [i / 8, 0, 0, 1]);
+    const palette: RGBA[] = Array.from({ length: PALETTE_SIZE }, (_, i) => [
+      i / PALETTE_SIZE,
+      0,
+      0,
+      1,
+    ]);
     const u = paletteToUniform(palette);
     expect(u).toBeInstanceOf(Float32Array);
     expect(u.length).toBe(32);
@@ -125,10 +132,10 @@ describe("paletteToUniform — flatten 8 RGBA -> uniform array", () => {
   });
 
   it("rejects a palette of the wrong length", () => {
-    const tooShort: RGBA[] = Array.from({ length: 7 }, () => [0, 0, 0, 1]);
-    expect(() => paletteToUniform(tooShort)).toThrow(/8 entries/);
-    const tooLong: RGBA[] = Array.from({ length: 9 }, () => [0, 0, 0, 1]);
-    expect(() => paletteToUniform(tooLong)).toThrow(/8 entries/);
+    const tooShort: RGBA[] = Array.from({ length: PALETTE_SIZE - 1 }, () => [0, 0, 0, 1]);
+    expect(() => paletteToUniform(tooShort)).toThrow(new RegExp(`${PALETTE_SIZE} entries`));
+    const tooLong: RGBA[] = Array.from({ length: PALETTE_SIZE + 1 }, () => [0, 0, 0, 1]);
+    expect(() => paletteToUniform(tooLong)).toThrow(new RegExp(`${PALETTE_SIZE} entries`));
   });
 });
 
@@ -149,7 +156,46 @@ describe("quadWorldSize — quad spans the glow-padded cell in world units", () 
 describe("VRAMRenderer — constructor WebGL2 gate", () => {
   it("throws when WebGL2 is unavailable (jsdom has no WebGL2)", () => {
     const canvas = document.createElement("canvas");
-    const palette: RGBA[] = Array.from({ length: 8 }, () => [1, 1, 1, 1]);
+    const palette: RGBA[] = Array.from({ length: PALETTE_SIZE }, () => [1, 1, 1, 1]);
     expect(() => new VRAMRenderer({ canvas, palette })).toThrow(/WebGL2/);
+  });
+});
+
+describe("RenderInstance — A2 field contract", () => {
+  it("has all 9 fields including A2 additions", () => {
+    const ri: RenderInstance = {
+      glyphIdx: 0,
+      lumaIdx: 0,
+      colorIdx: 0,
+      worldX: 0,
+      worldY: 0,
+      entityType: 0,
+      zOrder: 0,
+      rotation: 0,
+      selected: false,
+    };
+    expect(ri.entityType).toBe(0);
+    expect(ri.zOrder).toBe(0);
+    expect(ri.rotation).toBe(0);
+    expect(ri.selected).toBe(false);
+  });
+
+  it("entityType and zOrder are CPU-side (not shader attribs)", () => {
+    const ri: RenderInstance = {
+      glyphIdx: 0,
+      lumaIdx: 0,
+      colorIdx: 0,
+      worldX: 0,
+      worldY: 0,
+      entityType: 2, // flow
+      zOrder: 99,
+      rotation: Math.PI / 2,
+      selected: true,
+    };
+    // CPU-side fields accept any value without constraint
+    expect(ri.entityType).toBe(2);
+    expect(ri.zOrder).toBe(99);
+    expect(ri.rotation).toBeCloseTo(Math.PI / 2);
+    expect(ri.selected).toBe(true);
   });
 });
