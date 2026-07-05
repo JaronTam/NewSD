@@ -128,11 +128,11 @@ action item:   open → in-progress → done
 ## 4. PR 工作流 (NewSD 特化)
 
 - 禁直推 main; 改 main 走 PR
-- `gh pr create` → CI 全绿 (frontend/go/wasm/build-image) → `gh pr merge --merge --delete-branch`
+- `gh pr create` → CI 全绿 (frontend/playwright/go/wasm/build-image/process) → `sh scripts/merge-pr.sh <PR号>` (自带 CI-green + CLEAN 门控,不依赖分支保护 UI;内部调 `gh pr merge --squash --delete-branch` + post-merge-cleanup)
 - 提交前核暂存区 (`git diff --cached --stat`); 禁止清单: `.claude/` / `package-lock.json` / `.playwright-mcp/` 非白名单 PNG / 根级 PNG (命中则 `git restore --staged <file>`)
 - 禁 `git add -A` (用 `git add <显式路径>`)
-- ✅ 以上已由 pre-commit hook 强制 (husky: forbidden-files 守卫 + lint-staged, 见 `.husky/pre-commit`); pre-push hook 另挡 lockfile drift + lint + typecheck (见 `.husky/pre-push`) — 纪律规则现转为自动门
-- 合并后卫生: `sh scripts/post-merge-cleanup.sh` (回 main + 拉取 + 剪枝 + 列已合并的本地分支)
+- ✅ 以上已由 pre-commit hook 强制 (husky: forbidden-files 守卫 + lint-staged, 见 `.husky/pre-commit`); pre-push hook 另挡 lockfile drift + lint + typecheck (见 `.husky/pre-push`) — 纪律规则现转为自动门; process 层 (hooks/scripts) 由 CI `process` job 自测 (shellcheck + grep/deny 断言, 见 `scripts/test-process.sh`), 防 ERE 转义类脚本逻辑 bug ship 到 main
+- 合并后卫生: `merge-pr.sh` 内部已调 `sh scripts/post-merge-cleanup.sh` (回 main + 拉取 + 剪枝 + 列已合并的本地分支); 单独跑亦可
 - 提交信息: 标题 + 要点 + `Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>`
 - PR 描述: 总结 + 测试计划 + 末尾 `🤖 Generated with [Claude Code](https://claude.com/claude-code)`
 

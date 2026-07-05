@@ -91,6 +91,14 @@ jobs:
       - uses: jetli/wasm-pack-action@v0.4.0
       - run: wasm-pack test --node wasm
 
+  # process 层自测: shellcheck + 关键 grep/deny 断言
+  # 防 ERE 转义类 bug(如 #27 '^\*\|main\|lovable')ship 到 main
+  process:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: sh scripts/test-process.sh
+
   # sub-PR #4: build the multi-stage Docker image. On feat/PR it only builds
   # (validates the Dockerfile); on main it also pushes to GHCR (GITHUB_TOKEN,
   # no manual secret). The image is a real deployable artifact — dist is baked
