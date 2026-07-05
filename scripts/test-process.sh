@@ -38,7 +38,9 @@ denies=$(awk -F"'" '/^deny /{print $2}' ".husky/pre-commit")
 p1=$(printf '%s\n' "$denies" | sed -n 1p)
 p2=$(printf '%s\n' "$denies" | sed -n 2p)
 p3=$(printf '%s\n' "$denies" | sed -n 3p)
-[ -n "$p1" ] && [ -n "$p2" ] && [ -n "$p3" ] || { echo "✗ 抽不到三条 deny pattern"; exit 1; }
+if [ -z "$p1" ] || [ -z "$p2" ] || [ -z "$p3" ]; then
+  echo "✗ 抽不到三条 deny pattern"; exit 1
+fi
 check_deny "$p1" 'package-lock.json' 'bun.lock'
 check_deny "$p2" '.claude/skills/x' 'src/a.ts'
 check_deny "$p3" 'sd-sim-0.png' 'src/a.png'
