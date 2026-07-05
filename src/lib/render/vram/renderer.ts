@@ -27,11 +27,24 @@ export interface RenderInstance {
   colorIdx: number;
   worldX: number;
   worldY: number;
-  /** Element type discriminator: 0=stock, 1=cloud, 2=flow. CPU-side enum. */
+  /**
+   * Element type discriminator: 0=stock, 1=cloud, 2=flow. CPU-side enum.
+   * TODO(A1 scaffold): not yet consumed by any shader attrib or render logic;
+   * carried for future per-type styling. Activate when needed.
+   */
   entityType: number;
-  /** CPU-side draw-order key (sort ascending before render). Not a shader attrib. */
+  /**
+   * CPU-side draw-order key (sort ascending before render). Not a shader attrib.
+   * TODO(A1 scaffold): render() currently draws instances in array order and
+   * does NOT sort by zOrder. Activate the sort when explicit layering is required.
+   */
   zOrder: number;
-  /** Per-instance quad rotation in radians (shader attrib). */
+  /**
+   * Per-instance quad rotation in radians (shader attrib).
+   * TODO(A2 scaffold): shader path is live (a_rotation consumed in VERT_SRC),
+   * but CPU always sets rotation=0 (see elements.ts pushChar). Wire non-zero
+   * input when rotation interaction lands.
+   */
   rotation: number;
   /** Selected state — luma level +1 in vertex shader when true (shader attrib). */
   selected: boolean;
@@ -325,6 +338,8 @@ export class VRAMRenderer {
     const sc = this.scratchColorIdx;
     const sr = this.scratchRotation;
     const ss = this.scratchSelected;
+    // NOTE: instances are drawn in array order; zOrder is NOT applied here
+    // (see RenderInstance.zOrder TODO). Callers must pre-sort if layering matters.
     for (let i = 0; i < n; i++) {
       const it = instances[i];
       sg[i * 2 + 0] = it.glyphIdx;

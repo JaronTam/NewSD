@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 
-import { cloudToInstances, findElementAt, getElementBounds, stockToInstances } from "./elements";
+import {
+  cloudToInstances,
+  findElementAt,
+  getElementBounds,
+  resizeStock,
+  stockToInstances,
+  RESIZE_HANDLES,
+} from "./elements";
 import type { Cloud, SDElement, Stock } from "../sd/types";
 import type { RenderInstance } from "./vram/renderer";
 
@@ -195,16 +202,22 @@ describe("stockToInstances — ASCII box builder", () => {
     expect(interior.length).toBeGreaterThanOrEqual(3);
   });
 
-  it("selected instances have higher lumaIdx than non-selected", () => {
-    // We test by comparing two stocks, one selected and one not.
-    // The story doesn't expose a per-instance selected flag in the
-    // RenderInstance — it's per-element. For now selected is always
-    // false. This test asserts the contract: selected field exists
-    // and defaults to false.
-    const stock = makeStock();
-    const instances = stockToInstances(stock, false);
-    for (const r of instances) {
+  it("selected flag propagates to instances; lumaIdx stays at base (shader lifts luma)", () => {
+    // M1 (A2 path): CPU no longer bumps lumaIdx for selected glyphs. The vertex
+    // shader computes effectiveLuma = a_lumaIdx + a_selected, so selected
+    // instances carry selected=true with lumaIdx=0 (base). This keeps atlas band
+    // selection in the vertex shader (UV is computed there) — the fragment
+    // shader cannot change the sampling band, so AC-13's "fragment shader"
+    // wording is corrected to "vertex shader" (see story Dev Notes).
+    const unselected = stockToInstances(makeStock(), false);
+    for (const r of unselected) {
       expect(r.selected).toBe(false);
+      expect(r.lumaIdx).toBe(0);
+    }
+    const selected = stockToInstances(makeStock(), false, true);
+    for (const r of selected) {
+      expect(r.selected).toBe(true);
+      expect(r.lumaIdx).toBe(0); // base — shader lifts, not CPU
     }
   });
 
@@ -246,7 +259,7 @@ describe("cloudToInstances — ASCII cloud builder", () => {
     expect(instances.length).toBe(18);
   });
 
-  it("row 0 is ' .--. ' (space, dot, dash, dash, dot, space)", () => {
+  it("row 0 is ' .--. ' — a palindrome (arc centered, mirror-symmetric)", () => {
     const cloud = makeCloud({ x: 10, y: 5 });
     const instances = cloudToInstances(cloud);
     const row0 = instances.filter((r) => r.worldY === cloud.y).sort((a, b) => a.worldX - b.worldX);
@@ -255,6 +268,10 @@ describe("cloudToInstances — ASCII cloud builder", () => {
     for (const r of row0) {
       expect(r.glyphIdx).toBeGreaterThanOrEqual(0);
     }
+    // .--. is a palindrome: col0==col5 (space), col1==col4 (.), col2==col3 (-)
+    expect(row0[0].glyphIdx).toBe(row0[5].glyphIdx);
+    expect(row0[1].glyphIdx).toBe(row0[4].glyphIdx);
+    expect(row0[2].glyphIdx).toBe(row0[3].glyphIdx);
   });
 
   it("row 1 is '(    )' (paren, 4 spaces, paren)", () => {
@@ -266,13 +283,22 @@ describe("cloudToInstances — ASCII cloud builder", () => {
     expect(row1.length).toBe(6);
   });
 
-  it("row 2 is \" '--' \" (space, quote, dash, dash, quote, space)", () => {
+  it("row 2 is \" '--' \" — palindrome mirroring row 0's padding (M5 regression guard)", () => {
     const cloud = makeCloud({ x: 0, y: 0 });
     const instances = cloudToInstances(cloud);
+    const row0 = instances.filter((r) => r.worldY === cloud.y).sort((a, b) => a.worldX - b.worldX);
     const row2 = instances
       .filter((r) => r.worldY === cloud.y + 2)
       .sort((a, b) => a.worldX - b.worldX);
     expect(row2.length).toBe(6);
+    // '--' is a palindrome: col0==col5 (space), col1==col4 ('), col2==col3 (-)
+    expect(row2[0].glyphIdx).toBe(row2[5].glyphIdx);
+    expect(row2[1].glyphIdx).toBe(row2[4].glyphIdx);
+    expect(row2[2].glyphIdx).toBe(row2[3].glyphIdx);
+    // M5: pre-fix row 2 was "'--'  " (left-shifted) — col 0 was a quote, not a
+    // space. The arc must be centered, so row 2 col 0 == row 0 col 0 (both spaces).
+    expect(row2[0].glyphIdx).toBe(row0[0].glyphIdx);
+    expect(row2[5].glyphIdx).toBe(row0[5].glyphIdx);
   });
 
   it("all instances have colorIdx=2 (cloud violet)", () => {
@@ -291,13 +317,20 @@ describe("cloudToInstances — ASCII cloud builder", () => {
     }
   });
 
-  it("selected defaults to false, zOrder and rotation default to 0", () => {
+  it("selected flag propagates; defaults to false, zOrder/rotation default to 0", () => {
     const cloud = makeCloud();
     const instances = cloudToInstances(cloud);
     for (const r of instances) {
       expect(r.selected).toBe(false);
       expect(r.zOrder).toBe(0);
       expect(r.rotation).toBe(0);
+    }
+    // M1: selected cloud → selected=true on all instances (A2 glow path,
+    // luma lift done by vertex shader, not CPU).
+    const sel = cloudToInstances(makeCloud(), true);
+    for (const r of sel) {
+      expect(r.selected).toBe(true);
+      expect(r.lumaIdx).toBe(0); // base — shader lifts luma, not CPU
     }
   });
 
@@ -377,5 +410,71 @@ describe("findElementAt", () => {
     // s1: (0,0,10,5) — (10, 5) is exclusive
     const found = findElementAt(10, 5, elements);
     expect(found).toBeNull();
+  });
+});
+
+// ---- resize (AC-7 调整大小; CR followup L9) --------------------------------
+
+describe("resizeStock", () => {
+  it("exposes all four corner handles", () => {
+    expect(RESIZE_HANDLES).toEqual(["nw", "ne", "sw", "se"]);
+  });
+
+  it("SE handle grows width/height; x/y (opposite NW corner) stay fixed", () => {
+    // stock (0,0,10,5); drag SE corner to (15,8) → width=15, height=8.
+    const r = resizeStock(makeStock({ x: 0, y: 0, width: 10, height: 5 }), "se", 15, 8);
+    expect(r).toEqual({ x: 0, y: 0, width: 15, height: 8 });
+  });
+
+  it("NW handle moves x/y and resizes; opposite SE corner stays fixed", () => {
+    // stock (0,0,10,5); SE corner = (10,5) fixed; drag NW to (-3,-2) →
+    // x=-3, y=-2, width=10-(-3)=13, height=5-(-2)=7.
+    const r = resizeStock(makeStock({ x: 0, y: 0, width: 10, height: 5 }), "nw", -3, -2);
+    expect(r).toEqual({ x: -3, y: -2, width: 13, height: 7 });
+    // SE corner invariant: (x+w, y+h) === (10, 5).
+    expect(r.x + r.width).toBe(10);
+    expect(r.y + r.height).toBe(5);
+  });
+
+  it("NE handle moves top + right; opposite SW corner stays fixed", () => {
+    // stock (0,0,10,5); SW = (0,5) fixed; drag NE to (12,-2) →
+    // x=0 (left fixed), y=-2, width=12, height=5-(-2)=7.
+    const r = resizeStock(makeStock({ x: 0, y: 0, width: 10, height: 5 }), "ne", 12, -2);
+    expect(r).toEqual({ x: 0, y: -2, width: 12, height: 7 });
+    expect(r.x).toBe(0);
+    expect(r.y + r.height).toBe(5); // SW corner y
+  });
+
+  it("SW handle moves left + bottom; opposite NE corner stays fixed", () => {
+    // stock (0,0,10,5); NE = (10,0) fixed; drag SW to (-2,9) →
+    // x=-2, y=0 (top fixed), width=10-(-2)=12, height=9.
+    const r = resizeStock(makeStock({ x: 0, y: 0, width: 10, height: 5 }), "sw", -2, 9);
+    expect(r).toEqual({ x: -2, y: 0, width: 12, height: 9 });
+    expect(r.y).toBe(0);
+    expect(r.x + r.width).toBe(10); // NE corner x
+  });
+
+  it("SE handle clamps width & height to >=3 when dragged past the opposite corner", () => {
+    // stock (0,0,10,5); drag SE to (1,1) → width=1<3, height=1<3.
+    // SE moves right+bottom edges → pin r=left+3=3, b=top+3=3 → 3×3.
+    const r = resizeStock(makeStock({ x: 0, y: 0, width: 10, height: 5 }), "se", 1, 1);
+    expect(r).toEqual({ x: 0, y: 0, width: 3, height: 3 });
+  });
+
+  it("NW handle clamps to >=3 by pinning left/top to opposite ±3 (not inverting)", () => {
+    // stock (0,0,10,5); drag NW to (12,6) → width=10-12=-2<3, height=5-6=-1<3.
+    // NW moves left+top → pin left=r-3=10-3=7, top=b-3=5-3=2 → 3×3.
+    // Opposite SE corner (10,5) preserved: 7+3=10, 2+3=5.
+    const r = resizeStock(makeStock({ x: 0, y: 0, width: 10, height: 5 }), "nw", 12, 6);
+    expect(r).toEqual({ x: 7, y: 2, width: 3, height: 3 });
+    expect(r.x + r.width).toBe(10);
+    expect(r.y + r.height).toBe(5);
+  });
+
+  it("respects a non-origin stock position when resizing SE", () => {
+    // stock (-4, 3, 10, 5); SE corner = (6, 8) fixed... wait SE moves so NW=(-4,3) fixed.
+    // drag SE to (2, 6) → width=2-(-4)=6, height=6-3=3.
+    const r = resizeStock(makeStock({ x: -4, y: 3, width: 10, height: 5 }), "se", 2, 6);
+    expect(r).toEqual({ x: -4, y: 3, width: 6, height: 3 });
   });
 });

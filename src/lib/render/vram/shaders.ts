@@ -34,7 +34,6 @@ uniform vec2 u_atlasCellSize;  // cellW, cellH in texels
 uniform vec2 u_atlasTexelSize; // texW, texH
 
 flat out int v_colorIdx;
-flat out int v_selected;  // A2: pass selected to fragment shader
 out vec2 v_uv;
 
 const int LUMA_LEVELS = 4;
@@ -75,7 +74,6 @@ void main() {
   v_uv = mix(uvMin, uvMax, corner);
 
   v_colorIdx = a_colorIdx;
-  v_selected = a_selected;
 }
 `;
 
@@ -83,7 +81,6 @@ export const FRAG_SRC = /* glsl */ `#version 300 es
 precision highp float;
 
 flat in int v_colorIdx;
-flat in int v_selected;  // A2: selected state from vertex shader
 in vec2 v_uv;
 
 uniform sampler2D u_atlas;

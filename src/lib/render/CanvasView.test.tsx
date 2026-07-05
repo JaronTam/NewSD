@@ -2,6 +2,7 @@ import { render, fireEvent, waitFor, cleanup } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { CanvasView } from "./CanvasView";
+import { getElementBounds } from "./elements";
 
 // Integration smoke for FR-CANVAS-1: the camera math (panBy/zoomAt/clamp) is
 // unit-tested in camera.test.ts; here we assert the view layer wires input ->
@@ -42,8 +43,8 @@ describe("CanvasView — F4 loading skeleton + ready transition", () => {
     const { container } = await renderReady();
     expect(container.querySelector(".ns-canvas__skeleton")).toBeNull();
     expect(container.querySelector("canvas.ns-canvas__surface")).not.toBeNull();
-    // HUD baseline is present and on the 100% zoom default.
-    expect(zoomPercent(hudText(container))).toBe(100);
+    // HUD baseline is present and on the default zoom (16 -> 1600%).
+    expect(zoomPercent(hudText(container))).toBe(1600);
   });
 });
 
@@ -99,9 +100,9 @@ describe("CanvasView — FR-CANVAS-1 pan/zoom input wiring", () => {
     fireEvent.pointerMove(canvas, { pointerId: 3, clientX: 220, clientY: 50 });
     fireEvent.pointerUp(canvas, { pointerId: 3, clientX: 220, clientY: 50 });
     // HUD may update cursor coords on hover, but zoom must be unchanged and the
-    // camera must not have translated — assert zoom stayed 100%.
-    expect(zoomPercent(hudText(container))).toBe(100);
-    expect(before).toContain("zoom 100%");
+    // camera must not have translated — assert zoom stayed at the default.
+    expect(zoomPercent(hudText(container))).toBe(1600);
+    expect(before).toContain("zoom 1600%");
   });
 });
 
@@ -252,13 +253,13 @@ describe("CanvasView — element interaction (Story 1a.3 Task 7)", () => {
     ]);
 
     // Click at world (5, 2.5) — center of the stock.
-    // screenToWorld with default cam (0,0,1) and vp={1,1}: wx = sx - 0.5
-    // So to hit world (5, 2.5), clientX = 5.5, clientY = 3.
-    fireEvent.pointerDown(canvas, { button: 0, pointerId: 50, clientX: 5.5, clientY: 3 });
-    fireEvent.pointerUp(canvas, { pointerId: 50, clientX: 5.5, clientY: 3 });
+    // screenToWorld with default cam (0,0,16) and vp={1,1}: wx = (sx - 0.5) / 16
+    // So to hit world (5, 2.5), clientX = 5 * 16 + 0.5 = 80.5, clientY = 2.5 * 16 + 0.5 = 40.5.
+    fireEvent.pointerDown(canvas, { button: 0, pointerId: 50, clientX: 80.5, clientY: 40.5 });
+    fireEvent.pointerUp(canvas, { pointerId: 50, clientX: 80.5, clientY: 40.5 });
 
-    // Zoom must stay at 100% — left click on element does NOT pan.
-    expect(zoomPercent(hudText(container))).toBe(100);
+    // Zoom must stay at the default — left click on element does NOT pan.
+    expect(zoomPercent(hudText(container))).toBe(1600);
   });
 
   it("left-click on empty space clears selection (no crash)", async () => {
@@ -266,11 +267,11 @@ describe("CanvasView — element interaction (Story 1a.3 Task 7)", () => {
     const canvas = container.querySelector("canvas")!;
 
     // Click far from any element — world (100, 100).
-    fireEvent.pointerDown(canvas, { button: 0, pointerId: 51, clientX: 100.5, clientY: 100.5 });
-    fireEvent.pointerUp(canvas, { pointerId: 51, clientX: 100.5, clientY: 100.5 });
+    fireEvent.pointerDown(canvas, { button: 0, pointerId: 51, clientX: 1600.5, clientY: 1600.5 });
+    fireEvent.pointerUp(canvas, { pointerId: 51, clientX: 1600.5, clientY: 1600.5 });
 
     // Still renders without crash.
-    expect(zoomPercent(hudText(container))).toBe(100);
+    expect(zoomPercent(hudText(container))).toBe(1600);
   });
 
   it("dragging a stock moves it with grid snap applied", async () => {
@@ -295,12 +296,14 @@ describe("CanvasView — element interaction (Story 1a.3 Task 7)", () => {
     ]);
 
     // pointerDown at world (5, 2.5) → hit test finds the stock → begin drag.
-    fireEvent.pointerDown(canvas, { button: 0, pointerId: 52, clientX: 5.5, clientY: 3 });
+    // With zoom=16, screen = world * 16 + 0.5.
+    fireEvent.pointerDown(canvas, { button: 0, pointerId: 52, clientX: 80.5, clientY: 40.5 });
 
     // Drag to world (15, 0.5): rawX = 15 + offsetX(-5) = 10, rawY = 0.5 + offsetY(-2.5) = -2
     // snapToGrid: 10 → 10, -2 → -2. Stock moves from (0, 0) to (10, -2).
-    fireEvent.pointerMove(canvas, { pointerId: 52, clientX: 15.5, clientY: 1 });
-    fireEvent.pointerUp(canvas, { pointerId: 52, clientX: 15.5, clientY: 1 });
+    // screen for world (15, 0.5): sx = 15 * 16 + 0.5 = 240.5, sy = 0.5 * 16 + 0.5 = 8.5.
+    fireEvent.pointerMove(canvas, { pointerId: 52, clientX: 240.5, clientY: 8.5 });
+    fireEvent.pointerUp(canvas, { pointerId: 52, clientX: 240.5, clientY: 8.5 });
 
     const elements = elementStore.getElements();
     const dragged = elements.find((e) => e.id === "test-drag");
@@ -337,12 +340,12 @@ describe("CanvasView — element interaction (Story 1a.3 Task 7)", () => {
     ]);
 
     const before = hudText(container);
-    fireEvent.pointerDown(canvas, { button: 0, pointerId: 53, clientX: 5.5, clientY: 3 });
-    fireEvent.pointerMove(canvas, { pointerId: 53, clientX: 25.5, clientY: 3 });
-    fireEvent.pointerUp(canvas, { pointerId: 53, clientX: 25.5, clientY: 3 });
+    fireEvent.pointerDown(canvas, { button: 0, pointerId: 53, clientX: 80.5, clientY: 40.5 });
+    fireEvent.pointerMove(canvas, { pointerId: 53, clientX: 400.5, clientY: 40.5 });
+    fireEvent.pointerUp(canvas, { pointerId: 53, clientX: 400.5, clientY: 40.5 });
 
-    // Camera must not have panned — zoom stays 100%.
-    expect(zoomPercent(hudText(container))).toBe(100);
+    // Camera must not have panned — zoom stays at the default.
+    expect(zoomPercent(hudText(container))).toBe(1600);
   });
 });
 
@@ -376,12 +379,12 @@ describe("CanvasView — double-click edit name (AC-7)", () => {
     const promptSpy = vi.spyOn(window, "prompt").mockReturnValue("NewName");
 
     // First click — selects the element.
-    fireEvent.pointerDown(canvas, { button: 0, pointerId: 60, clientX: 5.5, clientY: 3 });
-    fireEvent.pointerUp(canvas, { pointerId: 60, clientX: 5.5, clientY: 3 });
+    fireEvent.pointerDown(canvas, { button: 0, pointerId: 60, clientX: 80.5, clientY: 40.5 });
+    fireEvent.pointerUp(canvas, { pointerId: 60, clientX: 80.5, clientY: 40.5 });
 
     // Second click within 300 ms on same element → double-click → prompt.
-    fireEvent.pointerDown(canvas, { button: 0, pointerId: 61, clientX: 5.5, clientY: 3 });
-    fireEvent.pointerUp(canvas, { pointerId: 61, clientX: 5.5, clientY: 3 });
+    fireEvent.pointerDown(canvas, { button: 0, pointerId: 61, clientX: 80.5, clientY: 40.5 });
+    fireEvent.pointerUp(canvas, { pointerId: 61, clientX: 80.5, clientY: 40.5 });
 
     expect(promptSpy).toHaveBeenCalledWith("Edit name:", "OldName");
 
@@ -420,10 +423,10 @@ describe("CanvasView — double-click edit name (AC-7)", () => {
 
     const promptSpy = vi.spyOn(window, "prompt").mockReturnValue(null);
 
-    fireEvent.pointerDown(canvas, { button: 0, pointerId: 62, clientX: 5.5, clientY: 3 });
-    fireEvent.pointerUp(canvas, { pointerId: 62, clientX: 5.5, clientY: 3 });
-    fireEvent.pointerDown(canvas, { button: 0, pointerId: 63, clientX: 5.5, clientY: 3 });
-    fireEvent.pointerUp(canvas, { pointerId: 63, clientX: 5.5, clientY: 3 });
+    fireEvent.pointerDown(canvas, { button: 0, pointerId: 62, clientX: 80.5, clientY: 40.5 });
+    fireEvent.pointerUp(canvas, { pointerId: 62, clientX: 80.5, clientY: 40.5 });
+    fireEvent.pointerDown(canvas, { button: 0, pointerId: 63, clientX: 80.5, clientY: 40.5 });
+    fireEvent.pointerUp(canvas, { pointerId: 63, clientX: 80.5, clientY: 40.5 });
 
     expect(promptSpy).toHaveBeenCalled();
     const elements = elementStore.getElements();
@@ -435,6 +438,177 @@ describe("CanvasView — double-click edit name (AC-7)", () => {
     }
 
     promptSpy.mockRestore();
+  });
+});
+
+// ---- Story 1a.3 CR followup (L9): element resize (AC-7 调整大小) -------------
+//
+// Resize fires only when a STOCK is selected and the pointerDown lands in a
+// corner handle's screen-space hit-zone. Default cam (0,0,16) + vp {1,1}:
+// screenToWorld wx = (sx - 0.5) / 16; worldToScreen sx = wx * 16 + 0.5.
+// Stock (0,0,10,5): body center world (5, 2.5) -> screen (80.5, 40.5);
+// NW corner world (0,0) -> screen (0.5, 0.5); SE corner world (10,5) -> (160.5, 80.5).
+describe("CanvasView — element resize (Story 1a.3 CR followup L9, AC-7)", () => {
+  afterEach(() => {
+    cleanup();
+    elementStore.setElements([]);
+  });
+
+  it("dragging the SE handle grows a stock's width/height (x/y unchanged)", async () => {
+    const { container } = await renderReady();
+    const canvas = container.querySelector("canvas")!;
+
+    elementStore.setElements([
+      {
+        id: "test-rsz-se",
+        kind: "stock",
+        name: "ResizeSE",
+        x: 0,
+        y: 0,
+        width: 10,
+        height: 5,
+        initialValue: 1,
+        currentValue: 1,
+        units: "",
+        allowNegative: false,
+        history: [1],
+      },
+    ]);
+
+    // 1. Select the stock: click body center world (5, 2.5) -> screen (80.5, 40.5).
+    fireEvent.pointerDown(canvas, { button: 0, pointerId: 70, clientX: 80.5, clientY: 40.5 });
+    fireEvent.pointerUp(canvas, { pointerId: 70, clientX: 80.5, clientY: 40.5 });
+
+    // 2. Grab the SE handle: pointerDown at SE corner world (10,5) -> screen (160.5, 80.5).
+    fireEvent.pointerDown(canvas, { button: 0, pointerId: 71, clientX: 160.5, clientY: 80.5 });
+    // 3. Drag SE to world (15, 8) -> screen (240.5, 128.5).
+    fireEvent.pointerMove(canvas, { pointerId: 71, clientX: 240.5, clientY: 128.5 });
+    fireEvent.pointerUp(canvas, { pointerId: 71, clientX: 240.5, clientY: 128.5 });
+
+    const el = elementStore.getElements().find((e) => e.id === "test-rsz-se");
+    expect(el).toBeDefined();
+    if (!el) throw new Error("unreachable: element not found");
+    expect(el.kind).toBe("stock");
+    if (el.kind === "stock") {
+      expect(el.x).toBe(0); // NW corner fixed
+      expect(el.y).toBe(0);
+      expect(el.width).toBe(15); // grew
+      expect(el.height).toBe(8);
+    }
+  });
+
+  it("dragging the NW handle moves x/y and resizes (opposite SE corner fixed)", async () => {
+    const { container } = await renderReady();
+    const canvas = container.querySelector("canvas")!;
+
+    elementStore.setElements([
+      {
+        id: "test-rsz-nw",
+        kind: "stock",
+        name: "ResizeNW",
+        x: 0,
+        y: 0,
+        width: 10,
+        height: 5,
+        initialValue: 1,
+        currentValue: 1,
+        units: "",
+        allowNegative: false,
+        history: [1],
+      },
+    ]);
+
+    // Select: body click.
+    fireEvent.pointerDown(canvas, { button: 0, pointerId: 72, clientX: 80.5, clientY: 40.5 });
+    fireEvent.pointerUp(canvas, { pointerId: 72, clientX: 80.5, clientY: 40.5 });
+
+    // Grab NW handle: pointerDown at NW corner world (0,0) -> screen (0.5, 0.5).
+    fireEvent.pointerDown(canvas, { button: 0, pointerId: 73, clientX: 0.5, clientY: 0.5 });
+    // Drag NW to world (-3, -2) -> screen (-47.5, -31.5).
+    fireEvent.pointerMove(canvas, { pointerId: 73, clientX: -47.5, clientY: -31.5 });
+    fireEvent.pointerUp(canvas, { pointerId: 73, clientX: -47.5, clientY: -31.5 });
+
+    const el = elementStore.getElements().find((e) => e.id === "test-rsz-nw");
+    expect(el).toBeDefined();
+    if (!el) throw new Error("unreachable: element not found");
+    expect(el.kind).toBe("stock");
+    if (el.kind === "stock") {
+      expect(el.x).toBe(-3);
+      expect(el.y).toBe(-2);
+      expect(el.width).toBe(13); // 10 - (-3)
+      expect(el.height).toBe(7); // 5 - (-2)
+      // SE corner invariant: (x + width, y + height) === (10, 5).
+      expect(el.x + el.width).toBe(10);
+      expect(el.y + el.height).toBe(5);
+    }
+  });
+
+  it("resize clamps width & height to >=3 when the SE handle is dragged past the opposite corner", async () => {
+    const { container } = await renderReady();
+    const canvas = container.querySelector("canvas")!;
+
+    elementStore.setElements([
+      {
+        id: "test-rsz-clamp",
+        kind: "stock",
+        name: "ClampMe",
+        x: 0,
+        y: 0,
+        width: 10,
+        height: 5,
+        initialValue: 1,
+        currentValue: 1,
+        units: "",
+        allowNegative: false,
+        history: [1],
+      },
+    ]);
+
+    // Select.
+    fireEvent.pointerDown(canvas, { button: 0, pointerId: 74, clientX: 80.5, clientY: 40.5 });
+    fireEvent.pointerUp(canvas, { pointerId: 74, clientX: 80.5, clientY: 40.5 });
+
+    // Grab SE handle, drag to world (1, 1) -> screen (16.5, 16.5) (would make w=h=1).
+    fireEvent.pointerDown(canvas, { button: 0, pointerId: 75, clientX: 160.5, clientY: 80.5 });
+    fireEvent.pointerMove(canvas, { pointerId: 75, clientX: 16.5, clientY: 16.5 });
+    fireEvent.pointerUp(canvas, { pointerId: 75, clientX: 16.5, clientY: 16.5 });
+
+    const el = elementStore.getElements().find((e) => e.id === "test-rsz-clamp");
+    expect(el).toBeDefined();
+    if (!el) throw new Error("unreachable: element not found");
+    if (el.kind === "stock") {
+      expect(el.width).toBe(3); // clamped to minimum (AC-8/9)
+      expect(el.height).toBe(3);
+      expect(el.x).toBe(0);
+      expect(el.y).toBe(0);
+    }
+  });
+
+  it("cloud is not resizable: a corner drag does not add width/height (AC-12 fixed 6×3)", async () => {
+    const { container } = await renderReady();
+    const canvas = container.querySelector("canvas")!;
+
+    elementStore.setElements([{ id: "test-cloud-noresize", kind: "cloud", x: 0, y: 0 }]);
+
+    // Select the cloud: body click at world (1, 1) -> screen (16.5, 16.5).
+    fireEvent.pointerDown(canvas, { button: 0, pointerId: 76, clientX: 16.5, clientY: 16.5 });
+    fireEvent.pointerUp(canvas, { pointerId: 76, clientX: 16.5, clientY: 16.5 });
+
+    // Attempt a resize from the cloud's SE corner position: world (6, 3) ->
+    // screen (96.5, 48.5). Clouds are kind !== "stock", so the resize hit-test
+    // branch is skipped and no width/height patch is ever applied.
+    fireEvent.pointerDown(canvas, { button: 0, pointerId: 77, clientX: 96.5, clientY: 48.5 });
+    fireEvent.pointerMove(canvas, { pointerId: 77, clientX: 160.5, clientY: 96.5 });
+    fireEvent.pointerUp(canvas, { pointerId: 77, clientX: 160.5, clientY: 96.5 });
+
+    const el = elementStore.getElements().find((e) => e.id === "test-cloud-noresize");
+    expect(el).toBeDefined();
+    if (!el) throw new Error("unreachable: element not found");
+    expect(el.kind).toBe("cloud");
+    // Cloud gained no width/height — resize never fired.
+    expect("width" in el).toBe(false);
+    expect("height" in el).toBe(false);
+    expect(getElementBounds(el)).toEqual({ x: 0, y: 0, width: 6, height: 3 });
   });
 });
 

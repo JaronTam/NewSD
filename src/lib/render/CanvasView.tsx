@@ -11,7 +11,14 @@ import {
   type Camera,
   type Viewport,
 } from "./camera";
-import { cloudToInstances, findElementAt, getElementBounds, stockToInstances } from "./elements";
+import {
+  cloudToInstances,
+  findElementAt,
+  getElementBounds,
+  resizeStock,
+  stockToInstances,
+  type ResizeHandle,
+} from "./elements";
 import { readPalette } from "./palette";
 import { createElementStore } from "../sd/store";
 import type { SDElement, Stock } from "../sd/types";
@@ -47,6 +54,46 @@ const GRID_MIN_PX = 8;
 // click, anchored at the viewport center. 1.2 lines up with "one wheel notch"
 // on the FR-CANVAS-1 UX.
 const ZOOM_BUTTON_FACTOR = 1.2;
+
+// Resize handle hit-zone half-size in screen pixels (AC-7 调整大小). A 12 px
+// square centred on each stock corner — slightly larger than the 8 px drawn
+// handle for usability. Cloud is a fixed 6×3 icon (AC-12) and is not resizable.
+const RESIZE_HANDLE_HALF_PX = 6;
+
+/** CSS cursor for a given corner handle (diagonal pairs share an axis). */
+function cursorForHandle(h: ResizeHandle): string {
+  return h === "nw" || h === "se" ? "nwse-resize" : "nesw-resize";
+}
+
+/**
+ * Hit-test the four corner handles of a stock in screen space (AC-7 resize).
+ * Returns the handle under (sx, sy), or null when the pointer is not on a
+ * corner. Pure worldToScreen math — works in jsdom (no DOM layout needed).
+ */
+function hitResizeHandle(
+  sx: number,
+  sy: number,
+  stock: Stock,
+  cam: Camera,
+  vp: Viewport,
+): ResizeHandle | null {
+  const corners: ReadonlyArray<readonly [ResizeHandle, number, number]> = [
+    ["nw", stock.x, stock.y],
+    ["ne", stock.x + stock.width, stock.y],
+    ["sw", stock.x, stock.y + stock.height],
+    ["se", stock.x + stock.width, stock.y + stock.height],
+  ];
+  for (const [h, wx, wy] of corners) {
+    const [csx, csy] = worldToScreen(cam, vp, wx, wy);
+    if (
+      Math.abs(sx - csx) <= RESIZE_HANDLE_HALF_PX &&
+      Math.abs(sy - csy) <= RESIZE_HANDLE_HALF_PX
+    ) {
+      return h;
+    }
+  }
+  return null;
+}
 
 type Phase = "loading" | "ready";
 
@@ -163,7 +210,8 @@ function buildInstancesFromStore(selectedId: string | null): RenderInstance[] {
       const instances = stockToInstances(el as Stock, false, selected);
       for (const ri of instances) out.push(ri);
     } else if (el.kind === "cloud") {
-      const instances = cloudToInstances(el);
+      const selected = el.id === selectedId;
+      const instances = cloudToInstances(el, selected);
       for (const ri of instances) out.push(ri);
     }
     // flow rendering added in 1a.4 (edges)
@@ -183,7 +231,13 @@ export function CanvasView() {
   const rendererRef = useRef<VRAMRenderer | null>(null);
   const instancesRef = useRef<RenderInstance[]>([]);
 
-  const camRef = useRef<Camera>({ x: 0, y: 0, zoom: 1 });
+  // Initial zoom gives an on-screen cell width of ~16px. The VRAM glyph
+  // renderer's quadWorldSize is expressed in world units where 1 world unit
+  // maps to `zoom` screen pixels (see /vram harness which uses zoom=24 for a
+  // 24px cell). At zoom=1 the glyphs rasterize to ~1px and read back as all
+  // zeros under SwiftShader headless (M6 CR followup), so the default must be
+  // a readable cell size from the first frame.
+  const camRef = useRef<Camera>({ x: 0, y: 0, zoom: 16 });
   const vpRef = useRef<Viewport>({ width: 0, height: 0 });
   const tokensRef = useRef<Tokens>(DEFAULT_TOKENS);
   const cursorRef = useRef<Cursor | null>(null);
@@ -209,6 +263,14 @@ export function CanvasView() {
   }>({ active: false, pointerId: -1, offsetX: 0, offsetY: 0 });
   // Double-click detection: timestamp of last click + clicked element id.
   const clickRef = useRef<{ time: number; id: string }>({ time: 0, id: "" });
+  // Resize state (AC-7 调整大小, CR followup L9): when active, tracks which
+  // corner handle is being dragged. Stock-only — clouds are a fixed 6×3 icon
+  // (AC-12) and have no resize handles.
+  const resizeRef = useRef<{
+    active: boolean;
+    pointerId: number;
+    handle: ResizeHandle;
+  }>({ active: false, pointerId: -1, handle: "se" });
 
   const [phase, setPhase] = useState<Phase>("loading");
 
@@ -267,7 +329,37 @@ export function CanvasView() {
     ctx.stroke();
     ctx.globalAlpha = 1;
 
-    // 5. VRAM glyph overlay (AD-9). Renders the pre-baked glow atlas via the
+    // 5. selection resize handles (AC-7 调整大小; CR followup L9). Stock-only:
+    //    clouds are a fixed 6×3 icon (AC-12) and are not resizable. CAP-11:
+    //    fillRect/strokeRect only — no shadowBlur. Drawn on the 2D surface (the
+    //    gl glyph overlay stacks above, but corners extend half-outside the box
+    //    for visibility). Handles mark where the user can grab to resize.
+    const selId = selectedIdRef.current;
+    if (selId) {
+      const sel = elementStore.getElements().find((el) => el.id === selId);
+      if (sel && sel.kind === "stock") {
+        const b = getElementBounds(sel);
+        const HANDLE = 8; // CSS-px half-size of the drawn handle square
+        ctx.lineWidth = 1;
+        ctx.strokeStyle = tokens.origin;
+        ctx.fillStyle = tokens.bg;
+        const corners: ReadonlyArray<readonly [number, number]> = [
+          [b.x, b.y],
+          [b.x + b.width, b.y],
+          [b.x, b.y + b.height],
+          [b.x + b.width, b.y + b.height],
+        ];
+        for (const [hx, hy] of corners) {
+          const [csx, csy] = worldToScreen(cam, vp, hx, hy);
+          const x = Math.round(csx) - HANDLE / 2;
+          const y = Math.round(csy) - HANDLE / 2;
+          ctx.fillRect(x, y, HANDLE, HANDLE);
+          ctx.strokeRect(x + 0.5, y + 0.5, HANDLE - 1, HANDLE - 1);
+        }
+      }
+    }
+
+    // 6. VRAM glyph overlay (AD-9). Renders the pre-baked glow atlas via the
     // WebGL2 instanced pipeline on the stacked gl canvas. No-op when WebGL2 is
     // unavailable — rendererRef stays null and the grid-only surface above is
     // the final frame (no shadowBlur fallback; AD-9/CAP-11). The renderer sizes
@@ -447,6 +539,29 @@ export function CanvasView() {
       const vp = vpRef.current;
       const [wx, wy] = screenToWorld(cam, vp, sx, sy);
 
+      // Resize handle hit-test on the currently-selected stock (AC-7 调整大小).
+      // Must precede findElementAt so a corner grab (which may extend outside the
+      // box) starts a resize, not a body-drag. Clouds are fixed-size (AC-12) —
+      // only stocks get handles.
+      const selId = selectedIdRef.current;
+      if (selId) {
+        const sel = elementStore.getElements().find((el) => el.id === selId);
+        if (sel && sel.kind === "stock") {
+          const handle = hitResizeHandle(sx, sy, sel, cam, vp);
+          if (handle) {
+            resizeRef.current = { active: true, pointerId: e.pointerId, handle };
+            try {
+              (e.target as HTMLCanvasElement).setPointerCapture(e.pointerId);
+            } catch {
+              // jsdom — resize still works via bubbling.
+            }
+            containerRef.current?.style.setProperty("cursor", cursorForHandle(handle));
+            e.preventDefault();
+            return;
+          }
+        }
+      }
+
       const elements = elementStore.getElements();
       const hit = findElementAt(wx, wy, elements);
 
@@ -521,6 +636,26 @@ export function CanvasView() {
       return;
     }
 
+    // ---- element resize (AC-7 调整大小: snap + clamp ≥3) ----
+    if (resizeRef.current.active && resizeRef.current.pointerId === e.pointerId) {
+      const cam = camRef.current;
+      const vp = vpRef.current;
+      const [wx, wy] = screenToWorld(cam, vp, sx, sy);
+      // Snap the pointer to the grid before computing new dims (AC-1/2/3).
+      const rX = shouldSnap(wx, cam.zoom) ? snapToGrid(wx) : wx;
+      const rY = shouldSnap(wy, cam.zoom) ? snapToGrid(wy) : wy;
+      const id = selectedIdRef.current;
+      if (id) {
+        const sel = elementStore.getElements().find((el) => el.id === id);
+        if (sel && sel.kind === "stock") {
+          const next = resizeStock(sel, resizeRef.current.handle, rX, rY);
+          elementStore.updateElement(id, next as Partial<SDElement>);
+        }
+      }
+      drawRef.current();
+      return;
+    }
+
     // ---- element drag (AC-7: snapToGrid + shouldSnap tolerance) ----
     if (dragRef.current.active && dragRef.current.pointerId === e.pointerId) {
       const cam = camRef.current;
@@ -539,6 +674,19 @@ export function CanvasView() {
     }
 
     if (!panRef.current.active) {
+      // Hover-resize cursor: when idle over a selected stock's handle, show a
+      // resize cursor so the affordance is discoverable before pressing. Falls
+      // back to the space-aware default otherwise.
+      let cursor = panRef.current.spaceDown ? "grab" : "default";
+      const sid = selectedIdRef.current;
+      if (sid && !panRef.current.spaceDown) {
+        const sel = elementStore.getElements().find((el) => el.id === sid);
+        if (sel && sel.kind === "stock") {
+          const h = hitResizeHandle(sx, sy, sel, camRef.current, vpRef.current);
+          if (h) cursor = cursorForHandle(h);
+        }
+      }
+      containerRef.current?.style.setProperty("cursor", cursor);
       drawRef.current(); // hover HUD only
       return;
     }
@@ -573,6 +721,11 @@ export function CanvasView() {
     // End element drag.
     if (dragRef.current.active && dragRef.current.pointerId === e.pointerId) {
       dragRef.current.active = false;
+    }
+
+    // End element resize (AC-7).
+    if (resizeRef.current.active && resizeRef.current.pointerId === e.pointerId) {
+      resizeRef.current.active = false;
     }
     containerRef.current?.style.setProperty("cursor", p.spaceDown ? "grab" : "default");
   };

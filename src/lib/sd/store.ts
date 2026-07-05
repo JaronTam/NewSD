@@ -21,14 +21,17 @@ export const DEFAULT_STOCK_H = 5;
 /**
  * Validate stock width & height (E9 guard, AC-8 / AC-9).
  *
- * Rejects: ≤ 0, NaN, ±Infinity, non-numeric strings.
+ * Accepts w >= 3 && h >= 3 (the minimum that fits a box frame ┌─┐│└┘ plus at
+ * least one interior text row/col; smaller sizes degenerate — w<3 makes ┌/┐
+ * overlap, h<3 collapses top/bottom edges onto the interior).
+ * Rejects: < 3 on either axis, NaN, ±Infinity, non-numeric strings.
  * On rejection, returns `{ ok: false, width: DEFAULT, height: DEFAULT }`.
  * On success, returns the validated numeric values.
  */
 export function validateStockSize(width: unknown, height: unknown): StockSizeResult {
   const w = Number(width);
   const h = Number(height);
-  const ok = w > 0 && h > 0 && Number.isFinite(w) && Number.isFinite(h);
+  const ok = w >= 3 && h >= 3 && Number.isFinite(w) && Number.isFinite(h);
   return {
     ok,
     width: ok ? w : DEFAULT_STOCK_W,
@@ -77,8 +80,13 @@ export function createElementStore(): ElementStore {
     },
 
     createStock(partial): Stock {
+      // E9 guard (AC-8/AC-9): clamp invalid/too-small dimensions to defaults
+      // before they reach the renderer (which assumes w>=3, h>=3 for a valid box).
+      const { width, height } = validateStockSize(partial.width, partial.height);
       const stock: Stock = {
         ...partial,
+        width,
+        height,
         id: crypto.randomUUID(),
         kind: "stock",
         currentValue: partial.initialValue,

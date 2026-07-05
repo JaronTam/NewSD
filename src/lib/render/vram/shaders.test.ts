@@ -78,12 +78,11 @@ describe("shaders — A2 rotation and selected attribs", () => {
     expect(VERT_SRC).toContain("effectiveLuma = a_lumaIdx + a_selected");
   });
 
-  it("vertex shader passes v_selected to fragment shader", () => {
-    expect(VERT_SRC).toContain("flat out int v_selected;");
-    expect(VERT_SRC).toContain("v_selected = a_selected;");
-  });
-
-  it("fragment shader receives v_selected", () => {
-    expect(FRAG_SRC).toContain("flat in int v_selected;");
+  it("does not declare a dead v_selected varying (M1: luma bump is vertex-only)", () => {
+    // M1: v_selected was a dead varying — the fragment shader never read it
+    // (the luma bump happens in the vertex shader via effectiveLuma). Removed
+    // to avoid an unused-varying warning. This guard prevents re-introducing it.
+    expect(VERT_SRC).not.toContain("v_selected");
+    expect(FRAG_SRC).not.toContain("v_selected");
   });
 });
