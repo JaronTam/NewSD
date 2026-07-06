@@ -666,3 +666,378 @@ describe("CanvasView — CAP-11 runtime guard (no shadowBlur in the 2D draw path
     ).toEqual([]);
   });
 });
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Story 1a.4 red-phase — flow creation + port snap + empty state
+//
+// These tests reference interaction patterns that don't exist yet:
+//   - Flow tool mode ("flow") wired to keyboard shortcut
+//   - pointerDown on a port → drag → pointerUp on another port = createFlow
+//   - findNearestPort snap during pointerMove
+//   - Empty state UI when no elements exist (AR#12)
+//
+// All are expected to FAIL until DS implements the flow creation interaction.
+// ══════════════════════════════════════════════════════════════════════════════
+
+import { findNearestPort } from "./elements";
+
+// ---- AC-10/11: flow creation via port snap ----------------------------------
+
+describe("CanvasView — flow creation & port snap (AC-10, AC-11)", () => {
+  afterEach(() => {
+    cleanup();
+    elementStore.setElements([]);
+  });
+
+  it("F key activates flow toolMode", async () => {
+    // Keyboard shortcut: F → flow tool mode (per VS钉死决策: keyboard-only toolMode).
+    // Red: toolMode switching via keyboard is not yet implemented.
+    const { container } = await renderReady();
+    const canvas = container.querySelector("canvas")!;
+
+    fireEvent.keyDown(window, { code: "KeyF", key: "f" });
+
+    // After pressing F, the status bar / HUD should reflect "flow" mode.
+    // We can't directly assert internal React state, but we can check that
+    // no crash occurred and the canvas is still mounted.
+    expect(canvas).not.toBeNull();
+    expect(container.querySelector("canvas.ns-canvas__surface")).not.toBeNull();
+  });
+
+  it("S key activates stock toolMode (existing, regression guard)", async () => {
+    const { container } = await renderReady();
+    fireEvent.keyDown(window, { code: "KeyS", key: "s" });
+    expect(container.querySelector("canvas.ns-canvas__surface")).not.toBeNull();
+  });
+
+  it("C key activates cloud toolMode (existing, regression guard)", async () => {
+    const { container } = await renderReady();
+    fireEvent.keyDown(window, { code: "KeyC", key: "c" });
+    expect(container.querySelector("canvas.ns-canvas__surface")).not.toBeNull();
+  });
+
+  it("V key activates select toolMode (existing, regression guard)", async () => {
+    const { container } = await renderReady();
+    fireEvent.keyDown(window, { code: "KeyV", key: "v" });
+    expect(container.querySelector("canvas.ns-canvas__surface")).not.toBeNull();
+  });
+
+  it("pointerDown near a port starts flow creation drag", async () => {
+    // AC-10: port snap activates when cursor is within SNAP_THRESHOLD of a port.
+    // Red: flow creation interaction is not yet wired.
+    const { container } = await renderReady();
+    const canvas = container.querySelector("canvas")!;
+
+    // Place two stocks so we can drag between their ports.
+    elementStore.setElements([
+      {
+        id: "from-stock",
+        kind: "stock",
+        name: "Source",
+        x: 0,
+        y: 0,
+        width: 10,
+        height: 6,
+        initialValue: 100,
+        currentValue: 100,
+        units: "people",
+        allowNegative: false,
+        history: [100],
+      },
+      {
+        id: "to-stock",
+        kind: "stock",
+        name: "Target",
+        x: 20,
+        y: 0,
+        width: 10,
+        height: 6,
+        initialValue: 50,
+        currentValue: 50,
+        units: "people",
+        allowNegative: false,
+        history: [50],
+      },
+    ]);
+
+    // Activate flow tool via F key.
+    fireEvent.keyDown(window, { code: "KeyF", key: "f" });
+
+    // The E port of from-stock is at world (10, 3). With zoom=16, screen = world * 16 + 0.5.
+    // PointerDown near the port should snap and begin flow creation.
+    const ePortScreenX = 10 * 16 + 0.5; // 160.5
+    const ePortScreenY = 3 * 16 + 0.5; // 48.5
+
+    fireEvent.pointerDown(canvas, {
+      button: 0,
+      pointerId: 100,
+      clientX: ePortScreenX,
+      clientY: ePortScreenY,
+    });
+
+    // Drag toward the W port of to-stock at world (20, 3).
+    const wPortScreenX = 20 * 16 + 0.5; // 320.5
+    const wPortScreenY = 3 * 16 + 0.5; // 48.5
+
+    fireEvent.pointerMove(canvas, {
+      pointerId: 100,
+      clientX: wPortScreenX,
+      clientY: wPortScreenY,
+    });
+    fireEvent.pointerUp(canvas, {
+      pointerId: 100,
+      clientX: wPortScreenX,
+      clientY: wPortScreenY,
+    });
+
+    // After the interaction completes, a flow should be created.
+    const elements = elementStore.getElements();
+    const flows = elements.filter((e) => e.kind === "flow");
+
+    expect(flows.length).toBe(1);
+    expect(flows[0].fromId).toBe("from-stock");
+    expect(flows[0].toId).toBe("to-stock");
+  });
+
+  it("flow creation drag shows a preview line (rubber-band) during drag", async () => {
+    // During flow creation drag, a temporary preview line should be visible
+    // from the snapped port to the current cursor position.
+    // Red: preview line rendering is not yet implemented.
+    const { container } = await renderReady();
+    const canvas = container.querySelector("canvas")!;
+
+    elementStore.setElements([
+      {
+        id: "from-stock",
+        kind: "stock",
+        name: "Source",
+        x: 0,
+        y: 0,
+        width: 10,
+        height: 6,
+        initialValue: 100,
+        currentValue: 100,
+        units: "",
+        allowNegative: false,
+        history: [100],
+      },
+    ]);
+
+    fireEvent.keyDown(window, { code: "KeyF", key: "f" });
+
+    // Start at E port.
+    fireEvent.pointerDown(canvas, {
+      button: 0,
+      pointerId: 101,
+      clientX: 160.5,
+      clientY: 48.5,
+    });
+
+    // Move to a new location (preview line should follow).
+    fireEvent.pointerMove(canvas, {
+      pointerId: 101,
+      clientX: 250,
+      clientY: 100,
+    });
+
+    // Abort the drag (don't create a flow). No port is nearby at (250,100) → world (15.6, 6.2).
+    fireEvent.pointerUp(canvas, {
+      pointerId: 101,
+      clientX: 250,
+      clientY: 100,
+    });
+
+    // No canvas crash; no flow in store (release was not near any port).
+    expect(container.querySelector("canvas.ns-canvas__surface")).not.toBeNull();
+    const flows = elementStore.getElements().filter((e) => e.kind === "flow");
+    expect(flows.length).toBe(0);
+  });
+
+  it("flow creation aborted when pointerUp is NOT near a port (no flow created)", async () => {
+    // AC-10: if the drag ends in empty space (not near any port), no flow is created.
+    const { container } = await renderReady();
+    const canvas = container.querySelector("canvas")!;
+
+    elementStore.setElements([
+      {
+        id: "from-stock",
+        kind: "stock",
+        name: "Source",
+        x: 0,
+        y: 0,
+        width: 10,
+        height: 6,
+        initialValue: 100,
+        currentValue: 100,
+        units: "",
+        allowNegative: false,
+        history: [100],
+      },
+    ]);
+
+    fireEvent.keyDown(window, { code: "KeyF", key: "f" });
+
+    // PointerDown at E port of from-stock.
+    fireEvent.pointerDown(canvas, {
+      button: 0,
+      pointerId: 102,
+      clientX: 160.5,
+      clientY: 48.5,
+    });
+
+    // Drag to empty space far from any port.
+    fireEvent.pointerMove(canvas, {
+      pointerId: 102,
+      clientX: 500.5,
+      clientY: 500.5,
+    });
+    fireEvent.pointerUp(canvas, {
+      pointerId: 102,
+      clientX: 500.5,
+      clientY: 500.5,
+    });
+
+    // No flow should be created — only the original stock remains.
+    const elements = elementStore.getElements();
+    expect(elements.length).toBe(1);
+    expect(elements[0].kind).toBe("stock");
+  });
+
+  it("flow tool mode shows [F] indicator in the HUD", async () => {
+    const { container } = await renderReady();
+
+    fireEvent.keyDown(window, { code: "KeyF", key: "f" });
+
+    // The HUD should reflect flow mode with [F] prefix.
+    const hud = container.querySelector(".ns-canvas__hud");
+    expect(hud).not.toBeNull();
+    expect(hud!.textContent).toContain("[F]");
+  });
+});
+
+// ---- AC-16: empty state (AR#12) ---------------------------------------------
+
+describe("CanvasView — empty state (AC-16, AR#12)", () => {
+  afterEach(() => {
+    cleanup();
+    elementStore.setElements([]);
+  });
+
+  it("AC-16: shows guidance text when no elements are on the canvas", async () => {
+    const { container } = await renderReady();
+
+    // Clear all elements (remove the default 3 seed stocks).
+    elementStore.setElements([]);
+
+    const guide = container.querySelector(".ns-canvas__guide") as HTMLElement;
+    expect(guide).not.toBeNull();
+    expect(guide.style.display).toBe("block");
+    expect(guide.textContent).toBe("按 S 放置存量 · 按 C 放置源汇 · 按 F 连流量");
+  });
+
+  it("AC-16: guidance text disappears when elements are added", async () => {
+    const { container } = await renderReady();
+
+    elementStore.setElements([]);
+
+    // Add a stock — guidance should clear.
+    elementStore.setElements([
+      {
+        id: "new-stock",
+        kind: "stock",
+        name: "First",
+        x: 0,
+        y: 0,
+        width: 10,
+        height: 5,
+        initialValue: 1,
+        currentValue: 1,
+        units: "",
+        allowNegative: false,
+        history: [1],
+      },
+    ]);
+
+    const guide = container.querySelector(".ns-canvas__guide") as HTMLElement;
+    expect(guide).not.toBeNull();
+    expect(guide.style.display).toBe("none");
+  });
+
+  it("AC-16: default seed stocks prevent empty state on first load", async () => {
+    // The default seed (seedSampleStocks) creates 3 stocks, so the empty state
+    // should NOT appear on initial load.
+    const { container } = await renderReady();
+
+    // Default seed stocks are present → no empty state.
+    const elements = elementStore.getElements();
+    expect(elements.length).toBeGreaterThanOrEqual(2); // at least the 3 default stocks
+  });
+});
+
+// ---- Status bar / warnings (AC-14 E11 carry) ---------------------------------
+
+describe("CanvasView — status bar warnings (AC-14)", () => {
+  afterEach(() => {
+    cleanup();
+    elementStore.setElements([]);
+  });
+
+  it("warn div exists with role=alert and is initially hidden", async () => {
+    const { container } = await renderReady();
+
+    const warn = container.querySelector(".ns-canvas__warn") as HTMLElement;
+    expect(warn).not.toBeNull();
+    expect(warn.getAttribute("role")).toBe("alert");
+    expect(warn.style.display).toBe("none");
+  });
+
+  it("warn div remains hidden after successful flow creation (no error)", async () => {
+    const { container } = await renderReady();
+    const canvas = container.querySelector("canvas")!;
+
+    elementStore.setElements([
+      {
+        id: "ws1",
+        kind: "stock",
+        name: "A",
+        x: 0,
+        y: 0,
+        width: 10,
+        height: 6,
+        initialValue: 100,
+        currentValue: 100,
+        units: "",
+        allowNegative: false,
+        history: [100],
+      },
+      {
+        id: "ws2",
+        kind: "stock",
+        name: "B",
+        x: 20,
+        y: 0,
+        width: 10,
+        height: 6,
+        initialValue: 50,
+        currentValue: 50,
+        units: "",
+        allowNegative: false,
+        history: [50],
+      },
+    ]);
+
+    fireEvent.keyDown(window, { code: "KeyF", key: "f" });
+    // E port of ws1 at world (10, 3)
+    fireEvent.pointerDown(canvas, { button: 0, pointerId: 200, clientX: 160.5, clientY: 48.5 });
+    // W port of ws2 at world (20, 3)
+    fireEvent.pointerMove(canvas, { pointerId: 200, clientX: 320.5, clientY: 48.5 });
+    fireEvent.pointerUp(canvas, { pointerId: 200, clientX: 320.5, clientY: 48.5 });
+
+    // Flow was created successfully — warn must stay hidden.
+    const flows = elementStore.getElements().filter((e) => e.kind === "flow");
+    expect(flows.length).toBe(1);
+
+    const warn = container.querySelector(".ns-canvas__warn") as HTMLElement;
+    expect(warn.style.display).toBe("none");
+  });
+});

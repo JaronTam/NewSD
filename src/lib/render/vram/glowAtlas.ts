@@ -44,12 +44,20 @@ export const GLOW_PASSES = 3;
 // the atlas layout is stable across 1a.3 (no re-bake/re-UV churn later).
 export const BOX_GLYPHS = "─│┌┐└┘├┤┬┴┼═║╔╗╚╝╠╣╦╩╬";
 
-// Printable ASCII 32–126 (space..tilde), then box glyphs. Space is index 0.
+// Flow glyphs (Story 1a.4 AC-8) for directional markers + port snap visualization:
+//   ▶ (U+25B6) — arrowhead for flow direction
+//   ▼ (U+25BC) — downward triangle for cloud/flow markers
+//   ○ (U+25CB) — white circle for port snap visualization
+export const FLOW_GLYPHS = "▶▼○";
+
+// Printable ASCII 32–126 (space..tilde), then box glyphs, then flow glyphs. Space is index 0.
 export const CHARSET: readonly string[] = Object.freeze(
-  Array.from({ length: 95 }, (_, i) => String.fromCharCode(32 + i)).concat(Array.from(BOX_GLYPHS)),
+  Array.from({ length: 95 }, (_, i) => String.fromCharCode(32 + i))
+    .concat(Array.from(BOX_GLYPHS))
+    .concat(Array.from(FLOW_GLYPHS)),
 );
 
-export const CHAR_COUNT = CHARSET.length; // 95 + 22 = 117
+export const CHAR_COUNT = CHARSET.length; // 95 + 22 + 3 = 120
 
 const CHAR_MAP: ReadonlyMap<string, number> = new Map(CHARSET.map((c, i) => [c, i]));
 

@@ -14,15 +14,19 @@ import {
 import {
   cloudToInstances,
   findElementAt,
+  findNearestPort,
+  flowToInstances,
   getElementBounds,
+  getElementPorts,
   resizeStock,
   stockToInstances,
+  type Port,
   type ResizeHandle,
 } from "./elements";
 import { readPalette } from "./palette";
-import { createElementStore } from "../sd/store";
-import type { SDElement, Stock } from "../sd/types";
-import { GLYPH_H, bakeGlowAtlasCanvas } from "./vram/glowAtlas";
+import { createElementStore, createFlow } from "../sd/store";
+import type { Flow, SDElement, Stock, ToolMode } from "../sd/types";
+import { GLYPH_H, bakeGlowAtlasCanvas, charToGlyphIdx } from "./vram/glowAtlas";
 import { VRAMRenderer, type RenderInstance } from "./vram/renderer";
 
 // Story 1a.1 sub-PR #3 — FR-CANVAS-1: infinite canvas navigation.
@@ -166,6 +170,11 @@ function distance(a: { x: number; y: number }, b: { x: number; y: number }): num
 const elementStore = createElementStore();
 export { elementStore };
 
+// e2e test hook — expose store + createFlow on window for Playwright (dev only)
+if (typeof window !== "undefined" && import.meta.env.DEV) {
+  (window as any).__e2e__ = { elementStore, createFlow };
+}
+
 // Seed sample stocks for development / first screen (replaces the old
 // `buildBootInstances` static ASCII placeholder).
 function seedSampleStocks() {
@@ -200,11 +209,28 @@ function seedSampleStocks() {
     allowNegative: false,
   });
 }
-seedSampleStocks();
+// Seed on first mount only — not at module init, so the empty-state test can
+// clear the store and verify guidance text (AR#12 / AC-16).
 
 function buildInstancesFromStore(selectedId: string | null): RenderInstance[] {
   const out: RenderInstance[] = [];
-  for (const el of elementStore.getElements()) {
+  const elements = elementStore.getElements();
+
+  // 1. Flow instances first (edges below nodes — CS钉死 z-order).
+  for (const el of elements) {
+    if (el.kind !== "flow") continue;
+    const flow = el as Flow;
+    const selected = el.id === selectedId;
+    const fromEl = elements.find((e) => e.id === flow.fromId);
+    const toEl = elements.find((e) => e.id === flow.toId);
+    const fromBounds = fromEl ? getElementBounds(fromEl) : null;
+    const toBounds = toEl ? getElementBounds(toEl) : null;
+    const instances = flowToInstances(flow, fromBounds, toBounds, selected);
+    for (const ri of instances) out.push(ri);
+  }
+
+  // 2. Stock + cloud instances (nodes above edges).
+  for (const el of elements) {
     if (el.kind === "stock") {
       const selected = el.id === selectedId;
       const instances = stockToInstances(el as Stock, false, selected);
@@ -214,7 +240,6 @@ function buildInstancesFromStore(selectedId: string | null): RenderInstance[] {
       const instances = cloudToInstances(el, selected);
       for (const ri of instances) out.push(ri);
     }
-    // flow rendering added in 1a.4 (edges)
   }
   return out;
 }
@@ -223,6 +248,8 @@ export function CanvasView() {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const hudRef = useRef<HTMLSpanElement>(null);
+  const guideRef = useRef<HTMLDivElement>(null);
+  const warnElRef = useRef<HTMLDivElement>(null);
   // VRAM glyph overlay (AD-9). glCanvas is a second <canvas> stacked above the
   // 2D surface; renderer is null when WebGL2 is unavailable (jsdom / old
   // browsers) -> degrade to grid-only. instances holds the first-screen
@@ -272,6 +299,20 @@ export function CanvasView() {
     handle: ResizeHandle;
   }>({ active: false, pointerId: -1, handle: "se" });
 
+  // Story 1a.4: tool mode (keyboard-only, toolbar defer 1a.7).
+  const toolModeRef = useRef<ToolMode>("select");
+
+  // Story 1a.4: flow creation drag state (port snap → preview → commit).
+  const flowDragRef = useRef<{
+    active: boolean;
+    pointerId: number;
+    fromPort: Port | null;
+    previewInstances: RenderInstance[];
+  }>({ active: false, pointerId: -1, fromPort: null, previewInstances: [] });
+
+  // Story 1a.4: status-bar warnings (E11 parallel flows, duplicate names).
+  const warnRef = useRef<string>("");
+
   const [phase, setPhase] = useState<Phase>("loading");
 
   // draw is reassigned every render so the [] effects below always call the
@@ -290,7 +331,31 @@ export function CanvasView() {
       const zoomPct = Math.round(cam.zoom * 100);
       const cur = cursorRef.current;
       const [wx, wy] = cur ? screenToWorld(cam, vp, cur.sx, cur.sy) : [cam.x, cam.y];
-      hud.textContent = `zoom ${zoomPct}%  ·  x ${wx.toFixed(1)}  ·  y ${wy.toFixed(1)}`;
+      const modeLabel: Record<string, string> = {
+        select: "V",
+        stock: "S",
+        cloud: "C",
+        flow: "F",
+      };
+      const tm = toolModeRef.current;
+      const modeStr = `[${modeLabel[tm] ?? tm}]`;
+      hud.textContent = `${modeStr}  zoom ${zoomPct}%  ·  x ${wx.toFixed(1)}  ·  y ${wy.toFixed(1)}`;
+    }
+
+    // Empty-state guidance + warnings (also DOM-based, testable in jsdom).
+    const guide = guideRef.current;
+    if (guide) {
+      const isEmpty = elementStore.getElements().length === 0;
+      guide.style.display = isEmpty ? "block" : "none";
+      if (isEmpty) {
+        guide.textContent = "按 S 放置存量 · 按 C 放置源汇 · 按 F 连流量";
+      }
+    }
+    const warn = warnElRef.current;
+    if (warn) {
+      const msg = warnRef.current;
+      warn.style.display = msg ? "block" : "none";
+      if (msg) warn.textContent = msg;
     }
 
     if (!canvas || !ctx || vp.width === 0 || vp.height === 0) return;
@@ -373,6 +438,14 @@ export function CanvasView() {
     const el = containerRef.current;
     const canvas = canvasRef.current;
     if (!el || !canvas) return;
+
+    // AR#12 / AC-16: seed default stocks on first mount when the store is empty
+    // so the canvas never shows a blank screen. Clearing the store afterward
+    // (e.g. to test the empty-state guidance) does NOT re-seed — the seed is
+    // only applied once at initial mount.
+    if (elementStore.getElements().length === 0) {
+      seedSampleStocks();
+    }
 
     tokensRef.current = readTokens();
 
@@ -482,6 +555,38 @@ export function CanvasView() {
     };
   }, []);
 
+  // ---- Tool mode keyboard switching (Story 1a.4 AC-10, keyboard-only) ----
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (isTextInput(e.target)) return;
+      // Only handle bare key presses (no Ctrl/Alt/Meta — allow Shift).
+      if (e.ctrlKey || e.altKey || e.metaKey) return;
+      const map: Record<string, ToolMode> = {
+        KeyF: "flow",
+        KeyS: "stock",
+        KeyC: "cloud",
+        KeyV: "select",
+      };
+      const mode = map[e.code];
+      if (mode) {
+        e.preventDefault();
+        toolModeRef.current = mode;
+        // Abort any in-progress flow drag when switching modes.
+        flowDragRef.current = {
+          active: false,
+          pointerId: -1,
+          fromPort: null,
+          previewInstances: [],
+        };
+        selectedIdRef.current = null;
+        instancesRef.current = buildInstancesFromStore(null);
+        drawRef.current();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
   const beginPan = (e: React.PointerEvent<HTMLCanvasElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
     // Always track this pointer so a second finger going down promotes us to
@@ -529,6 +634,44 @@ export function CanvasView() {
       };
       containerRef.current?.style.setProperty("cursor", "grabbing");
       return;
+    }
+
+    // ---- flow creation: port snap (Story 1a.4 AC-10, keyboard-only toolMode) ----
+    if (e.button === 0 && toolModeRef.current === "flow") {
+      const sx = e.clientX - rect.left;
+      const sy = e.clientY - rect.top;
+      const cam = camRef.current;
+      const vp = vpRef.current;
+      const [wx, wy] = screenToWorld(cam, vp, sx, sy);
+
+      // Build port list from all non-flow elements.
+      const elems = elementStore.getElements();
+      const ports: Port[] = [];
+      for (const el of elems) {
+        if (el.kind === "flow") continue;
+        for (const p of getElementPorts(el)) ports.push(p);
+      }
+      const snapTol = 8 / cam.zoom; // screen 8 px → world units (mirrors shouldSnap)
+      const port = findNearestPort(wx, wy, ports, snapTol);
+
+      if (port) {
+        e.preventDefault();
+        try {
+          (e.target as HTMLCanvasElement).setPointerCapture(e.pointerId);
+        } catch {
+          /* jsdom */
+        }
+        flowDragRef.current = {
+          active: true,
+          pointerId: e.pointerId,
+          fromPort: port,
+          previewInstances: [],
+        };
+        containerRef.current?.style.setProperty("cursor", "crosshair");
+        drawRef.current();
+        return;
+      }
+      // If not near a port in flow mode, fall through to miss → clear selection.
     }
 
     // ---- element interaction: plain left click (Task 7, AC-7) ----
@@ -613,6 +756,60 @@ export function CanvasView() {
     const sx = e.clientX - rect.left;
     const sy = e.clientY - rect.top;
     cursorRef.current = { sx, sy };
+
+    // ---- flow creation drag preview (Story 1a.4 AC-10) ----
+    if (flowDragRef.current.active && flowDragRef.current.pointerId === e.pointerId) {
+      const cam = camRef.current;
+      const vp = vpRef.current;
+      const [wx, wy] = screenToWorld(cam, vp, sx, sy);
+      const fp = flowDragRef.current.fromPort!;
+      const preview: RenderInstance[] = [];
+      const pushPrev = (ch: string, worldX: number, worldY: number, rotation = 0) => {
+        const gi = charToGlyphIdx(ch);
+        if (gi < 0) return;
+        preview.push({
+          glyphIdx: gi,
+          lumaIdx: 3,
+          colorIdx: 1,
+          worldX,
+          worldY,
+          entityType: 2,
+          zOrder: 0,
+          rotation,
+          selected: true,
+        });
+      };
+      const dx = wx - fp.x;
+      const dy = wy - fp.y;
+      const stepX = dx > 0 ? 1 : -1;
+      const stepY = dy > 0 ? 1 : -1;
+      const rx = Math.round(fp.x);
+      const ry = Math.round(fp.y);
+      const tx = Math.round(wx);
+      const ty = Math.round(wy);
+      // H-segment
+      if (dx !== 0) {
+        for (let x = rx + stepX; stepX > 0 ? x <= tx : x >= tx; x += stepX) {
+          if (dy === 0 && x === tx) break; // arrow replaces last h-glyph
+          pushPrev("─", x, ry);
+        }
+      }
+      // V-segment
+      if (dy !== 0) {
+        for (let y = ry + stepY; stepY > 0 ? y < ty : y > ty; y += stepY) {
+          pushPrev("│", tx, y);
+        }
+      }
+      // Arrowhead at cursor
+      const arrowRot = dy !== 0 ? (dy > 0 ? Math.PI / 2 : -Math.PI / 2) : dx > 0 ? 0 : Math.PI;
+      pushPrev("▶", tx, ty, arrowRot);
+      flowDragRef.current.previewInstances = preview;
+      // Merge preview with store instances for rendering
+      const base = buildInstancesFromStore(selectedIdRef.current);
+      instancesRef.current = [...preview, ...base];
+      drawRef.current();
+      return;
+    }
 
     // Update tracked pointer position (pinch needs both fingers' live coords).
     if (pointersRef.current.has(e.pointerId)) {
@@ -707,6 +904,55 @@ export function CanvasView() {
     }
     pointersRef.current.delete(e.pointerId);
 
+    // ---- flow creation completion (Story 1a.4 AC-10) ----
+    if (flowDragRef.current.active && flowDragRef.current.pointerId === e.pointerId) {
+      e.preventDefault();
+      const rect = e.currentTarget.getBoundingClientRect();
+      const sx = e.clientX - rect.left;
+      const sy = e.clientY - rect.top;
+      const cam = camRef.current;
+      const vp = vpRef.current;
+      const [wx, wy] = screenToWorld(cam, vp, sx, sy);
+      const fp = flowDragRef.current.fromPort!;
+
+      // Build port list from all non-flow elements.
+      const elems = elementStore.getElements();
+      const ports: Port[] = [];
+      for (const el of elems) {
+        if (el.kind === "flow") continue;
+        for (const p of getElementPorts(el)) ports.push(p);
+      }
+      const snapTol = 8 / cam.zoom;
+      const port = findNearestPort(wx, wy, ports, snapTol);
+
+      if (port && port.elementId !== fp.elementId) {
+        // Valid target port found — create flow.
+        try {
+          createFlow(elementStore, {
+            fromId: fp.elementId,
+            toId: port.elementId,
+            formula: "1",
+            isVariable: false,
+          });
+          warnRef.current = "";
+        } catch (err: unknown) {
+          warnRef.current = err instanceof Error ? err.message : "Flow creation failed";
+        }
+      }
+
+      // Reset flow drag state.
+      flowDragRef.current = {
+        active: false,
+        pointerId: -1,
+        fromPort: null,
+        previewInstances: [],
+      };
+      instancesRef.current = buildInstancesFromStore(selectedIdRef.current);
+      containerRef.current?.style.setProperty("cursor", "crosshair");
+      drawRef.current();
+      return;
+    }
+
     // Drop out of pinch as soon as we go back below two fingers.
     if (pinchRef.current.active && pointersRef.current.size < 2) {
       pinchRef.current = { active: false, prevDist: 0 };
@@ -756,6 +1002,8 @@ export function CanvasView() {
           canvas below. aria-hidden: the HUD is the accessible live region. */}
       <canvas ref={glCanvasRef} className="ns-canvas__gl" aria-hidden="true" />
       <span ref={hudRef} className="ns-canvas__hud" aria-live="polite" />
+      <div ref={warnElRef} className="ns-canvas__warn" role="alert" style={{ display: "none" }} />
+      <div ref={guideRef} className="ns-canvas__guide" role="status" style={{ display: "none" }} />
       <div className="ns-canvas__ctrl" role="group" aria-label="zoom controls">
         <button
           type="button"

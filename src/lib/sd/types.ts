@@ -46,6 +46,8 @@ export interface Flow {
   formula: string;
   isVariable: boolean;
   lastValue: number;
+  /** Derived units (readonly): toId stock units + time unit, populated by deriveFlowUnits at construction. Not persisted. */
+  units: string;
   formulaError?: string | null;
 }
 

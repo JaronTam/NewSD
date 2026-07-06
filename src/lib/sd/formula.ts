@@ -43,6 +43,24 @@ function tokenize(src: string): Tok[] {
       i = j;
       continue;
     }
+    // @uuid reference — e.g. @550e8400-e29b-41d4-a716-446655440000
+    if (c === "@") {
+      let j = i + 1;
+      while (j < src.length && /[0-9a-fA-F-]/.test(src[j])) j++;
+      const ref = src.slice(i, j);
+      out.push({ t: "id", v: ref });
+      i = j;
+      continue;
+    }
+    // [单位] annotation — skip entirely (unit-time / dimensional annotation,
+    // not an arithmetic token; consumed by deriveFlowUnits & formatFormulaForEditor)
+    if (c === "[") {
+      let j = i + 1;
+      while (j < src.length && src[j] !== "]") j++;
+      if (j >= src.length) throw new Error(`Unclosed [ @${i}`);
+      i = j + 1; // skip past ]
+      continue;
+    }
     // identifier: letters, digits, underscore, and CJK
     if (/[A-Za-z_一-鿿]/.test(c)) {
       let j = i;
@@ -111,5 +129,39 @@ export function evalFormula(src: string, env: Env): number {
   const result = parseExpr();
   if (p !== toks.length) throw new Error("Trailing tokens");
   if (!Number.isFinite(result)) throw new Error("Non-finite");
+  return result;
+}
+
+// ---------------------------------------------------------------------------
+// Display-side formula formatting (Story 1a.4, AC-5 Naming不变量)
+// ---------------------------------------------------------------------------
+
+/**
+ * Resolve `@uuid` refs to human-readable stock names and strip `[单位]`
+ * annotations for editor display.
+ *
+ * Naming invariant (ARCHITECTURE-SPINE L190):
+ *   Storage layer stores `@<uuid>`; display layer renders the stock `name`.
+ *   Renaming a stock only changes `name`, never `id` — refs never break.
+ *
+ * Rules:
+ * - `@<uuid>` replaced with `nameMap[uuid]`; unknown uuids kept as-is
+ * - `[...]` annotations stripped
+ * - Whitespace normalized (collapsed to single spaces, trimmed)
+ * - Idempotent: re-applying on already-clean output is a no-op
+ */
+export function formatFormulaForEditor(formula: string, nameMap: Record<string, string>): string {
+  // 1. Strip [单位] annotations
+  let result = formula.replace(/\[[^\]]*\]/g, "");
+
+  // 2. Resolve @uuid → human-readable name
+  result = result.replace(
+    /@([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/gi,
+    (_match, uuid: string) => nameMap[uuid] ?? _match,
+  );
+
+  // 3. Normalize whitespace
+  result = result.replace(/\s+/g, " ").trim();
+
   return result;
 }

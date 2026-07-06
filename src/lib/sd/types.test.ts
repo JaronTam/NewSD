@@ -118,10 +118,70 @@ describe("Flow type contract", () => {
       formula: "birthRate * Population",
       isVariable: false,
       lastValue: 0,
+      units: "",
     };
     expect(f.kind).toBe("flow");
     expect(f.fromId).toBeTruthy();
     expect(f.toId).toBeTruthy();
+  });
+
+  // AC-1: Flow 属性含 units(只读派生,不持久化)
+  it("AC-1: Flow has required `units` field (readonly, derived from toId stock)", () => {
+    const f: Flow = {
+      id: "00000000-0000-4000-8000-000000000021",
+      kind: "flow",
+      name: "growth",
+      fromId: "stock-a",
+      toId: "stock-b",
+      formula: "0.05 * Population",
+      isVariable: true,
+      lastValue: 0,
+      units: "people/dt",
+    };
+    expect(f.units).toBe("people/dt");
+    // units is a string field present on every Flow
+    expect(typeof f.units).toBe("string");
+  });
+
+  // AC-2: 方向由 fromId→toId 表达,不设极性字段
+  it("AC-2: Flow direction is expressed solely by fromId→toId (no polarity field)", () => {
+    const f: Flow = {
+      id: "00000000-0000-4000-8000-000000000022",
+      kind: "flow",
+      name: "inflow",
+      fromId: "src",
+      toId: "dst",
+      formula: "1",
+      isVariable: false,
+      lastValue: 0,
+      units: "",
+    };
+    // Direction is purely fromId → toId; no polarity/direction field exists
+    expect(f.fromId).toBe("src");
+    expect(f.toId).toBe("dst");
+    // polarity must not exist on Flow — verified via runtime access
+    const _noPolarity: undefined = (f as unknown as Record<string, unknown>)[
+      "polarity"
+    ] as undefined;
+    expect(_noPolarity).toBeUndefined();
+  });
+
+  // AC-3: units 自动派生为目标存量 units/时间单位,只读,deriveFlowUnits 纯函数
+  it("AC-3: Flow.units is a readonly derived field (populated by deriveFlowUnits at construction)", () => {
+    // Flow.units is a plain string — the derivation happens in createFlow (store),
+    // not as a getter. This test just verifies the field exists and is typed as string.
+    const f: Flow = {
+      id: "00000000-0000-4000-8000-000000000023",
+      kind: "flow",
+      name: "derived",
+      fromId: "s1",
+      toId: "s2",
+      formula: "rate",
+      isVariable: false,
+      lastValue: 0,
+      units: "people/dt",
+    };
+    expect(f.units).toBe("people/dt");
   });
 });
 

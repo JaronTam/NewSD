@@ -5,7 +5,7 @@
 // Box-drawing glyphs come from BOX_GLYPHS (glowAtlas.ts), which is already
 // baked into the glyph atlas — no re-bake needed.
 
-import type { Cloud, SDElement, Stock } from "../sd/types";
+import type { Cloud, Flow, SDElement, Stock } from "../sd/types";
 import { charToGlyphIdx } from "./vram/glowAtlas";
 import type { RenderInstance } from "./vram/renderer";
 
@@ -28,16 +28,10 @@ function pushChar(
   lumaIdx: number,
   entityType: number,
   selected: boolean,
+  rotation = 0,
 ): void {
   const glyphIdx = charToGlyphIdx(ch);
   if (glyphIdx < 0) return; // skip chars outside the baked charset
-  // TODO(A1/A2 scaffold — L6): entityType is GPU-dead (no shader attrib
-  // consumes it; see renderer.ts:32) and zOrder is sort-dead (render() draws
-  // in array order; see renderer.ts:38/342). rotation is shader-live (a_rotation
-  // rotates the quad in VERT_SRC) but hardcoded 0 here — no element rotates yet.
-  // All three await M2 Step 2 (drag hot-path wiring, deferred to 1a.4) before
-  // they carry real per-instance values. `selected` is live (M1 — vertex shader
-  // effectiveLuma = a_lumaIdx + a_selected).
   out.push({
     glyphIdx,
     lumaIdx,
@@ -46,7 +40,7 @@ function pushChar(
     worldY,
     entityType,
     zOrder: 0,
-    rotation: 0,
+    rotation,
     selected,
   });
 }
@@ -195,15 +189,36 @@ const CLOUD_H = CLOUD_SHAPE.length; // 3
  * Return the world-space bounding box for an element.
  * Stock bounds = (x, y, width, height).
  * Cloud bounds = (x, y, 6, 3) — fixed icon size.
+ * Flow bounds = computed from the rendered Manhattan path when `allElements`
+ *   is provided so endpoints can be resolved; otherwise {0,0,0,0}.
  */
-export function getElementBounds(el: SDElement): ElementBounds {
+export function getElementBounds(el: SDElement, allElements?: readonly SDElement[]): ElementBounds {
   if (el.kind === "stock") {
     return { x: el.x, y: el.y, width: el.width, height: el.height };
   }
   if (el.kind === "cloud") {
     return { x: el.x, y: el.y, width: CLOUD_W, height: CLOUD_H };
   }
-  // flow — has no spatial position (1a.4 introduces fromId→toId edges)
+  // flow — bbox from rendered instances when endpoints are available
+  if (el.kind === "flow" && allElements) {
+    const fromEl = allElements.find((e) => e.id === el.fromId);
+    const toEl = allElements.find((e) => e.id === el.toId);
+    const fromBounds = fromEl ? getElementBounds(fromEl, allElements) : null;
+    const toBounds = toEl ? getElementBounds(toEl, allElements) : null;
+    const instances = flowToInstances(el, fromBounds, toBounds, false);
+    if (instances.length === 0) return { x: 0, y: 0, width: 0, height: 0 };
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+    for (const ri of instances) {
+      if (ri.worldX < minX) minX = ri.worldX;
+      if (ri.worldY < minY) minY = ri.worldY;
+      if (ri.worldX > maxX) maxX = ri.worldX;
+      if (ri.worldY > maxY) maxY = ri.worldY;
+    }
+    return { x: minX, y: minY, width: maxX - minX + 1, height: maxY - minY + 1 };
+  }
   return { x: 0, y: 0, width: 0, height: 0 };
 }
 
@@ -296,4 +311,179 @@ export function resizeStock(
     height = 3;
   }
   return { x: left, y: top, width, height };
+}
+
+// ---- flow → instances (Story 1a.4) ------------------------------------------
+
+/** A connection port on an element edge. */
+export interface Port {
+  elementId: string;
+  side: "N" | "S" | "E" | "W";
+  x: number;
+  y: number;
+}
+
+/**
+ * Return the four edge-midpoint ports for a stock or cloud element.
+ *
+ * Ports are at world-space positions (may be half-integer for odd-dimension
+ * elements). Flow elements have no spatial extent and return [].
+ */
+export function getElementPorts(el: SDElement): Port[] {
+  if (el.kind === "flow") return [];
+  const b = getElementBounds(el);
+  const cx = b.x + b.width / 2;
+  const cy = b.y + b.height / 2;
+  return [
+    { elementId: el.id, side: "N", x: cx, y: b.y },
+    { elementId: el.id, side: "S", x: cx, y: b.y + b.height },
+    { elementId: el.id, side: "E", x: b.x + b.width, y: cy },
+    { elementId: el.id, side: "W", x: b.x, y: cy },
+  ];
+}
+
+/**
+ * Find the nearest port to (wx, wy) within `threshold` (Chebyshev-inclusive:
+ * distance ≤ threshold snaps). Returns null when no port is within range.
+ */
+export function findNearestPort(
+  wx: number,
+  wy: number,
+  ports: readonly Port[],
+  threshold: number,
+): Port | null {
+  let best: Port | null = null;
+  let bestDist = Infinity;
+  for (const p of ports) {
+    const dx = p.x - wx;
+    const dy = p.y - wy;
+    const d = Math.sqrt(dx * dx + dy * dy);
+    if (d <= threshold && d < bestDist) {
+      bestDist = d;
+      best = p;
+    }
+  }
+  return best;
+}
+
+/**
+ * Convert a Flow element into an array of RenderInstance entries.
+ *
+ * AC-6 Manhattan orthogonal routing (horizontal-first): draw an axis-aligned
+ * path from the source port to the target port using box-drawing glyphs
+ * (`─` horizontal, `│` vertical) plus a `▶` arrowhead at the endpoint.
+ *
+ * AC-7 rotation to direction mapping (Task 4.4):
+ *   0 → E, π/2 → S, π → W, -π/2 → N
+ *
+ * AC-12c dangling ref guard (Option B — silent empty): when either endpoint
+ * bounds is null the function returns an empty array without throwing.
+ *
+ * @param flow       The flow domain element (provides id, selected state reference).
+ * @param fromBounds World-space bounding box of the source element (or null).
+ * @param toBounds   World-space bounding box of the target element (or null).
+ * @param selected   If true, all instances carry `selected=true` (A2 glow path).
+ */
+export function flowToInstances(
+  flow: Flow,
+  fromBounds: ElementBounds | null,
+  toBounds: ElementBounds | null,
+  selected = false,
+): RenderInstance[] {
+  // AC-12c: dangling ref → graceful degradation (Option B — silent empty)
+  if (!fromBounds || !toBounds) return [];
+
+  const out: RenderInstance[] = [];
+
+  // ---- port selection --------------------------------------------------
+  // Pick the from-port closest to the to-element center, and vice versa.
+
+  const fromCX = fromBounds.x + fromBounds.width / 2;
+  const fromCY = fromBounds.y + fromBounds.height / 2;
+  const toCX = toBounds.x + toBounds.width / 2;
+  const toCY = toBounds.y + toBounds.height / 2;
+
+  const fromPorts: { x: number; y: number }[] = [
+    { x: fromCX, y: fromBounds.y }, // N
+    { x: fromCX, y: fromBounds.y + fromBounds.height }, // S
+    { x: fromBounds.x + fromBounds.width, y: fromCY }, // E
+    { x: fromBounds.x, y: fromCY }, // W
+  ];
+  const toPorts: { x: number; y: number }[] = [
+    { x: toCX, y: toBounds.y }, // N
+    { x: toCX, y: toBounds.y + toBounds.height }, // S
+    { x: toBounds.x + toBounds.width, y: toCY }, // E
+    { x: toBounds.x, y: toCY }, // W
+  ];
+
+  const sqDist = (a: { x: number; y: number }, b: { x: number; y: number }) =>
+    (a.x - b.x) ** 2 + (a.y - b.y) ** 2;
+
+  let fromP = fromPorts[0];
+  let bestD = Infinity;
+  for (const p of fromPorts) {
+    const d = sqDist(p, { x: toCX, y: toCY });
+    if (d < bestD) {
+      bestD = d;
+      fromP = p;
+    }
+  }
+
+  let toP = toPorts[0];
+  bestD = Infinity;
+  for (const p of toPorts) {
+    const d = sqDist(p, { x: fromCX, y: fromCY });
+    if (d < bestD) {
+      bestD = d;
+      toP = p;
+    }
+  }
+
+  // Snap ports to integer grid for character-cell rendering.
+  const fx = Math.round(fromP.x);
+  const fy = Math.round(fromP.y);
+  const tx = Math.round(toP.x);
+  const ty = Math.round(toP.y);
+
+  const COLOR_IDX = 1; // flow green
+  const ET = EntityType.FLOW;
+
+  const dx = tx - fx;
+  const dy = ty - fy;
+  const stepX = dx > 0 ? 1 : -1;
+  const stepY = dy > 0 ? 1 : -1;
+
+  // ---- arrow direction (last non-zero segment) -------------------------
+  let arrowRot: number;
+  if (dy !== 0) {
+    arrowRot = dy > 0 ? Math.PI / 2 : -Math.PI / 2; // S or N
+  } else if (dx !== 0) {
+    arrowRot = dx > 0 ? 0 : Math.PI; // E or W
+  } else {
+    arrowRot = 0; // degenerate — both ports on same cell
+  }
+
+  // ---- Manhattan routing (horizontal-first) ----------------------------
+  // H-segment: (fx, fy) → (tx, fy). Excludes the arrow position when there
+  // is no vertical segment (otherwise the arrow replaces the last h-glyph).
+
+  if (dx !== 0) {
+    for (let x = fx + stepX; stepX > 0 ? x <= tx : x >= tx; x += stepX) {
+      if (dy === 0 && x === tx) break; // arrow replaces this cell
+      pushChar(out, "─", x, fy, COLOR_IDX, 0, ET, selected, 0);
+    }
+  }
+
+  // V-segment: (tx, fy) → (tx, ty). Excludes the turn point (already an
+  // h-glyph or the from-port) and the arrow position.
+  if (dy !== 0) {
+    for (let y = fy + stepY; stepY > 0 ? y < ty : y > ty; y += stepY) {
+      pushChar(out, "│", tx, y, COLOR_IDX, 0, ET, selected, 0);
+    }
+  }
+
+  // Arrowhead at the to-port.
+  pushChar(out, "▶", tx, ty, COLOR_IDX, 0, ET, selected, arrowRot);
+
+  return out;
 }

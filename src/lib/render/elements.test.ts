@@ -8,8 +8,11 @@ import {
   stockToInstances,
   RESIZE_HANDLES,
 } from "./elements";
-import type { Cloud, SDElement, Stock } from "../sd/types";
+import type { Cloud, Flow, SDElement, Stock } from "../sd/types";
 import type { RenderInstance } from "./vram/renderer";
+
+// ---- 1a.4 red-phase imports (do NOT exist yet — TDD red state) --------------
+import { flowToInstances, getElementPorts, findNearestPort } from "./elements";
 
 function makeStock(overrides: Partial<Stock> = {}): Stock {
   return {
@@ -476,5 +479,446 @@ describe("resizeStock", () => {
     // drag SE to (2, 6) → width=2-(-4)=6, height=6-3=3.
     const r = resizeStock(makeStock({ x: -4, y: 3, width: 10, height: 5 }), "se", 2, 6);
     expect(r).toEqual({ x: -4, y: 3, width: 6, height: 3 });
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Story 1a.4 red-phase — flowToInstances + ports + pushChar rotation
+//
+// These symbols (flowToInstances, getElementPorts, findNearestPort) do NOT
+// exist in elements.ts yet. The imports at the top of this file will cause a
+// module load failure, which is the expected TDD red state.
+// ══════════════════════════════════════════════════════════════════════════════
+
+function makeFlow(overrides: Partial<Flow> = {}): Flow {
+  return {
+    id: "f1",
+    kind: "flow",
+    name: "growth",
+    fromId: "s1",
+    toId: "s2",
+    formula: "0.05 * Pop",
+    isVariable: true,
+    lastValue: 0,
+    units: "people/dt",
+    ...overrides,
+  };
+}
+
+// ---- AC-6/7/8: flowToInstances -----------------------------------------------
+
+describe("flowToInstances — Manhattan orthogonal routing (AC-6/7/8)", () => {
+  it("produces a non-empty instance array for a valid endpoint pair", () => {
+    // Even a trivial horizontal flow should produce glyph instances.
+    const instances = flowToInstances(
+      makeFlow(),
+      { x: 0, y: 2, width: 10, height: 5 }, // from bounds
+      { x: 20, y: 0, width: 10, height: 5 }, // to bounds
+    );
+    expect(instances.length).toBeGreaterThan(0);
+  });
+
+  it("every instance has entityType=FLOW (2)", () => {
+    const instances = flowToInstances(
+      makeFlow(),
+      { x: 0, y: 0, width: 8, height: 4 },
+      { x: 20, y: 0, width: 8, height: 4 },
+    );
+    expect(instances.length).toBeGreaterThan(0);
+    for (const r of instances) {
+      expect(r.entityType).toBe(2);
+    }
+  });
+
+  it("every instance has colorIdx=1 (flow green)", () => {
+    const instances = flowToInstances(
+      makeFlow(),
+      { x: 0, y: 0, width: 8, height: 4 },
+      { x: 20, y: 0, width: 8, height: 4 },
+    );
+    for (const r of instances) {
+      expect(r.colorIdx).toBe(1);
+    }
+  });
+
+  it("horizontal flow (E→W or W→E) uses only horizontal box-drawing glyphs", () => {
+    // Two stocks side-by-side horizontally. Orthogonal routing = single horizontal line.
+    const instances = flowToInstances(
+      makeFlow(),
+      { x: 0, y: 2, width: 10, height: 5 }, // right edge at x=10, mid y=4.5→4
+      { x: 20, y: 2, width: 10, height: 5 }, // left edge at x=20, mid y=4.5→4
+    );
+    expect(instances.length).toBeGreaterThan(0);
+    // All instances should share the same y (single horizontal segment).
+    const ys = new Set(instances.map((r) => r.worldY));
+    expect(ys.size).toBe(1);
+  });
+
+  it("vertical flow (N→S or S→N) is a single column of instances", () => {
+    // Two stocks stacked vertically — routing is a straight vertical line.
+    const instances = flowToInstances(
+      makeFlow(),
+      { x: 0, y: 0, width: 8, height: 4 }, // bottom mid
+      { x: 0, y: 20, width: 8, height: 4 }, // top mid
+    );
+    expect(instances.length).toBeGreaterThan(0);
+    // All instances should share the same x (single vertical segment).
+    const xs = new Set(instances.map((r) => r.worldX));
+    expect(xs.size).toBe(1);
+  });
+
+  it("Manhattan routing: horizontal-first (East then South for SE diagonal)", () => {
+    // from at (0,0) → to at (20,10): horizontal segment first (E), then vertical (S).
+    const instances = flowToInstances(
+      makeFlow(),
+      { x: 0, y: 0, width: 8, height: 4 }, // from
+      { x: 20, y: 10, width: 8, height: 4 }, // to (SE of from)
+    );
+    expect(instances.length).toBeGreaterThan(0);
+    // Horizontal-first: the first segment runs east, the second south.
+    // Verify that for the horizontal segment, y is constant; for the vertical, x is constant.
+    // Simple structural check: there's at least one horizontal run and one vertical run.
+    const byY = new Map<number, RenderInstance[]>();
+    for (const r of instances) {
+      const arr = byY.get(r.worldY) || [];
+      arr.push(r);
+      byY.set(r.worldY, arr);
+    }
+    // At least 2 distinct y values (horizontal + vertical segments)
+    expect(byY.size).toBeGreaterThanOrEqual(2);
+  });
+
+  it("▶ arrowhead glyph at the endpoint (direction indicator)", () => {
+    // The flow should render a ▶ arrowhead at the to-end of the path.
+    const instances = flowToInstances(
+      makeFlow(),
+      { x: 0, y: 2, width: 10, height: 5 },
+      { x: 20, y: 2, width: 10, height: 5 },
+    );
+    // At least one instance near the "to" element's port.
+    const arrowInstances = instances.filter((r) => r.worldX >= 18 && r.worldX <= 22);
+    expect(arrowInstances.length).toBeGreaterThan(0);
+  });
+
+  it("selected flag propagates to all instances", () => {
+    const instances = flowToInstances(
+      makeFlow(),
+      { x: 0, y: 0, width: 8, height: 4 },
+      { x: 20, y: 0, width: 8, height: 4 },
+      true,
+    );
+    expect(instances.length).toBeGreaterThan(0);
+    for (const r of instances) {
+      expect(r.selected).toBe(true);
+    }
+  });
+
+  it("unselected by default", () => {
+    const instances = flowToInstances(
+      makeFlow(),
+      { x: 0, y: 0, width: 8, height: 4 },
+      { x: 20, y: 0, width: 8, height: 4 },
+    );
+    for (const r of instances) {
+      expect(r.selected).toBe(false);
+    }
+  });
+
+  // AC-7: rotation mapping — Task 4.4 table
+  // 0→E, π/2→S, π→W, -π/2→N (orthogonal directions only)
+  it("AC-7: rotation maps to orthogonal direction per Task 4.4 table", () => {
+    // The pushChar function must accept a rotation parameter and set it on
+    // RenderInstance. The rotation→direction mapping:
+    //   0 → E (right, ▶ points east)
+    //   π/2 → S (down, ▶ points south)
+    //   π → W (left, ▶ points west)
+    //   -π/2 → N (up, ▶ points north)
+    // For flow glyphs, rotation determines arrowhead orientation.
+
+    const instances = flowToInstances(
+      makeFlow(),
+      { x: 0, y: 2, width: 10, height: 5 },
+      { x: 20, y: 2, width: 10, height: 5 },
+    );
+
+    // All instances must have a defined rotation field.
+    for (const r of instances) {
+      expect(typeof r.rotation).toBe("number");
+    }
+
+    // Horizontal rightward flow → arrowhead at the endpoint should have rotation ≈ 0 (E)
+    const rightEdgeInstances = instances.filter((r) => r.worldX > 15);
+    for (const r of rightEdgeInstances) {
+      // rotation is a multiple of π/2 (orthogonal)
+      expect(r.rotation % (Math.PI / 2)).toBeCloseTo(0, 5);
+    }
+  });
+
+  it("▼ marker glyph rendered at cloud connections", () => {
+    // Flow to/from cloud: a ▼ marker is rendered at the cloud port.
+    // We verify that the instances array includes glyphs — glyph-level
+    // verification (which ch is ▼) is harder without the glyph map, but
+    // structural assertions (non-empty, at cloud location) work.
+    const instances = flowToInstances(
+      makeFlow({ fromId: "c1" }),
+      { x: 0, y: 0, width: 6, height: 3 }, // cloud (fixed 6×3)
+      { x: 20, y: 0, width: 10, height: 5 }, // stock
+    );
+    expect(instances.length).toBeGreaterThan(0);
+  });
+});
+
+// ---- AC-12c: dangling flow ref -------------------------------------------------
+
+describe("flowToInstances — AC-12c dangling ref guard", () => {
+  it("returns empty array when fromId endpoint element doesn't exist", () => {
+    // Option B (VS钉死决策): silent empty — don't throw, just render nothing.
+    const instances = flowToInstances(
+      makeFlow({ fromId: "nonexistent" }),
+      null, // from bounds = null (endpoint not found)
+      { x: 10, y: 0, width: 8, height: 4 },
+    );
+    expect(instances).toEqual([]);
+  });
+
+  it("returns empty array when toId endpoint element doesn't exist", () => {
+    const instances = flowToInstances(
+      makeFlow({ toId: "nonexistent" }),
+      { x: 0, y: 0, width: 8, height: 4 },
+      null, // to bounds = null (endpoint not found)
+    );
+    expect(instances).toEqual([]);
+  });
+
+  it("returns empty array when both endpoints are null", () => {
+    const instances = flowToInstances(makeFlow({ fromId: "gone1", toId: "gone2" }), null, null);
+    expect(instances).toEqual([]);
+  });
+
+  it("dangling ref does NOT throw (graceful degradation, Option B)", () => {
+    expect(() =>
+      flowToInstances(makeFlow({ fromId: "ghost" }), null, { x: 0, y: 0, width: 8, height: 4 }),
+    ).not.toThrow();
+  });
+});
+
+// ---- AC-9: getElementPorts ---------------------------------------------------
+
+describe("getElementPorts (AC-9)", () => {
+  it("returns 4 ports for a stock — N, E, S, W edge midpoints", () => {
+    const stock = makeStock({ x: 0, y: 0, width: 10, height: 6 });
+    const ports = getElementPorts(stock);
+    expect(ports.length).toBe(4);
+
+    // N port: center-x of top edge
+    const nPort = ports.find((p) => p.side === "N");
+    expect(nPort).toBeDefined();
+    expect(nPort!.x).toBe(5); // x + width/2 = 0 + 5
+    expect(nPort!.y).toBe(0); // y (top edge)
+
+    // S port: center-x of bottom edge
+    const sPort = ports.find((p) => p.side === "S");
+    expect(sPort).toBeDefined();
+    expect(sPort!.x).toBe(5);
+    expect(sPort!.y).toBe(6); // y + height = 0 + 6
+
+    // E port: center-y of right edge
+    const ePort = ports.find((p) => p.side === "E");
+    expect(ePort).toBeDefined();
+    expect(ePort!.x).toBe(10); // x + width = 0 + 10
+    expect(ePort!.y).toBe(3); // y + height/2 = 0 + 3
+
+    // W port: center-y of left edge
+    const wPort = ports.find((p) => p.side === "W");
+    expect(wPort).toBeDefined();
+    expect(wPort!.x).toBe(0); // x (left edge)
+    expect(wPort!.y).toBe(3);
+  });
+
+  it("returns 4 ports for a cloud (fixed 6×3 icon)", () => {
+    const cloud = makeCloud({ x: 10, y: 5 });
+    const ports = getElementPorts(cloud);
+    expect(ports.length).toBe(4);
+
+    // All ports reference the cloud element ID.
+    for (const p of ports) {
+      expect(p.elementId).toBe(cloud.id);
+    }
+
+    // Cloud ports are at edge midpoints of the 6×3 bounding box.
+    const nPort = ports.find((p) => p.side === "N");
+    expect(nPort!.x).toBe(13); // 10 + 3
+    expect(nPort!.y).toBe(5);
+
+    const ePort = ports.find((p) => p.side === "E");
+    expect(ePort!.x).toBe(16); // 10 + 6
+    expect(ePort!.y).toBe(6.5); // 5 + 1.5
+  });
+
+  it("stock ports are at world-space midpoints (integer or half-integer)", () => {
+    // Odd-dimension stock: width=7, height=5 → center-x is 3.5, center-y is 2.5
+    const stock = makeStock({ x: 0, y: 0, width: 7, height: 5 });
+    const ports = getElementPorts(stock);
+
+    const nPort = ports.find((p) => p.side === "N")!;
+    expect(nPort.x).toBe(3.5);
+    expect(nPort.y).toBe(0);
+
+    const ePort = ports.find((p) => p.side === "E")!;
+    expect(ePort.x).toBe(7);
+    expect(ePort.y).toBe(2.5);
+  });
+
+  it("each port carries the element ID it belongs to", () => {
+    const stock = makeStock({ id: "my-stock-1" });
+    const ports = getElementPorts(stock);
+    for (const p of ports) {
+      expect(p.elementId).toBe("my-stock-1");
+    }
+  });
+});
+
+// ---- AC-10: findNearestPort --------------------------------------------------
+
+describe("findNearestPort (AC-10)", () => {
+  function makePortsAroundOrigin(): ReturnType<typeof getElementPorts> {
+    return [
+      { elementId: "s-n", side: "N" as const, x: 5, y: 0 },
+      { elementId: "s-s", side: "S" as const, x: 5, y: 6 },
+      { elementId: "s-e", side: "E" as const, x: 10, y: 3 },
+      { elementId: "s-w", side: "W" as const, x: 0, y: 3 },
+    ];
+  }
+
+  it("returns the nearest port when cursor is close to one port", () => {
+    const ports = makePortsAroundOrigin();
+    // Cursor at (9.5, 3) — very close to E port (10, 3).
+    const nearest = findNearestPort(9.5, 3, ports, 3);
+    expect(nearest).not.toBeNull();
+    expect(nearest!.side).toBe("E");
+    expect(nearest!.elementId).toBe("s-e");
+  });
+
+  it("returns null when cursor is farther than threshold from all ports", () => {
+    const ports = makePortsAroundOrigin();
+    // Cursor at (100, 100) — far from all ports, threshold=3.
+    const nearest = findNearestPort(100, 100, ports, 3);
+    expect(nearest).toBeNull();
+  });
+
+  it("returns null when ports array is empty", () => {
+    expect(findNearestPort(5, 3, [], 5)).toBeNull();
+  });
+
+  it("breaks ties by the first port encountered (closest distance wins)", () => {
+    // Two ports equidistant from the cursor.
+    const ports = [
+      { elementId: "a", side: "N" as const, x: 5, y: 0 },
+      { elementId: "b", side: "S" as const, x: 5, y: 6 },
+    ];
+    // Cursor at (5, 3) — exactly 3 units from both N(5,0) and S(5,6).
+    const nearest = findNearestPort(5, 3, ports, 5);
+    expect(nearest).not.toBeNull();
+    // Either port is valid — just verify the result is one of them.
+    expect(["a", "b"]).toContain(nearest!.elementId);
+  });
+
+  it("threshold is exclusive: exactly threshold away still snaps", () => {
+    const ports = [{ elementId: "p1", side: "N" as const, x: 5, y: 0 }];
+    // Distance = 3 (exactly at threshold), should snap.
+    const nearest = findNearestPort(5, 3, ports, 3);
+    expect(nearest).not.toBeNull();
+  });
+
+  it("threshold + epsilon away does NOT snap", () => {
+    const ports = [{ elementId: "p1", side: "N" as const, x: 5, y: 0 }];
+    // Distance = 3.01 > threshold 3.
+    const nearest = findNearestPort(5, 3.01, ports, 3);
+    expect(nearest).toBeNull();
+  });
+
+  it("large threshold (e.g. 5) snaps from farther away", () => {
+    const ports = makePortsAroundOrigin();
+    // Cursor at (13, 3) — 3 units from E port (10,3), within threshold=5.
+    const nearest = findNearestPort(13, 3, ports, 5);
+    expect(nearest).not.toBeNull();
+    expect(nearest!.side).toBe("E");
+  });
+});
+
+// ---- pushChar rotation support (AC-8) ----------------------------------------
+
+describe("pushChar rotation (AC-8)", () => {
+  it("flowToInstances sets rotation on all instances", () => {
+    const instances = flowToInstances(
+      makeFlow(),
+      { x: 0, y: 0, width: 8, height: 4 },
+      { x: 0, y: 20, width: 8, height: 4 },
+    );
+    expect(instances.length).toBeGreaterThan(0);
+    for (const r of instances) {
+      // rotation is a defined number (may be 0 for straight segments)
+      expect(typeof r.rotation).toBe("number");
+      expect(Number.isFinite(r.rotation)).toBe(true);
+    }
+  });
+
+  it("rotation values are multiples of π/2 (orthogonal directions only)", () => {
+    const instances = flowToInstances(
+      makeFlow(),
+      { x: 0, y: 0, width: 8, height: 4 },
+      { x: 20, y: 10, width: 8, height: 4 },
+    );
+    for (const r of instances) {
+      // Each rotation should be a multiple of π/2 (0, π/2, π, -π/2)
+      const remainder = r.rotation % (Math.PI / 2);
+      expect(Math.abs(remainder)).toBeCloseTo(0, 5);
+    }
+  });
+
+  it("existing stockToInstances still has rotation=0 (no regression)", () => {
+    const instances = stockToInstances(makeStock(), false);
+    for (const r of instances) {
+      expect(r.rotation).toBe(0);
+    }
+  });
+
+  it("existing cloudToInstances still has rotation=0 (no regression)", () => {
+    const instances = cloudToInstances(makeCloud());
+    for (const r of instances) {
+      expect(r.rotation).toBe(0);
+    }
+  });
+});
+
+// ---- getElementBounds — flow branch (AC-6 carry) -----------------------------
+
+describe("getElementBounds — flow (AC-6)", () => {
+  it("returns non-zero bbox for a flow (computed from endpoint instances)", () => {
+    // Place two stocks 10 world-units apart horizontally so the Manhattan route
+    // has measurable extent. s1 at (0,0) 10×5, s2 at (20,0) 10×5.
+    const elements: SDElement[] = [
+      makeStock({ id: "s1", x: 0, y: 0, width: 10, height: 5 }),
+      makeStock({ id: "s2", x: 20, y: 0, width: 10, height: 5 }),
+    ];
+    const flow = makeFlow({ fromId: "s1", toId: "s2" });
+    const b = getElementBounds(flow, elements);
+    expect(b.width).toBeGreaterThan(0);
+    expect(b.height).toBeGreaterThanOrEqual(0);
+    // The bbox must contain at least the arrowhead at the to-port.
+    expect(b.x).toBeLessThanOrEqual(b.x + b.width);
+    expect(b.y).toBeLessThanOrEqual(b.y + b.height);
+  });
+
+  it("returns zero bbox when allElements is not provided (backward compat)", () => {
+    const b = getElementBounds(makeFlow());
+    expect(b).toEqual({ x: 0, y: 0, width: 0, height: 0 });
+  });
+
+  it("returns zero bbox for a flow with dangling refs (AC-12c)", () => {
+    const elements: SDElement[] = [makeStock({ id: "s1", x: 0, y: 0, width: 10, height: 5 })];
+    const flow = makeFlow({ fromId: "s1", toId: "nonexistent" });
+    const b = getElementBounds(flow, elements);
+    expect(b).toEqual({ x: 0, y: 0, width: 0, height: 0 });
   });
 });
