@@ -2,7 +2,7 @@
 // In-memory store for Story 1a.3; designed as a replaceable adapter
 // so 1a.4 / collab (AD-10 Y.Doc) can swap out the backing store later.
 
-import type { Cloud, SDElement, Stock } from "./types";
+import type { Cloud, Flow, SDElement, Stock } from "./types";
 
 // ---------------------------------------------------------------------------
 // E9 stock size validation (AC-8, AC-9)
@@ -139,4 +139,105 @@ export function createElementStore(): ElementStore {
       return elements;
     },
   };
+}
+
+// ---------------------------------------------------------------------------
+// Flow helpers (Story 1a.4)
+// ---------------------------------------------------------------------------
+
+/**
+ * Derive flow units from the target element's units and formula time annotation.
+ *
+ * Rules (AC-3, CS钉死):
+ * - Default time unit = `/dt`
+ * - If formula contains `[单位]` annotation (e.g. `[1/year]`), extract the
+ *   time-unit portion (the `/…` segment) and use it instead of `/dt`
+ * - If `toId` points to a Cloud or a non-existent element → return `""`
+ * - If the target stock has empty units, return just the time unit (e.g. `/dt`)
+ *
+ * @returns The derived units string (single source of truth; called by createFlow).
+ */
+export function deriveFlowUnits(
+  formula: string,
+  toId: string,
+  elements: readonly SDElement[],
+): string {
+  const toEl = elements.find((e) => e.id === toId);
+
+  // Cloud target or nonexistent → empty string (AC-3 cloud fallback)
+  if (!toEl || toEl.kind === "cloud") return "";
+
+  const stockUnits = (toEl as Stock).units;
+
+  // Default time unit (CS钉死)
+  let timeUnit = "/dt";
+
+  // Check for [单位] annotation in formula (e.g. "0.05 [1/year]")
+  const annMatch = formula.match(/\[([^\]]+)\]/);
+  if (annMatch) {
+    const inner = annMatch[1]; // e.g. "1/year"
+    const slashIdx = inner.indexOf("/");
+    if (slashIdx !== -1) {
+      timeUnit = inner.slice(slashIdx); // "/year"
+    }
+  }
+
+  return stockUnits ? `${stockUnits}${timeUnit}` : timeUnit;
+}
+
+/** Partial input for createFlow (omits id/kind/units/lastValue — all derived). */
+export interface CreateFlowInput {
+  fromId: string;
+  toId: string;
+  formula: string;
+  isVariable: boolean;
+  name?: string;
+}
+
+/**
+ * Create a Flow element and append it to the store.
+ *
+ * Guard sequence (AC-12/AC-12b, throw form — preserves Flow return type):
+ * ① Endpoint validity — fromId/toId must point to existing Stock or Cloud
+ *    (rejects nonexistent ids and Flow→Flow connections)
+ * ② Self-loop guard — fromId === toId → reject
+ *
+ * E11 (parallel flows) and AC-15 (duplicate names) are allowed (non-blocking).
+ *
+ * @throws {Error} "Invalid flow endpoint" if endpoints are invalid.
+ * @throws {Error} "Self-loop not allowed" if fromId === toId.
+ */
+export function createFlow(store: ElementStore, input: CreateFlowInput): Flow {
+  const elements = [...store.getElements()];
+
+  // ① Endpoint validity (AC-12b)
+  const fromEl = elements.find((e) => e.id === input.fromId);
+  const toEl = elements.find((e) => e.id === input.toId);
+
+  if (!fromEl || fromEl.kind === "flow" || !toEl || toEl.kind === "flow") {
+    throw new Error("Invalid flow endpoint");
+  }
+
+  // ② Self-loop guard (AC-12)
+  if (input.fromId === input.toId) {
+    throw new Error("Self-loop not allowed");
+  }
+
+  // Derive units from target stock + formula time annotation
+  const units = deriveFlowUnits(input.formula, input.toId, elements);
+
+  const flow: Flow = {
+    id: crypto.randomUUID(),
+    kind: "flow",
+    name: input.name ?? `Flow ${elements.filter((e) => e.kind === "flow").length + 1}`,
+    fromId: input.fromId,
+    toId: input.toId,
+    formula: input.formula,
+    isVariable: input.isVariable,
+    lastValue: 0,
+    units,
+  };
+
+  store.setElements([...elements, flow]);
+  return flow;
 }

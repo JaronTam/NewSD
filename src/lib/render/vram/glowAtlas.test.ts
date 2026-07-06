@@ -16,25 +16,34 @@ import {
   charToGlyphIdx,
 } from "./glowAtlas";
 
+// ---- 1a.4 red-phase import (does NOT exist yet — TDD red state) --------------
+import { FLOW_GLYPHS } from "./glowAtlas";
+
 // Pure-layout tests for the AD-9 glow atlas. The off-screen Canvas2D baker
 // (bakeGlowAtlasCanvas) needs a real 2D context + WebGL and is verified
 // end-to-end via Playwright, not here.
 
 describe("glowAtlas — charset", () => {
-  it("charset is printable ASCII 32–126 + box glyphs (117 total)", () => {
+  it("charset is printable ASCII 32–126 + box glyphs + flow glyphs (120 total)", () => {
     expect(CHARSET[0]).toBe(" ");
     expect(CHARSET[94]).toBe("~");
-    expect(CHARSET.length).toBe(95 + BOX_GLYPHS.length);
-    expect(CHAR_COUNT).toBe(117);
+    expect(CHARSET.length).toBe(95 + BOX_GLYPHS.length + FLOW_GLYPHS.length);
+    expect(CHAR_COUNT).toBe(120);
     expect(CHARSET).toContain("─");
     expect(CHARSET).toContain("╬");
+    expect(CHARSET).toContain("▶");
+    expect(CHARSET).toContain("▼");
+    expect(CHARSET).toContain("○");
   });
 
-  it("charToGlyphIdx maps ASCII and box glyphs; unknown → -1", () => {
+  it("charToGlyphIdx maps ASCII, box glyphs, and flow glyphs; unknown → -1", () => {
     expect(charToGlyphIdx(" ")).toBe(0);
     expect(charToGlyphIdx("~")).toBe(94);
     expect(charToGlyphIdx("─")).toBe(95);
     expect(charToGlyphIdx("╬")).toBe(116);
+    expect(charToGlyphIdx("▶")).toBe(117);
+    expect(charToGlyphIdx("▼")).toBe(118);
+    expect(charToGlyphIdx("○")).toBe(119);
     expect(charToGlyphIdx("€")).toBe(-1);
   });
 });
@@ -132,5 +141,82 @@ describe("glowAtlas — cellUV", () => {
     const b = cellUV(1, dims); // same row, next col
     expect(b.u0).toBeCloseTo(a.u1, 10);
     expect(b.v0).toBeCloseTo(a.v0, 10);
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Story 1a.4 red-phase — FLOW_GLYPHS (AC-8)
+//
+// Flow rendering requires three new glyphs added to the charset:
+//   ▶ (U+25B6) — arrowhead for flow direction markers
+//   ▼ (U+25BC) — downward-pointing triangle for cloud/flow markers
+//   ○ (U+25CB) — white circle for port snap visualization
+//
+// These must be added to CHARSET and baked into the glow atlas so they
+// participate in the instanced WebGL2 pipeline (same as BOX_GLYPHS).
+// ══════════════════════════════════════════════════════════════════════════════
+
+describe("glowAtlas — FLOW_GLYPHS (AC-8)", () => {
+  it("FLOW_GLYPHS is the string '▶▼○'", () => {
+    expect(FLOW_GLYPHS).toBe("▶▼○");
+  });
+
+  it("each FLOW_GLYPHS character is in the CHARSET", () => {
+    for (const ch of FLOW_GLYPHS) {
+      expect(CHARSET).toContain(ch);
+    }
+  });
+
+  it("CHAR_COUNT accounts for FLOW_GLYPHS (117 + 3 = 120)", () => {
+    expect(CHAR_COUNT).toBe(120);
+  });
+
+  it("charToGlyphIdx returns a valid index for each flow glyph", () => {
+    expect(charToGlyphIdx("▶")).toBeGreaterThanOrEqual(0);
+    expect(charToGlyphIdx("▼")).toBeGreaterThanOrEqual(0);
+    expect(charToGlyphIdx("○")).toBeGreaterThanOrEqual(0);
+  });
+
+  it("flow glyph indices are at the end of the charset (after BOX_GLYPHS)", () => {
+    // ASCII 32-126 (95) + BOX_GLYPHS (22) = 117. FLOW_GLYPHS start at 117.
+    const idxArrow = charToGlyphIdx("▶");
+    const idxDown = charToGlyphIdx("▼");
+    const idxCircle = charToGlyphIdx("○");
+    expect(idxArrow).toBeGreaterThanOrEqual(117);
+    expect(idxDown).toBeGreaterThanOrEqual(117);
+    expect(idxCircle).toBeGreaterThanOrEqual(117);
+  });
+
+  it("total atlas cells still fit after adding FLOW_GLYPHS", () => {
+    const dims = atlasDims();
+    const total = CHAR_COUNT * LUMA_LEVELS; // 120 * 4 = 480
+    expect(dims.cols * dims.rows).toBeGreaterThanOrEqual(total);
+    const last = cellIndex(CHAR_COUNT - 1, LUMA_LEVELS - 1);
+    const col = last % dims.cols;
+    const row = Math.floor(last / dims.cols);
+    expect((col + 1) * dims.cellW).toBeLessThanOrEqual(dims.texW);
+    expect((row + 1) * dims.cellH).toBeLessThanOrEqual(dims.texH);
+  });
+});
+
+describe("glowAtlas — locked constants unchanged (AC-8 / §7gate)", () => {
+  it("F1-quality halo knobs are NOT changed by FLOW_GLYPHS addition", () => {
+    expect(GLOW_PAD).toBe(16);
+    expect([...LUMA_BLUR_PX]).toEqual([0, 4, 8, 14]);
+    expect(GLOW_PASSES).toBe(3);
+  });
+
+  it("BOX_GLYPHS unchanged (22 box-drawing chars)", () => {
+    expect(BOX_GLYPHS).toBe("─│┌┐└┘├┤┬┴┼═║╔╗╚╝╠╣╦╩╬");
+    expect(BOX_GLYPHS.length).toBe(22);
+  });
+
+  it("CELL_W and CELL_H unchanged (41×48)", () => {
+    expect(CELL_W).toBe(41);
+    expect(CELL_H).toBe(48);
+  });
+
+  it("LUMA_LEVELS unchanged (4 bands)", () => {
+    expect(LUMA_LEVELS).toBe(4);
   });
 });
