@@ -6,7 +6,7 @@ import type { Stock } from "./types";
 // Symbols imported from store for 1a.4 red-phase tests.
 // These do NOT exist yet — the imports will fail at compile/load time,
 // which is the expected TDD red state.
-import { createFlow, deriveFlowUnits } from "./store";
+import { createFlow, deriveFlowUnits, flowCreateWarning } from "./store";
 
 describe("validateStockSize — E9 guard (AC-8, AC-9)", () => {
   it("accepts positive finite dimensions", () => {
@@ -514,5 +514,102 @@ describe("createFlow — duplicate name allowed (AC-15)", () => {
       .getElements()
       .map((e) => ("name" in e ? (e as Stock).name : (e as { name?: string }).name));
     expect(names.filter((n) => n === "DuplicateName").length).toBe(2);
+  });
+});
+
+// ---- F3: non-blocking warn callback (E11 parallel / AC-15 dup name) -----------
+
+describe("createFlow — F3 onWarn callback + flowCreateWarning", () => {
+  it("flowCreateWarning returns null for a clean flow (no parallel, no dup name)", () => {
+    const store = createElementStore();
+    const s1 = seedStock(store, { id: "s1" });
+    const s2 = seedStock(store, { id: "s2" });
+    const warn = flowCreateWarning(store.getElements(), {
+      fromId: s1.id,
+      toId: s2.id,
+      formula: "1",
+      isVariable: false,
+    });
+    expect(warn).toBeNull();
+  });
+
+  it("flowCreateWarning returns a parallel-flow warning (E11) for a duplicate fromId→toId pair", () => {
+    const store = createElementStore();
+    const s1 = seedStock(store, { id: "s1" });
+    const s2 = seedStock(store, { id: "s2" });
+    createFlow(store, {
+      fromId: s1.id,
+      toId: s2.id,
+      formula: "a",
+      isVariable: false,
+      name: "first",
+    });
+    const warn = flowCreateWarning(store.getElements(), {
+      fromId: s1.id,
+      toId: s2.id,
+      formula: "b",
+      isVariable: true,
+    });
+    expect(warn).not.toBeNull();
+    expect(warn).toContain("Parallel");
+  });
+
+  it("flowCreateWarning returns a duplicate-name warning (AC-15)", () => {
+    const store = createElementStore();
+    const s1 = seedStock(store, { id: "s1" });
+    const s2 = seedStock(store, { id: "s2" });
+    const s3 = seedStock(store, { id: "s3" });
+    createFlow(store, {
+      fromId: s1.id,
+      toId: s2.id,
+      formula: "a",
+      isVariable: false,
+      name: "FlowX",
+    });
+    const warn = flowCreateWarning(store.getElements(), {
+      fromId: s1.id,
+      toId: s3.id,
+      formula: "b",
+      isVariable: true,
+      name: "FlowX",
+    });
+    expect(warn).not.toBeNull();
+    expect(warn).toContain("Duplicate flow name");
+  });
+
+  it("createFlow invokes onWarn with null when the flow is clean", () => {
+    const store = createElementStore();
+    const s1 = seedStock(store, { id: "s1" });
+    const s2 = seedStock(store, { id: "s2" });
+    let captured: string | null | undefined;
+    createFlow(store, { fromId: s1.id, toId: s2.id, formula: "1", isVariable: false }, (msg) => {
+      captured = msg;
+    });
+    expect(captured).toBeNull();
+  });
+
+  it("createFlow invokes onWarn with a parallel-flow warning (E11)", () => {
+    const store = createElementStore();
+    const s1 = seedStock(store, { id: "s1" });
+    const s2 = seedStock(store, { id: "s2" });
+    createFlow(store, { fromId: s1.id, toId: s2.id, formula: "a", isVariable: false });
+    let captured: string | null | undefined;
+    createFlow(store, { fromId: s1.id, toId: s2.id, formula: "b", isVariable: true }, (msg) => {
+      captured = msg;
+    });
+    expect(captured).not.toBeNull();
+    expect(captured).toContain("Parallel");
+  });
+
+  it("createFlow does NOT invoke onWarn when it throws (invalid endpoint)", () => {
+    const store = createElementStore();
+    const s2 = seedStock(store, { id: "s2" });
+    let called = false;
+    expect(() =>
+      createFlow(store, { fromId: "ghost", toId: s2.id, formula: "1", isVariable: false }, () => {
+        called = true;
+      }),
+    ).toThrow();
+    expect(called).toBe(false);
   });
 });

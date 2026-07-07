@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   cloudToInstances,
@@ -12,7 +12,8 @@ import type { Cloud, Flow, SDElement, Stock } from "../sd/types";
 import type { RenderInstance } from "./vram/renderer";
 
 // ---- 1a.4 red-phase imports (do NOT exist yet — TDD red state) --------------
-import { flowToInstances, getElementPorts, findNearestPort } from "./elements";
+import { flowToInstances, getElementPorts, findNearestPort, warnedDanglingFlows } from "./elements";
+import { charToGlyphIdx } from "./vram/glowAtlas";
 
 function makeStock(overrides: Partial<Stock> = {}): Stock {
   return {
@@ -508,105 +509,171 @@ function makeFlow(overrides: Partial<Flow> = {}): Flow {
 // ---- AC-6/7/8: flowToInstances -----------------------------------------------
 
 describe("flowToInstances — Manhattan orthogonal routing (AC-6/7/8)", () => {
+  // Default scene: s1 (0,0,10×5) → s2 (20,0,10×5). s1 E-port (9,3) → s2
+  // W-port (20,3): straight horizontal, variable flow.
+  function horizontalScene(flow?: Partial<Flow>): { elements: SDElement[]; flow: Flow } {
+    const elements: SDElement[] = [
+      makeStock({ id: "s1", x: 0, y: 0, width: 10, height: 5 }),
+      makeStock({ id: "s2", x: 20, y: 0, width: 10, height: 5 }),
+    ];
+    return { elements, flow: makeFlow({ ...flow }) };
+  }
+
   it("produces a non-empty instance array for a valid endpoint pair", () => {
-    // Even a trivial horizontal flow should produce glyph instances.
-    const instances = flowToInstances(
-      makeFlow(),
-      { x: 0, y: 2, width: 10, height: 5 }, // from bounds
-      { x: 20, y: 0, width: 10, height: 5 }, // to bounds
-    );
+    const { elements, flow } = horizontalScene();
+    const instances = flowToInstances(flow, elements);
     expect(instances.length).toBeGreaterThan(0);
   });
 
   it("every instance has entityType=FLOW (2)", () => {
-    const instances = flowToInstances(
-      makeFlow(),
-      { x: 0, y: 0, width: 8, height: 4 },
-      { x: 20, y: 0, width: 8, height: 4 },
-    );
+    const { elements, flow } = horizontalScene();
+    const instances = flowToInstances(flow, elements);
     expect(instances.length).toBeGreaterThan(0);
     for (const r of instances) {
       expect(r.entityType).toBe(2);
     }
   });
 
-  it("every instance has colorIdx=1 (flow green)", () => {
-    const instances = flowToInstances(
-      makeFlow(),
-      { x: 0, y: 0, width: 8, height: 4 },
-      { x: 20, y: 0, width: 8, height: 4 },
-    );
+  it("every instance has colorIdx=1 (flow magenta, palette index 1)", () => {
+    const { elements, flow } = horizontalScene();
+    const instances = flowToInstances(flow, elements);
     for (const r of instances) {
       expect(r.colorIdx).toBe(1);
     }
   });
 
-  it("horizontal flow (E→W or W→E) uses only horizontal box-drawing glyphs", () => {
-    // Two stocks side-by-side horizontally. Orthogonal routing = single horizontal line.
-    const instances = flowToInstances(
-      makeFlow(),
-      { x: 0, y: 2, width: 10, height: 5 }, // right edge at x=10, mid y=4.5→4
-      { x: 20, y: 2, width: 10, height: 5 }, // left edge at x=20, mid y=4.5→4
-    );
+  it("horizontal flow (E→W) is a single horizontal segment (one y value)", () => {
+    const { elements, flow } = horizontalScene();
+    const instances = flowToInstances(flow, elements);
     expect(instances.length).toBeGreaterThan(0);
-    // All instances should share the same y (single horizontal segment).
     const ys = new Set(instances.map((r) => r.worldY));
     expect(ys.size).toBe(1);
   });
 
-  it("vertical flow (N→S or S→N) is a single column of instances", () => {
-    // Two stocks stacked vertically — routing is a straight vertical line.
-    const instances = flowToInstances(
-      makeFlow(),
-      { x: 0, y: 0, width: 8, height: 4 }, // bottom mid
-      { x: 0, y: 20, width: 8, height: 4 }, // top mid
-    );
+  it("vertical flow (N→S) is a single column of instances (one x value)", () => {
+    const elements: SDElement[] = [
+      makeStock({ id: "s1", x: 0, y: 0, width: 8, height: 4 }),
+      makeStock({ id: "s2", x: 0, y: 20, width: 8, height: 4 }),
+    ];
+    const flow = makeFlow({ fromId: "s1", toId: "s2" });
+    const instances = flowToInstances(flow, elements);
     expect(instances.length).toBeGreaterThan(0);
-    // All instances should share the same x (single vertical segment).
     const xs = new Set(instances.map((r) => r.worldX));
     expect(xs.size).toBe(1);
   });
 
   it("Manhattan routing: horizontal-first (East then South for SE diagonal)", () => {
-    // from at (0,0) → to at (20,10): horizontal segment first (E), then vertical (S).
-    const instances = flowToInstances(
-      makeFlow(),
-      { x: 0, y: 0, width: 8, height: 4 }, // from
-      { x: 20, y: 10, width: 8, height: 4 }, // to (SE of from)
-    );
+    const elements: SDElement[] = [
+      makeStock({ id: "s1", x: 0, y: 0, width: 8, height: 4 }),
+      makeStock({ id: "s2", x: 20, y: 10, width: 8, height: 4 }),
+    ];
+    const flow = makeFlow({ fromId: "s1", toId: "s2" });
+    const instances = flowToInstances(flow, elements);
     expect(instances.length).toBeGreaterThan(0);
-    // Horizontal-first: the first segment runs east, the second south.
-    // Verify that for the horizontal segment, y is constant; for the vertical, x is constant.
-    // Simple structural check: there's at least one horizontal run and one vertical run.
     const byY = new Map<number, RenderInstance[]>();
     for (const r of instances) {
       const arr = byY.get(r.worldY) || [];
       arr.push(r);
       byY.set(r.worldY, arr);
     }
-    // At least 2 distinct y values (horizontal + vertical segments)
     expect(byY.size).toBeGreaterThanOrEqual(2);
   });
 
-  it("▶ arrowhead glyph at the endpoint (direction indicator)", () => {
-    // The flow should render a ▶ arrowhead at the to-end of the path.
-    const instances = flowToInstances(
-      makeFlow(),
-      { x: 0, y: 2, width: 10, height: 5 },
-      { x: 20, y: 2, width: 10, height: 5 },
+  it("▶ arrowhead glyph rendered (direction indicator)", () => {
+    const { elements, flow } = horizontalScene();
+    const instances = flowToInstances(flow, elements);
+    const arrow = instances.find((r) => r.glyphIdx === charToGlyphIdx("▶"));
+    expect(arrow).toBeDefined();
+  });
+
+  it("B1: arrow sits one cell short of the to-port (in the gap, not on the node edge)", () => {
+    // s2 W-port is at (20,3). Arrow must be at (19,3) — the gap cell — not on
+    // the to-port (20,3) where the target node's edge glyph would occlude it.
+    const { elements, flow } = horizontalScene();
+    const instances = flowToInstances(flow, elements);
+    const arrow = instances.find((r) => r.glyphIdx === charToGlyphIdx("▶"));
+    expect(arrow).toBeDefined();
+    expect(arrow!.worldX).toBe(19);
+    expect(arrow!.worldY).toBe(3);
+    const onPort = instances.filter(
+      (r) => r.glyphIdx === charToGlyphIdx("▶") && r.worldX === 20 && r.worldY === 3,
     );
-    // At least one instance near the "to" element's port.
-    const arrowInstances = instances.filter((r) => r.worldX >= 18 && r.worldX <= 22);
-    expect(arrowInstances.length).toBeGreaterThan(0);
+    expect(onPort.length).toBe(0);
+  });
+
+  it("AC-6 corner glyph ┌┐└┘ rendered at the turn cell (not ─)", () => {
+    // SE diagonal: turn cell at (tx, fy) = (20, 2); stepX=+1, stepY=+1 → ┐.
+    const elements: SDElement[] = [
+      makeStock({ id: "s1", x: 0, y: 0, width: 8, height: 4 }),
+      makeStock({ id: "s2", x: 20, y: 10, width: 8, height: 4 }),
+    ];
+    const flow = makeFlow({ fromId: "s1", toId: "s2" });
+    const instances = flowToInstances(flow, elements);
+    const corner = instances.find(
+      (r) => r.worldX === 20 && r.worldY === 2 && r.glyphIdx === charToGlyphIdx("┐"),
+    );
+    expect(corner).toBeDefined();
+  });
+
+  it("AC-6 corner glyph ┘ at turn cell (NE quadrant: stepX>0, stepY<0)", () => {
+    // s1 SE of s2 → dx>0, dy<0 → stepX=+1, stepY=-1 → ┘ at (tx, fy).
+    const elements: SDElement[] = [
+      makeStock({ id: "s1", x: 0, y: 10, width: 8, height: 4 }),
+      makeStock({ id: "s2", x: 20, y: 0, width: 8, height: 4 }),
+    ];
+    const flow = makeFlow({ fromId: "s1", toId: "s2" });
+    const instances = flowToInstances(flow, elements);
+    const corner = instances.find(
+      (r) => r.worldX === 20 && r.worldY === 12 && r.glyphIdx === charToGlyphIdx("┘"),
+    );
+    expect(corner).toBeDefined();
+  });
+
+  it("AC-6 corner glyph ┌ at turn cell (SW quadrant: stepX<0, stepY>0)", () => {
+    // s1 SW of s2 → dx<0, dy>0 → stepX=-1, stepY=+1 → ┌ at (tx, fy).
+    const elements: SDElement[] = [
+      makeStock({ id: "s1", x: 20, y: 0, width: 8, height: 4 }),
+      makeStock({ id: "s2", x: 0, y: 10, width: 8, height: 4 }),
+    ];
+    const flow = makeFlow({ fromId: "s1", toId: "s2" });
+    const instances = flowToInstances(flow, elements);
+    const corner = instances.find(
+      (r) => r.worldX === 7 && r.worldY === 2 && r.glyphIdx === charToGlyphIdx("┌"),
+    );
+    expect(corner).toBeDefined();
+  });
+
+  it("AC-6 corner glyph └ at turn cell (NW quadrant: stepX<0, stepY<0)", () => {
+    // s1 NW of s2 → dx<0, dy<0 → stepX=-1, stepY=-1 → └ at (tx, fy).
+    const elements: SDElement[] = [
+      makeStock({ id: "s1", x: 20, y: 10, width: 8, height: 4 }),
+      makeStock({ id: "s2", x: 0, y: 0, width: 8, height: 4 }),
+    ];
+    const flow = makeFlow({ fromId: "s1", toId: "s2" });
+    const instances = flowToInstances(flow, elements);
+    const corner = instances.find(
+      (r) => r.worldX === 7 && r.worldY === 12 && r.glyphIdx === charToGlyphIdx("└"),
+    );
+    expect(corner).toBeDefined();
+  });
+
+  it("nearestPort determinism: same inputs produce identical path output", () => {
+    // nearestPort tie-breaking depends on port-array order (N→S→E→W); verify
+    // that repeated calls with the same inputs return deep-equal results.
+    const elements: SDElement[] = [
+      makeStock({ id: "s1", x: 0, y: 0, width: 6, height: 6 }),
+      makeStock({ id: "s2", x: 12, y: 0, width: 6, height: 4 }),
+    ];
+    const flow = makeFlow({ fromId: "s1", toId: "s2" });
+    const a = flowToInstances(flow, elements);
+    const b = flowToInstances(flow, elements);
+    expect(a.length).toBeGreaterThan(0);
+    expect(a).toEqual(b);
   });
 
   it("selected flag propagates to all instances", () => {
-    const instances = flowToInstances(
-      makeFlow(),
-      { x: 0, y: 0, width: 8, height: 4 },
-      { x: 20, y: 0, width: 8, height: 4 },
-      true,
-    );
+    const { elements, flow } = horizontalScene();
+    const instances = flowToInstances(flow, elements, true);
     expect(instances.length).toBeGreaterThan(0);
     for (const r of instances) {
       expect(r.selected).toBe(true);
@@ -614,11 +681,8 @@ describe("flowToInstances — Manhattan orthogonal routing (AC-6/7/8)", () => {
   });
 
   it("unselected by default", () => {
-    const instances = flowToInstances(
-      makeFlow(),
-      { x: 0, y: 0, width: 8, height: 4 },
-      { x: 20, y: 0, width: 8, height: 4 },
-    );
+    const { elements, flow } = horizontalScene();
+    const instances = flowToInstances(flow, elements);
     for (const r of instances) {
       expect(r.selected).toBe(false);
     }
@@ -627,85 +691,93 @@ describe("flowToInstances — Manhattan orthogonal routing (AC-6/7/8)", () => {
   // AC-7: rotation mapping — Task 4.4 table
   // 0→E, π/2→S, π→W, -π/2→N (orthogonal directions only)
   it("AC-7: rotation maps to orthogonal direction per Task 4.4 table", () => {
-    // The pushChar function must accept a rotation parameter and set it on
-    // RenderInstance. The rotation→direction mapping:
-    //   0 → E (right, ▶ points east)
-    //   π/2 → S (down, ▶ points south)
-    //   π → W (left, ▶ points west)
-    //   -π/2 → N (up, ▶ points north)
-    // For flow glyphs, rotation determines arrowhead orientation.
-
-    const instances = flowToInstances(
-      makeFlow(),
-      { x: 0, y: 2, width: 10, height: 5 },
-      { x: 20, y: 2, width: 10, height: 5 },
-    );
-
-    // All instances must have a defined rotation field.
+    const { elements, flow } = horizontalScene();
+    const instances = flowToInstances(flow, elements);
     for (const r of instances) {
       expect(typeof r.rotation).toBe("number");
     }
-
-    // Horizontal rightward flow → arrowhead at the endpoint should have rotation ≈ 0 (E)
-    const rightEdgeInstances = instances.filter((r) => r.worldX > 15);
-    for (const r of rightEdgeInstances) {
-      // rotation is a multiple of π/2 (orthogonal)
-      expect(r.rotation % (Math.PI / 2)).toBeCloseTo(0, 5);
-    }
+    // Horizontal rightward flow → arrowhead rotation ≈ 0 (E).
+    const arrow = instances.find((r) => r.glyphIdx === charToGlyphIdx("▶"));
+    expect(arrow).toBeDefined();
+    expect(arrow!.rotation % (Math.PI / 2)).toBeCloseTo(0, 5);
   });
 
-  it("▼ marker glyph rendered at cloud connections", () => {
-    // Flow to/from cloud: a ▼ marker is rendered at the cloud port.
-    // We verify that the instances array includes glyphs — glyph-level
-    // verification (which ch is ▼) is harder without the glyph map, but
-    // structural assertions (non-empty, at cloud location) work.
-    const instances = flowToInstances(
-      makeFlow({ fromId: "c1" }),
-      { x: 0, y: 0, width: 6, height: 3 }, // cloud (fixed 6×3)
-      { x: 20, y: 0, width: 10, height: 5 }, // stock
+  it("F1: ▼ marker rendered for a variable flow (isVariable=true) at fromPort+firstDir", () => {
+    // s1 E-port (9,3); first segment is East → marker at (10,3).
+    const { elements, flow } = horizontalScene({ isVariable: true });
+    const instances = flowToInstances(flow, elements);
+    const marker = instances.find(
+      (r) => r.glyphIdx === charToGlyphIdx("▼") && r.worldX === 10 && r.worldY === 3,
     );
-    expect(instances.length).toBeGreaterThan(0);
+    expect(marker).toBeDefined();
+  });
+
+  it("F1: ○ marker rendered for a constant flow (isVariable=false)", () => {
+    const { elements, flow } = horizontalScene({ isVariable: false });
+    const instances = flowToInstances(flow, elements);
+    const marker = instances.find((r) => r.glyphIdx === charToGlyphIdx("○"));
+    expect(marker).toBeDefined();
+    const variable = instances.filter((r) => r.glyphIdx === charToGlyphIdx("▼"));
+    expect(variable.length).toBe(0);
+  });
+
+  it("F7: ▼ marker triggered by isVariable regardless of endpoint kind (cloud→stock)", () => {
+    const elements: SDElement[] = [
+      makeCloud({ id: "c1", x: 0, y: 0 }),
+      makeStock({ id: "s2", x: 20, y: 0, width: 10, height: 5 }),
+    ];
+    const flow = makeFlow({ fromId: "c1", toId: "s2", isVariable: true });
+    const instances = flowToInstances(flow, elements);
+    const marker = instances.find((r) => r.glyphIdx === charToGlyphIdx("▼"));
+    expect(marker).toBeDefined();
   });
 });
 
 // ---- AC-12c: dangling flow ref -------------------------------------------------
 
 describe("flowToInstances — AC-12c dangling ref guard", () => {
-  it("returns empty array when fromId endpoint element doesn't exist", () => {
-    // Option B (VS钉死决策): silent empty — don't throw, just render nothing.
-    const instances = flowToInstances(
-      makeFlow({ fromId: "nonexistent" }),
-      null, // from bounds = null (endpoint not found)
-      { x: 10, y: 0, width: 8, height: 4 },
-    );
-    expect(instances).toEqual([]);
+  beforeEach(() => {
+    warnedDanglingFlows.clear();
   });
 
-  it("returns empty array when toId endpoint element doesn't exist", () => {
-    const instances = flowToInstances(
-      makeFlow({ toId: "nonexistent" }),
-      { x: 0, y: 0, width: 8, height: 4 },
-      null, // to bounds = null (endpoint not found)
-    );
+  it("returns empty array + warns when fromId endpoint element doesn't exist", () => {
+    // Option B (VS钉死决策): silent empty + console.warn — don't throw.
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const elements: SDElement[] = [makeStock({ id: "s2", x: 20, y: 0, width: 10, height: 5 })];
+    const instances = flowToInstances(makeFlow({ fromId: "nonexistent", toId: "s2" }), elements);
     expect(instances).toEqual([]);
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("dangling"));
+    warnSpy.mockRestore();
   });
 
-  it("returns empty array when both endpoints are null", () => {
-    const instances = flowToInstances(makeFlow({ fromId: "gone1", toId: "gone2" }), null, null);
+  it("returns empty array + warns when toId endpoint element doesn't exist", () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const elements: SDElement[] = [makeStock({ id: "s1", x: 0, y: 0, width: 10, height: 5 })];
+    const instances = flowToInstances(makeFlow({ fromId: "s1", toId: "nonexistent" }), elements);
     expect(instances).toEqual([]);
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("dangling"));
+    warnSpy.mockRestore();
+  });
+
+  it("returns empty array when both endpoints are missing", () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const instances = flowToInstances(makeFlow({ fromId: "gone1", toId: "gone2" }), []);
+    expect(instances).toEqual([]);
+    expect(warnSpy).toHaveBeenCalled();
+    warnSpy.mockRestore();
   });
 
   it("dangling ref does NOT throw (graceful degradation, Option B)", () => {
-    expect(() =>
-      flowToInstances(makeFlow({ fromId: "ghost" }), null, { x: 0, y: 0, width: 8, height: 4 }),
-    ).not.toThrow();
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    expect(() => flowToInstances(makeFlow({ fromId: "ghost" }), [])).not.toThrow();
+    warnSpy.mockRestore();
   });
 });
 
 // ---- AC-9: getElementPorts ---------------------------------------------------
 
 describe("getElementPorts (AC-9)", () => {
-  it("returns 4 ports for a stock — N, E, S, W edge midpoints", () => {
+  it("returns 4 ports for a stock — N, E, S, W edge midpoints (inclusive bounds)", () => {
     const stock = makeStock({ x: 0, y: 0, width: 10, height: 6 });
     const ports = getElementPorts(stock);
     expect(ports.length).toBe(4);
@@ -713,20 +785,20 @@ describe("getElementPorts (AC-9)", () => {
     // N port: center-x of top edge
     const nPort = ports.find((p) => p.side === "N");
     expect(nPort).toBeDefined();
-    expect(nPort!.x).toBe(5); // x + width/2 = 0 + 5
+    expect(nPort!.x).toBe(5); // round(0 + 10/2) = 5
     expect(nPort!.y).toBe(0); // y (top edge)
 
-    // S port: center-x of bottom edge
+    // S port: center-x of bottom edge — inclusive (y + height - 1)
     const sPort = ports.find((p) => p.side === "S");
     expect(sPort).toBeDefined();
     expect(sPort!.x).toBe(5);
-    expect(sPort!.y).toBe(6); // y + height = 0 + 6
+    expect(sPort!.y).toBe(5); // 0 + 6 - 1 (inclusive bound)
 
-    // E port: center-y of right edge
+    // E port: center-y of right edge — inclusive (x + width - 1)
     const ePort = ports.find((p) => p.side === "E");
     expect(ePort).toBeDefined();
-    expect(ePort!.x).toBe(10); // x + width = 0 + 10
-    expect(ePort!.y).toBe(3); // y + height/2 = 0 + 3
+    expect(ePort!.x).toBe(9); // 0 + 10 - 1 (inclusive bound)
+    expect(ePort!.y).toBe(3); // round(0 + 6/2) = 3
 
     // W port: center-y of left edge
     const wPort = ports.find((p) => p.side === "W");
@@ -735,7 +807,7 @@ describe("getElementPorts (AC-9)", () => {
     expect(wPort!.y).toBe(3);
   });
 
-  it("returns 4 ports for a cloud (fixed 6×3 icon)", () => {
+  it("returns 4 ports for a cloud (fixed 6×3 icon, all integer cells)", () => {
     const cloud = makeCloud({ x: 10, y: 5 });
     const ports = getElementPorts(cloud);
     expect(ports.length).toBe(4);
@@ -745,28 +817,37 @@ describe("getElementPorts (AC-9)", () => {
       expect(p.elementId).toBe(cloud.id);
     }
 
-    // Cloud ports are at edge midpoints of the 6×3 bounding box.
+    // AC-9: cloud fixed 6×3 ports — N/S on row 0/2 at col+3, E/W on col 5/0
+    // at row+1. All integer (NOT the generic bounding-box center y+1.5).
     const nPort = ports.find((p) => p.side === "N");
     expect(nPort!.x).toBe(13); // 10 + 3
-    expect(nPort!.y).toBe(5);
+    expect(nPort!.y).toBe(5); // 5 + 0
+
+    const sPort = ports.find((p) => p.side === "S");
+    expect(sPort!.x).toBe(13); // 10 + 3
+    expect(sPort!.y).toBe(7); // 5 + 2
 
     const ePort = ports.find((p) => p.side === "E");
-    expect(ePort!.x).toBe(16); // 10 + 6
-    expect(ePort!.y).toBe(6.5); // 5 + 1.5
+    expect(ePort!.x).toBe(15); // 10 + 5
+    expect(ePort!.y).toBe(6); // 5 + 1
+
+    const wPort = ports.find((p) => p.side === "W");
+    expect(wPort!.x).toBe(10); // 10 + 0
+    expect(wPort!.y).toBe(6); // 5 + 1
   });
 
-  it("stock ports are at world-space midpoints (integer or half-integer)", () => {
-    // Odd-dimension stock: width=7, height=5 → center-x is 3.5, center-y is 2.5
+  it("stock ports are integer (Math.round applied to midpoints)", () => {
+    // Odd-dimension stock: width=7, height=5 → midpoint x=3.5, y=2.5 → rounded.
     const stock = makeStock({ x: 0, y: 0, width: 7, height: 5 });
     const ports = getElementPorts(stock);
 
     const nPort = ports.find((p) => p.side === "N")!;
-    expect(nPort.x).toBe(3.5);
+    expect(nPort.x).toBe(4); // round(3.5) = 4
     expect(nPort.y).toBe(0);
 
     const ePort = ports.find((p) => p.side === "E")!;
-    expect(ePort.x).toBe(7);
-    expect(ePort.y).toBe(2.5);
+    expect(ePort.x).toBe(6); // 0 + 7 - 1 (inclusive bound)
+    expect(ePort.y).toBe(3); // round(2.5) = 3
   });
 
   it("each port carries the element ID it belongs to", () => {
@@ -850,11 +931,11 @@ describe("findNearestPort (AC-10)", () => {
 
 describe("pushChar rotation (AC-8)", () => {
   it("flowToInstances sets rotation on all instances", () => {
-    const instances = flowToInstances(
-      makeFlow(),
-      { x: 0, y: 0, width: 8, height: 4 },
-      { x: 0, y: 20, width: 8, height: 4 },
-    );
+    const elements: SDElement[] = [
+      makeStock({ id: "s1", x: 0, y: 0, width: 8, height: 4 }),
+      makeStock({ id: "s2", x: 0, y: 20, width: 8, height: 4 }),
+    ];
+    const instances = flowToInstances(makeFlow({ fromId: "s1", toId: "s2" }), elements);
     expect(instances.length).toBeGreaterThan(0);
     for (const r of instances) {
       // rotation is a defined number (may be 0 for straight segments)
@@ -864,11 +945,11 @@ describe("pushChar rotation (AC-8)", () => {
   });
 
   it("rotation values are multiples of π/2 (orthogonal directions only)", () => {
-    const instances = flowToInstances(
-      makeFlow(),
-      { x: 0, y: 0, width: 8, height: 4 },
-      { x: 20, y: 10, width: 8, height: 4 },
-    );
+    const elements: SDElement[] = [
+      makeStock({ id: "s1", x: 0, y: 0, width: 8, height: 4 }),
+      makeStock({ id: "s2", x: 20, y: 10, width: 8, height: 4 }),
+    ];
+    const instances = flowToInstances(makeFlow({ fromId: "s1", toId: "s2" }), elements);
     for (const r of instances) {
       // Each rotation should be a multiple of π/2 (0, π/2, π, -π/2)
       const remainder = r.rotation % (Math.PI / 2);

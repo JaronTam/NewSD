@@ -59,6 +59,28 @@ async function createFlowAndWait(
   await page.waitForTimeout(100);
 }
 
+/** Rebuild the RenderInstance[] the renderer draws, straight from the live
+ *  store (dev-only __e2e__ hook). F6: lets the AC-17 gate assert specific
+ *  glyphs (▼/○ marker) reach the renderer, not just non-bg pixel growth. */
+async function builtInstances(page: import("@playwright/test").Page) {
+  return page.evaluate(() => {
+    const api = (window as any).__e2e__;
+    if (!api || typeof api.buildInstances !== "function")
+      throw new Error("__e2e__.buildInstances not found — dev hook missing?");
+    return api.buildInstances() as { glyphIdx: number }[];
+  });
+}
+
+/** Look up a char's glyph index in the baked atlas via the dev hook. */
+async function glyphIdxOf(page: import("@playwright/test").Page, ch: string): Promise<number> {
+  return page.evaluate((c) => {
+    const api = (window as any).__e2e__;
+    if (!api || typeof api.charToGlyphIdx !== "function")
+      throw new Error("__e2e__.charToGlyphIdx not found — dev hook missing?");
+    return api.charToGlyphIdx(c) as number;
+  }, ch);
+}
+
 test.describe("flow render (AC-17)", () => {
   test("canvas mounts both surface and WebGL2 overlay", async ({ page }) => {
     await page.goto("/");
@@ -128,7 +150,9 @@ test.describe("flow render (AC-17)", () => {
     // Create a variable flow (isVariable=true → ▼ marker).
     await createFlowAndWait(page, "Population", "GDP", true);
 
-    // Verify the canvas still renders after variable flow creation.
+    // Pixel sanity: the canvas still renders after variable flow creation.
+    // (Path + arrow alone satisfy this — the glyph assertion below is the real
+    // non-sham check that ▼ specifically reached the renderer.)
     const nonBg = await page.evaluate(() => {
       const canvas = document.querySelector("canvas.ns-canvas__gl") as HTMLCanvasElement | null;
       if (!canvas) return -1;
@@ -146,6 +170,35 @@ test.describe("flow render (AC-17)", () => {
       return n;
     });
     expect(nonBg).toBeGreaterThan(0);
+
+    // F6 (non-sham): the ▼ marker glyph must be present in the instances the
+    // renderer draws, and the ○ marker (isVariable=false variant) must NOT.
+    const [instances, downIdx, circleIdx] = await Promise.all([
+      builtInstances(page),
+      glyphIdxOf(page, "▼"),
+      glyphIdxOf(page, "○"),
+    ]);
+    expect(downIdx).toBeGreaterThanOrEqual(0); // ▼ is baked in the atlas
+    expect(instances.some((ri) => ri.glyphIdx === downIdx)).toBe(true);
+    expect(instances.some((ri) => ri.glyphIdx === circleIdx)).toBe(false);
+  });
+
+  test("AC-17: non-variable flow renders ○ marker (isVariable=false)", async ({ page }) => {
+    await page.goto("/");
+    await waitForRenderReady(page);
+
+    // Default isVariable=false → ○ marker (AC-7). Same stock pair as the ▼
+    // test above; only the isVariable flag differs, isolating the marker glyph.
+    await createFlowAndWait(page, "Population", "GDP", false);
+
+    const [instances, circleIdx, downIdx] = await Promise.all([
+      builtInstances(page),
+      glyphIdxOf(page, "○"),
+      glyphIdxOf(page, "▼"),
+    ]);
+    expect(circleIdx).toBeGreaterThanOrEqual(0); // ○ is baked in the atlas
+    expect(instances.some((ri) => ri.glyphIdx === circleIdx)).toBe(true);
+    expect(instances.some((ri) => ri.glyphIdx === downIdx)).toBe(false);
   });
 
   test("AC-17: parallel flows (E11) both render", async ({ page }) => {

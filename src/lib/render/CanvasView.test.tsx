@@ -763,9 +763,9 @@ describe("CanvasView — flow creation & port snap (AC-10, AC-11)", () => {
     // Activate flow tool via F key.
     fireEvent.keyDown(window, { code: "KeyF", key: "f" });
 
-    // The E port of from-stock is at world (10, 3). With zoom=16, screen = world * 16 + 0.5.
+    // The E port of from-stock is at world (9, 3) (AC-9: x+w-1, on-edge).
     // PointerDown near the port should snap and begin flow creation.
-    const ePortScreenX = 10 * 16 + 0.5; // 160.5
+    const ePortScreenX = 9 * 16 + 0.5; // 144.5
     const ePortScreenY = 3 * 16 + 0.5; // 48.5
 
     fireEvent.pointerDown(canvas, {
@@ -825,11 +825,11 @@ describe("CanvasView — flow creation & port snap (AC-10, AC-11)", () => {
 
     fireEvent.keyDown(window, { code: "KeyF", key: "f" });
 
-    // Start at E port.
+    // Start at E port (world (9, 3) → screen 144.5, 48.5).
     fireEvent.pointerDown(canvas, {
       button: 0,
       pointerId: 101,
-      clientX: 160.5,
+      clientX: 144.5,
       clientY: 48.5,
     });
 
@@ -877,11 +877,11 @@ describe("CanvasView — flow creation & port snap (AC-10, AC-11)", () => {
 
     fireEvent.keyDown(window, { code: "KeyF", key: "f" });
 
-    // PointerDown at E port of from-stock.
+    // PointerDown at E port of from-stock (world (9, 3) → screen 144.5, 48.5).
     fireEvent.pointerDown(canvas, {
       button: 0,
       pointerId: 102,
-      clientX: 160.5,
+      clientX: 144.5,
       clientY: 48.5,
     });
 
@@ -1027,8 +1027,8 @@ describe("CanvasView — status bar warnings (AC-14)", () => {
     ]);
 
     fireEvent.keyDown(window, { code: "KeyF", key: "f" });
-    // E port of ws1 at world (10, 3)
-    fireEvent.pointerDown(canvas, { button: 0, pointerId: 200, clientX: 160.5, clientY: 48.5 });
+    // E port of ws1 at world (9, 3) (AC-9: x+w-1)
+    fireEvent.pointerDown(canvas, { button: 0, pointerId: 200, clientX: 144.5, clientY: 48.5 });
     // W port of ws2 at world (20, 3)
     fireEvent.pointerMove(canvas, { pointerId: 200, clientX: 320.5, clientY: 48.5 });
     fireEvent.pointerUp(canvas, { pointerId: 200, clientX: 320.5, clientY: 48.5 });

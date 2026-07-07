@@ -195,6 +195,39 @@ export interface CreateFlowInput {
 }
 
 /**
+ * F3: detect non-blocking warnings for a flow about to be created from `input`
+ * against the existing `elements`. Returns a human-readable warning string, or
+ * null when the flow is clean. Pure (no store mutation) so it is unit-testable
+ * in isolation and callable from createFlow without extra coupling.
+ *
+ * - E11 parallel flows: another flow already connects the same ordered pair
+ *   (fromId→toId). Allowed (non-blocking), but flagged for the UI.
+ * - AC-15 duplicate names: another flow shares the proposed (or auto-generated)
+ *   name. Allowed (non-blocking), but flagged.
+ */
+export function flowCreateWarning(
+  elements: readonly SDElement[],
+  input: CreateFlowInput,
+): string | null {
+  const flows = elements.filter((e): e is Flow => e.kind === "flow");
+  const parallels = flows.filter((f) => f.fromId === input.fromId && f.toId === input.toId);
+  if (parallels.length > 0) {
+    const names = parallels.map((f) => f.name).join(", ");
+    return `Parallel flow(s) already exist (${names}): ${input.fromId}→${input.toId}`;
+  }
+  const flowNums = flows.map((f) => {
+    const m = f.name.match(/^Flow (\d+)$/);
+    return m ? parseInt(m[1], 10) : 0;
+  });
+  const nextFlowNum = Math.max(0, ...flowNums) + 1;
+  const name = input.name ?? `Flow ${nextFlowNum}`;
+  if (flows.some((f) => f.name === name)) {
+    return `Duplicate flow name: "${name}"`;
+  }
+  return null;
+}
+
+/**
  * Create a Flow element and append it to the store.
  *
  * Guard sequence (AC-12/AC-12b, throw form — preserves Flow return type):
@@ -202,12 +235,20 @@ export interface CreateFlowInput {
  *    (rejects nonexistent ids and Flow→Flow connections)
  * ② Self-loop guard — fromId === toId → reject
  *
- * E11 (parallel flows) and AC-15 (duplicate names) are allowed (non-blocking).
+ * E11 (parallel flows) and AC-15 (duplicate names) are allowed (non-blocking);
+ * when `onWarn` is supplied it is invoked with a warning string (or null when
+ * the flow is clean) after the flow is appended. Throwing guards do NOT call
+ * onWarn (the flow was not created).
  *
  * @throws {Error} "Invalid flow endpoint" if endpoints are invalid.
  * @throws {Error} "Self-loop not allowed" if fromId === toId.
+ * @param onWarn Optional sink for non-blocking E11/AC-15 warnings.
  */
-export function createFlow(store: ElementStore, input: CreateFlowInput): Flow {
+export function createFlow(
+  store: ElementStore,
+  input: CreateFlowInput,
+  onWarn?: (msg: string | null) => void,
+): Flow {
   const elements = [...store.getElements()];
 
   // ① Endpoint validity (AC-12b)
@@ -226,10 +267,19 @@ export function createFlow(store: ElementStore, input: CreateFlowInput): Flow {
   // Derive units from target stock + formula time annotation
   const units = deriveFlowUnits(input.formula, input.toId, elements);
 
+  // Auto-name: use max existing Flow-N + 1 (not length+1, which can collide after deletions).
+  const flowNums = elements
+    .filter((e) => e.kind === "flow")
+    .map((f) => {
+      const m = f.name.match(/^Flow (\d+)$/);
+      return m ? parseInt(m[1], 10) : 0;
+    });
+  const nextFlowNum = Math.max(0, ...flowNums) + 1;
+
   const flow: Flow = {
     id: crypto.randomUUID(),
     kind: "flow",
-    name: input.name ?? `Flow ${elements.filter((e) => e.kind === "flow").length + 1}`,
+    name: input.name ?? `Flow ${nextFlowNum}`,
     fromId: input.fromId,
     toId: input.toId,
     formula: input.formula,
@@ -239,5 +289,9 @@ export function createFlow(store: ElementStore, input: CreateFlowInput): Flow {
   };
 
   store.setElements([...elements, flow]);
+
+  // F3: non-blocking E11/AC-15 warnings (computed against the pre-add state).
+  if (onWarn) onWarn(flowCreateWarning(elements, input));
+
   return flow;
 }
