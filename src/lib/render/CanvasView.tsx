@@ -170,9 +170,19 @@ function distance(a: { x: number; y: number }, b: { x: number; y: number }): num
 const elementStore = createElementStore();
 export { elementStore };
 
-// e2e test hook — expose store + createFlow on window for Playwright (dev only)
+// e2e test hook — expose store + createFlow on window for Playwright (dev only).
+// F6: also expose buildInstances (rebuilds the RenderInstance[] the renderer
+// draws, straight from the live store) and charToGlyphIdx, so the AC-17 visual
+// gate can assert specific glyphs (▼/○ marker, ┌┐└┘ corner) actually reach the
+// renderer — not just non-bg pixel growth, which path+arrow satisfy regardless
+// of the marker. buildInstances reflects whatever createFlow just wrote.
 if (typeof window !== "undefined" && import.meta.env.DEV) {
-  (window as any).__e2e__ = { elementStore, createFlow };
+  (window as any).__e2e__ = {
+    elementStore,
+    createFlow,
+    buildInstances: () => buildInstancesFromStore(null),
+    charToGlyphIdx,
+  };
 }
 
 // Seed sample stocks for development / first screen (replaces the old
@@ -221,11 +231,7 @@ function buildInstancesFromStore(selectedId: string | null): RenderInstance[] {
     if (el.kind !== "flow") continue;
     const flow = el as Flow;
     const selected = el.id === selectedId;
-    const fromEl = elements.find((e) => e.id === flow.fromId);
-    const toEl = elements.find((e) => e.id === flow.toId);
-    const fromBounds = fromEl ? getElementBounds(fromEl) : null;
-    const toBounds = toEl ? getElementBounds(toEl) : null;
-    const instances = flowToInstances(flow, fromBounds, toBounds, selected);
+    const instances = flowToInstances(flow, elements, selected);
     for (const ri of instances) out.push(ri);
   }
 
@@ -928,13 +934,18 @@ export function CanvasView() {
       if (port && port.elementId !== fp.elementId) {
         // Valid target port found — create flow.
         try {
-          createFlow(elementStore, {
-            fromId: fp.elementId,
-            toId: port.elementId,
-            formula: "1",
-            isVariable: false,
-          });
-          warnRef.current = "";
+          createFlow(
+            elementStore,
+            {
+              fromId: fp.elementId,
+              toId: port.elementId,
+              formula: "1",
+              isVariable: false,
+            },
+            (msg) => {
+              warnRef.current = msg ?? "";
+            },
+          );
         } catch (err: unknown) {
           warnRef.current = err instanceof Error ? err.message : "Flow creation failed";
         }
