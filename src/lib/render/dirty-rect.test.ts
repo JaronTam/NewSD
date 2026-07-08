@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { DirtyRectTracker, rectsIntersect } from "./dirty-rect";
 import type { WorldRect } from "./camera";
 
@@ -141,6 +141,117 @@ describe("DirtyRectTracker", () => {
       t.markDirty(rect(0, 0, 0, 0));
       const result = t.queryLowPrecision(10);
       expect(result).toEqual([]);
+    });
+  });
+
+  // ---- H8/E2 hardening (AC-7, Story 1a.6) -------------------------------
+
+  describe("markDirty input validation (H8/E2 hardening)", () => {
+    it("skips rect with NaN minX and warns", () => {
+      const t = new DirtyRectTracker();
+      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+      t.markDirty(rect(NaN, 0, 10, 10));
+      expect(t.hasDirty()).toBe(false);
+      expect(warnSpy).toHaveBeenCalledTimes(1);
+      warnSpy.mockRestore();
+    });
+
+    it("skips rect with NaN maxX and warns", () => {
+      const t = new DirtyRectTracker();
+      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+      t.markDirty(rect(0, 0, NaN, 10));
+      expect(t.hasDirty()).toBe(false);
+      expect(warnSpy).toHaveBeenCalledTimes(1);
+      warnSpy.mockRestore();
+    });
+
+    it("skips rect with +Infinity and warns", () => {
+      const t = new DirtyRectTracker();
+      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+      t.markDirty(rect(0, 0, Infinity, 10));
+      expect(t.hasDirty()).toBe(false);
+      expect(warnSpy).toHaveBeenCalledTimes(1);
+      warnSpy.mockRestore();
+    });
+
+    it("skips rect with -Infinity and warns", () => {
+      const t = new DirtyRectTracker();
+      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+      t.markDirty(rect(-Infinity, 0, 10, 10));
+      expect(t.hasDirty()).toBe(false);
+      expect(warnSpy).toHaveBeenCalledTimes(1);
+      warnSpy.mockRestore();
+    });
+
+    it("accepts rect with -0 (negative zero is finite)", () => {
+      const t = new DirtyRectTracker();
+      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+      t.markDirty(rect(-0, -0, 10, 10));
+      expect(t.hasDirty()).toBe(true);
+      expect(warnSpy).not.toHaveBeenCalled();
+      warnSpy.mockRestore();
+    });
+
+    it("mixed finite+NaN: finite rects still recorded, NaN skipped with warn", () => {
+      const t = new DirtyRectTracker();
+      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+      t.markDirty(rect(0, 0, 10, 10)); // valid
+      t.markDirty(rect(NaN, 0, 10, 10)); // skipped
+      t.markDirty(rect(20, 20, 30, 30)); // valid
+      expect(t.hasDirty()).toBe(true);
+      const { rects } = t.consume();
+      expect(rects).toHaveLength(2);
+      expect(rects[0]).toEqual(rect(0, 0, 10, 10));
+      expect(rects[1]).toEqual(rect(20, 20, 30, 30));
+      expect(warnSpy).toHaveBeenCalledTimes(1);
+      warnSpy.mockRestore();
+    });
+
+    it("skips rect where any single field is non-finite", () => {
+      const t = new DirtyRectTracker();
+      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+      t.markDirty(rect(0, 0, 10, NaN)); // only maxY is NaN
+      expect(t.hasDirty()).toBe(false);
+      expect(warnSpy).toHaveBeenCalledTimes(1);
+      warnSpy.mockRestore();
+    });
+  });
+
+  describe("queryLowPrecision defensive skip (H8/E2 hardening)", () => {
+    it("filters out non-finite rects that bypassed markDirty guard", () => {
+      const t = new DirtyRectTracker();
+      // Directly push a non-finite rect into internal state (simulating
+      // a bypass of the markDirty guard, e.g. from external manipulation).
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (t as any).rects = [
+        rect(0, 0, 10, 10), // valid
+        rect(NaN, 0, 10, 10), // non-finite → skip
+        rect(20, 20, Infinity, 30), // non-finite → skip
+        rect(40, 40, 50, 50), // valid
+      ];
+      const result = t.queryLowPrecision(10);
+      // Only the two valid rects should survive.
+      expect(result).toHaveLength(2);
+    });
+
+    it("returns [] when all rects are non-finite", () => {
+      const t = new DirtyRectTracker();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (t as any).rects = [rect(NaN, NaN, NaN, NaN), rect(Infinity, -Infinity, Infinity, -Infinity)];
+      const result = t.queryLowPrecision(10);
+      expect(result).toEqual([]);
+    });
+
+    it("non-finite filter preserves dedup behavior for valid rects", () => {
+      const t = new DirtyRectTracker();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (t as any).rects = [
+        rect(1, 1, 4, 4),
+        rect(NaN, 0, 10, 10), // skipped
+        rect(6, 6, 9, 9), // snaps to same cell as first
+      ];
+      const result = t.queryLowPrecision(10);
+      expect(result).toHaveLength(1);
     });
   });
 });

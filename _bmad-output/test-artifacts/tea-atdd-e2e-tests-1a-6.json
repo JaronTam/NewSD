@@ -1,0 +1,10 @@
+{
+  "storyKey": "1a-6-minimap",
+  "storyId": "1a.6",
+  "testType": "e2e",
+  "tddPhase": "RED",
+  "generatedAt": "2026-07-08T18:05:08Z",
+  "testFiles": ["e2e/minimap.spec.ts"],
+  "scenarioCount": 7,
+  "allSkipped": true
+}

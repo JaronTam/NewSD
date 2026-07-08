@@ -222,4 +222,20 @@
     outline: 1px solid var(--ns-stock);
     outline-offset: 1px;
   }
+
+  /* Story 1a.6: minimap 2D canvas overlay (AC-1). Positioned bottom-right above
+     zoom controls. Own pointer events for jump interaction (T4). Non-VRAM path —
+     no shadowBlur risk (CAP-11). */
+  .ns-canvas__minimap {
+    position: absolute;
+    right: 0.6rem;
+    bottom: 3.2rem;
+    width: 200px;
+    height: 150px;
+    border: 1px solid var(--ns-border);
+    background: rgba(0, 0, 0, 0.75);
+    z-index: 1;
+    display: block;
+    cursor: crosshair;
+  }
 }

@@ -1,0 +1,37 @@
+{
+  "storyKey": "1a-6-minimap",
+  "storyId": "1a.6",
+  "tddPhase": "RED",
+  "generatedAt": "2026-07-09T02:05:00Z",
+  "summary": {
+    "total_tests": 7,
+    "api_tests": 0,
+    "e2e_tests": 7,
+    "component_tests": 0,
+    "unit_tests_planned": 27,
+    "all_tests_skipped": true,
+    "expected_to_fail": true,
+    "fixtures_created": 0,
+    "acceptance_criteria_covered": ["AC-9"],
+    "subagent_execution": "SUBAGENT (API + E2E)",
+    "performance_gain": "~50% faster than sequential"
+  },
+  "generatedFiles": {
+    "e2e": ["e2e/minimap.spec.ts"],
+    "api": [],
+    "component": []
+  },
+  "pendingForDS": {
+    "unit": [
+      "src/lib/render/dirty-rect.test.ts (modify)",
+      "src/lib/render/minimap.test.ts (create)"
+    ],
+    "component": ["src/lib/render/CanvasView.test.tsx (modify)"]
+  },
+  "redPhaseValidation": {
+    "allSkipped": true,
+    "noPlaceholderAssertions": true,
+    "assertsExpectedBehavior": true,
+    "apiNoEndpointCorrect": true
+  }
+}

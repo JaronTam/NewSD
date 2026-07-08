@@ -1,0 +1,10 @@
+{
+  "storyKey": "1a-6-minimap",
+  "storyId": "1a.6",
+  "testType": "api",
+  "tddPhase": "RED",
+  "generatedAt": "2026-07-09T00:00:00.000Z",
+  "endpointsFound": 0,
+  "testFiles": [],
+  "summary": "No API endpoints for this frontend-only minimap story. All logic is pure 2D canvas rendering with in-memory ElementStore — no REST/GraphQL/network requests."
+}

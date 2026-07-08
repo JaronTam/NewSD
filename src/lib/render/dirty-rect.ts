@@ -16,8 +16,19 @@ export class DirtyRectTracker {
   private rects: WorldRect[] = [];
   private dirtyIds = new Set<string>();
 
-  /** Record a world-space rect that needs redraw. */
+  /** Record a world-space rect that needs redraw.
+   *  H8/E2 hardening (Story 1a.6 AC-7): non-finite rect fields are
+   *  rejected with a console.warn to prevent NaN grid-key pollution. */
   markDirty(rect: WorldRect, elementId?: string): void {
+    if (
+      !Number.isFinite(rect.minX) ||
+      !Number.isFinite(rect.maxX) ||
+      !Number.isFinite(rect.minY) ||
+      !Number.isFinite(rect.maxY)
+    ) {
+      console.warn("[DirtyRectTracker] markDirty skipped non-finite rect:", rect);
+      return;
+    }
     this.rects.push(rect);
     if (elementId) this.dirtyIds.add(elementId);
   }
@@ -54,6 +65,16 @@ export class DirtyRectTracker {
 
     const grid = new Map<string, WorldRect>();
     for (const r of this.rects) {
+      // H8/E2 hardening (Story 1a.6 AC-7): defensive skip for non-finite
+      // rects that may have bypassed the markDirty guard.
+      if (
+        !Number.isFinite(r.minX) ||
+        !Number.isFinite(r.maxX) ||
+        !Number.isFinite(r.minY) ||
+        !Number.isFinite(r.maxY)
+      ) {
+        continue;
+      }
       const gx0 = Math.floor(r.minX / step) * step;
       const gy0 = Math.floor(r.minY / step) * step;
       const gx1 = Math.ceil(r.maxX / step) * step;
