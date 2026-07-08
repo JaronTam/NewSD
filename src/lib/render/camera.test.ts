@@ -9,6 +9,7 @@ import {
   screenToWorld,
   shouldSnap,
   snapToGrid,
+  viewportToWorldRect,
   worldToScreen,
   worldToScreenAffine,
   zoomAt,
@@ -253,5 +254,55 @@ describe("shouldSnap", () => {
     expect(shouldSnap(12, 1, 5, 8)).toBe(true); // distance from 12 to 10 = 2 ≤ 8
     expect(shouldSnap(12, 1, 5, 4)).toBe(true); // distance = 2 ≤ 4
     expect(shouldSnap(12, 1, 5, 1)).toBe(false); // distance = 2 > 1
+  });
+});
+
+describe("viewportToWorldRect", () => {
+  it("returns the four-corners bbox at zoom=1 centered at origin", () => {
+    const rect = viewportToWorldRect(ORIGIN, VP);
+    // VP = 1000x600, center at (0,0), zoom=1
+    expect(rect.minX).toBeCloseTo(-500, 5);
+    expect(rect.maxX).toBeCloseTo(500, 5);
+    expect(rect.minY).toBeCloseTo(-300, 5);
+    expect(rect.maxY).toBeCloseTo(300, 5);
+  });
+
+  it("pans with the camera", () => {
+    const cam: Camera = { x: 100, y: 50, zoom: 1 };
+    const rect = viewportToWorldRect(cam, VP);
+    expect(rect.minX).toBeCloseTo(-400, 5); // -500 + 100
+    expect(rect.maxX).toBeCloseTo(600, 5); // 500 + 100
+    expect(rect.minY).toBeCloseTo(-250, 5);
+    expect(rect.maxY).toBeCloseTo(350, 5);
+  });
+
+  it("zooms the visible area", () => {
+    const cam: Camera = { x: 0, y: 0, zoom: 2 };
+    const rect = viewportToWorldRect(cam, VP);
+    // At zoom=2, half viewport = 250 / 150
+    expect(rect.minX).toBeCloseTo(-250, 5);
+    expect(rect.maxX).toBeCloseTo(250, 5);
+    expect(rect.minY).toBeCloseTo(-150, 5);
+    expect(rect.maxY).toBeCloseTo(150, 5);
+  });
+
+  it("combines pan + zoom correctly", () => {
+    const cam: Camera = { x: 50, y: 30, zoom: 0.5 };
+    const rect = viewportToWorldRect(cam, VP);
+    // At zoom=0.5, vp in world = 2000 x 1200
+    expect(rect.minX).toBeCloseTo(50 - 1000, 5);
+    expect(rect.maxX).toBeCloseTo(50 + 1000, 5);
+    expect(rect.minY).toBeCloseTo(30 - 600, 5);
+    expect(rect.maxY).toBeCloseTo(30 + 600, 5);
+  });
+
+  it("handles non-square viewports", () => {
+    const vp: Viewport = { width: 300, height: 800 };
+    const cam: Camera = { x: 0, y: 0, zoom: 1 };
+    const rect = viewportToWorldRect(cam, vp);
+    expect(rect.minX).toBeCloseTo(-150, 5);
+    expect(rect.maxX).toBeCloseTo(150, 5);
+    expect(rect.minY).toBeCloseTo(-400, 5);
+    expect(rect.maxY).toBeCloseTo(400, 5);
   });
 });

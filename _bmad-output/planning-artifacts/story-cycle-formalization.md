@@ -37,6 +37,7 @@
 - story 文件含完整 AC (Given/When/Then, 覆盖 epic 全部 AC + fold 的 findings)
 - 任务拆解到可执行子任务
 - 技术约束 (AD/CAP) 显式引用
+- web research 显式记录 (step4: 有新 lib/API→记 version+why+breaking change; 无新依赖→explicit no-op 引用基座 story version 锁; 禁静默 skip — 1a.4 教训:静默 skip 致事后审计无法区分"无新依赖"与"该查未查")
 - 测试标准 (TDD red-green)
 - 依赖 (前置 story/AD) 标注
 - ZERO USER INTERVENTION (除初始选择)
@@ -46,7 +47,7 @@
 **流程**:
 
 - reviewer 检查 story 文件质量
-- gate: 零歧义 (AC 无多种解读) + 零遗漏 (epic AC 全覆盖) + 可执行 (dev 能直接做)
+- gate: 零歧义 (AC 无多种解读) + 零遗漏 (epic AC 全覆盖) + 可执行 (dev 能直接做) + web research 显式记录 (step4 no-op 也算, 禁静默 skip — VS 门控拦截 CS step4 缺失, 不留到事后审计)
 - pass → 进入 DS; fail → 回 CS 修订
 
 **artifacts**:
@@ -99,14 +100,14 @@
    - Acceptance Auditor: AC 覆盖
 3. 汇总 findings
 4. fix (dev) 或 accept (reviewer)
-5. sprint-status → done
+5. sprint-status -> done (独立 chore PR, 合后推) + story 文件 Status -> done (随 story PR 提交, CR pass 时改 - 1a.4 偏离#5 修正: 禁留 review)
 
 **artifacts**:
 
 - 输入: 实现 (review 状态)
 - 输出: CR 报告 + 修订 (若需)
 
-**gate**: CR pass → done; fail → 回 DS 修订
+**gate**: CR pass -> done (须双写: sprint-status->done + story 文件 Status->done; 1a.4 偏离#5 教训: story 文件 Status 禁留 review); fail -> 回 DS 修订
 
 ## 3. sprint-status 状态机
 
@@ -145,6 +146,7 @@ VS 在 `.claude/skills/` 无独立 skill, 引用 dev-story step1 的 `*validate-
   - 任务可执行 (子任务粒度 dev 能直接做)
   - 约束引用 (AD/CAP 显式)
   - 测试标准 (TDD red-green)
+  - web research 显式记录 (step4: 有新依赖记 version+why+breaking; 无新依赖记 no-op 引用基座 version 锁; 禁静默 skip)
   - 依赖标注 (前置 story/AD)
 - **gate**: 零歧义 + 零遗漏 + 可执行
 

@@ -36,3 +36,21 @@ Generated from code reviews. Each entry records work deferred beyond the current
 | H5  | Marker overwrites visible first path cell → 1-cell visual gap                | TBD             | By-design per AC-7 spec (marker at fromPort+dir×1); defer unless user reports issue      |
 | H9  | `onWarn` called after `store.setElements` — pre-add snapshot vs post-add gap | TBD             | Timing hardening; warnRef is a React ref (not state) → zero observable impact            |
 | H11 | B1 fallback arrow occlusion for adjacent nodes (documented known limitation) | TBD (post-1a.8) | Adjacent-node arrow on target edge glyph; z-order fix would require architectural change |
+
+---
+
+## From Story 1a.5 CR (Run 1, 2026-07-08)
+
+CR verdict FAIL -> 回 DS 续修 must+should(H1/H2/H3/H4/H6 + 2 回归测试)。LOW/Edge defer 项(见 story 文件 `Senior Developer Review (AI)` section):
+
+| ID  | Item                                                                                                  | Target Story | Rationale                                                                              |
+| --- | ----------------------------------------------------------------------------------------------------- | ------------ | -------------------------------------------------------------------------------------- |
+| H5  | dirty subscription `bboxOf` 双侧用 nextElements -> flow 端点移动不 markDirty (CanvasView.tsx:594-599) | TBD          | LOW;Branch2 全 visible rebuild 覆盖,不致 omission;dirty 优化仅影响 Branch2 redraw 范围 |
+| H7  | `viewportToWorldRect` 无 zoom=0 guard (camera.ts)                                                     | TBD          | LOW;clampCamera 上游 clamp [MIN_ZOOM,MAX_ZOOM] 守卫,defense-in-depth nice-to-have      |
+| H8  | `queryLowPrecision` NaN/Infinity 未守卫 (dirty-rect.ts:51-52/62)                                      | 1a.6         | LOW;1a.6 消费前修;viewportToWorldRect 在 WORLD_CLAMP=1e15 内不产 NaN                   |
+| H9  | `consume()` 返 `{rects, elementIds}` 非 AC-3 spec 措辞 `rect[]` (dirty-rect.ts:31)                    | TBD          | LOW;AC-3 spec 措辞 vs 实现双字段,消费侧 CanvasView 已适配 elementIds                   |
+| E1  | sync update 路径 `tree.insert` 无 degenerate skip (spatial-index.ts:142)                              | TBD          | Edge;flow 端点存在时非 degenerate;insert() L79 有 skip,sync update 路径漏              |
+| E2  | `queryLowPrecision` NaN pass (dirty-rect.ts:51)                                                       | 1a.6         | Edge;同 H8                                                                             |
+| E3  | dispose-stale (spatial-index.ts:152-157)                                                              | -            | **非 bug**(dispose 清 elementMap+tree + storeUnsub 正确)                               |
+| E4  | `markDirty` 无 rect 校验 (dirty-rect.ts:21)                                                           | TBD          | Edge;调用侧传 getElementBounds 合法 rect                                               |
+| E5  | (见 CR Run 1 Layer-2 报告)                                                                            | TBD          | Edge                                                                                   |
