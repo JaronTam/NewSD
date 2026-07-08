@@ -1,7 +1,8 @@
 import { render, fireEvent, waitFor, cleanup } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { CanvasView } from "./CanvasView";
+import { CanvasView, computeCameraChanged } from "./CanvasView";
+import type { Camera } from "./camera";
 import { getElementBounds } from "./elements";
 
 // Integration smoke for FR-CANVAS-1: the camera math (panBy/zoomAt/clamp) is
@@ -220,7 +221,7 @@ describe("CanvasView — VRAM overlay + WebGL2 graceful degrade (1a.2 sub-PR #2)
 
 // ---- Story 1a.3 Task 7: element interaction (AC-7) --------------------------
 
-import { elementStore } from "./CanvasView";
+import { elementStore, dirtyTracker } from "./CanvasView";
 
 describe("CanvasView — element interaction (Story 1a.3 Task 7)", () => {
   afterEach(() => {
@@ -1039,5 +1040,240 @@ describe("CanvasView — status bar warnings (AC-14)", () => {
 
     const warn = container.querySelector(".ns-canvas__warn") as HTMLElement;
     expect(warn.style.display).toBe("none");
+  });
+});
+
+// ---- Story 1a.5 Task 3: dirty rect tracking (AC-3, AC-5) -------------------
+
+describe("CanvasView — dirty rect tracking (Story 1a.5 AC-3, AC-5)", () => {
+  beforeEach(() => {
+    dirtyTracker.clear();
+  });
+
+  afterEach(() => {
+    cleanup();
+    elementStore.setElements([]);
+    dirtyTracker.clear();
+  });
+
+  it("AC-3: dirtyTracker is clean after initial render", async () => {
+    await renderReady();
+    // After first frame the camera branch fires (prevCam=null → cameraChanged),
+    // but draw early-returns in jsdom (no 2D ctx), so dirty stays empty.
+    expect(dirtyTracker.hasDirty()).toBe(false);
+  });
+
+  it("AC-3: adding an element marks its bbox dirty via store subscription", async () => {
+    await renderReady();
+    dirtyTracker.clear();
+
+    // Add a new stock — subscription fires, diffs prev→next, marks dirty.
+    elementStore.createStock({
+      name: "NewStock",
+      x: 50,
+      y: 50,
+      width: 10,
+      height: 5,
+      initialValue: 1,
+      units: "",
+      allowNegative: false,
+    });
+
+    // jsdom: draw early-returns (no ctx), so dirty is NOT consumed.
+    expect(dirtyTracker.hasDirty()).toBe(true);
+
+    const { rects, elementIds } = dirtyTracker.consume();
+    expect(rects.length).toBe(1);
+    // The rect should cover the stock's bbox (50,50)-(60,55).
+    expect(rects[0].minX).toBe(50);
+    expect(rects[0].minY).toBe(50);
+    expect(rects[0].maxX).toBe(60);
+    expect(rects[0].maxY).toBe(55);
+    expect(elementIds.size).toBe(1);
+  });
+
+  it("AC-3: moving an element marks both old and new bbox", async () => {
+    await renderReady();
+    dirtyTracker.clear();
+
+    const elements = elementStore.getElements();
+    const stock = elements.find((e) => e.kind === "stock");
+    expect(stock).toBeDefined();
+
+    // Move the stock to a new position.
+    elementStore.updateElement(stock!.id, { x: 100, y: 100 } as any);
+
+    expect(dirtyTracker.hasDirty()).toBe(true);
+
+    const { rects, elementIds } = dirtyTracker.consume();
+    // Should have 2 rects: old bbox + new bbox.
+    expect(rects.length).toBe(2);
+    expect(elementIds.has(stock!.id)).toBe(true);
+  });
+
+  it("AC-3: removing an element marks its bbox dirty", async () => {
+    await renderReady();
+    dirtyTracker.clear();
+
+    const elements = elementStore.getElements();
+    const first = elements[0];
+    expect(first).toBeDefined();
+
+    elementStore.deleteElement(first.id);
+
+    expect(dirtyTracker.hasDirty()).toBe(true);
+
+    const { rects, elementIds } = dirtyTracker.consume();
+    expect(rects.length).toBe(1);
+    expect(elementIds.has(first.id)).toBe(true);
+  });
+
+  it("AC-3: camera pan moves the camera (HUD reflects change)", async () => {
+    const { container } = await renderReady();
+    const canvas = container.querySelector("canvas")!;
+    const before = hudText(container);
+
+    // Pan via Space + left drag.
+    fireEvent.keyDown(window, { code: "Space" });
+    fireEvent.pointerDown(canvas, {
+      button: 0,
+      pointerId: 20,
+      clientX: 100,
+      clientY: 50,
+    });
+    fireEvent.pointerMove(canvas, {
+      pointerId: 20,
+      clientX: 300,
+      clientY: 50,
+    });
+    fireEvent.pointerUp(canvas, { pointerId: 20, clientX: 300, clientY: 50 });
+    fireEvent.keyUp(window, { code: "Space" });
+
+    const after = hudText(container);
+    // Pan moves camera → world coords in HUD should change.
+    expect(after).not.toBe(before);
+  });
+
+  it("AC-3: dirty rects accumulate across multiple operations (jsdom no-consume)", async () => {
+    await renderReady();
+    dirtyTracker.clear();
+
+    // Add two stocks — each triggers a subscription diff → markDirty.
+    elementStore.createStock({
+      name: "A",
+      x: 0,
+      y: 0,
+      width: 5,
+      height: 3,
+      initialValue: 1,
+      units: "",
+      allowNegative: false,
+    });
+    elementStore.createStock({
+      name: "B",
+      x: 30,
+      y: 30,
+      width: 5,
+      height: 3,
+      initialValue: 1,
+      units: "",
+      allowNegative: false,
+    });
+
+    const { rects } = dirtyTracker.consume();
+    // Two separate adds → 2 dirty rects.
+    expect(rects.length).toBe(2);
+  });
+
+  it("AC-5: queryLowPrecision returns coarse rects for dirty elements", async () => {
+    await renderReady();
+    dirtyTracker.clear();
+
+    elementStore.createStock({
+      name: "Q",
+      x: 12,
+      y: 18,
+      width: 7,
+      height: 4,
+      initialValue: 1,
+      units: "",
+      allowNegative: false,
+    });
+
+    // queryLowPrecision should be non-draining (AC-5 contract for 1a.6 minimap).
+    expect(dirtyTracker.hasDirty()).toBe(true);
+    const coarse = dirtyTracker.queryLowPrecision(10);
+    // Stock bbox (12,18)-(19,22), snapped outward to step=10:
+    // minX = floor(12/10)*10 = 10, maxX = ceil(19/10)*10 = 20
+    // minY = floor(18/10)*10 = 10, maxY = ceil(22/10)*10 = 30
+    expect(coarse.length).toBe(1);
+    expect(coarse[0]).toEqual({ minX: 10, minY: 10, maxX: 20, maxY: 30 });
+
+    // queryLowPrecision is non-draining — dirty still present after query.
+    expect(dirtyTracker.hasDirty()).toBe(true);
+  });
+
+  it("AC-3: dirtyTracker correctly drains after consume", async () => {
+    await renderReady();
+    dirtyTracker.clear();
+
+    elementStore.createStock({
+      name: "Drain",
+      x: 0,
+      y: 0,
+      width: 10,
+      height: 5,
+      initialValue: 1,
+      units: "",
+      allowNegative: false,
+    });
+
+    expect(dirtyTracker.hasDirty()).toBe(true);
+    dirtyTracker.consume();
+    expect(dirtyTracker.hasDirty()).toBe(false);
+  });
+});
+
+// ---- Story 1a.5 CR H1: resize-as-camera-change (Branch-1 trigger) ---------
+//
+// jsdom has no WebGL2 (rendererRef stays null), so renderer.render() is a
+// no-op and cannot be spied directly. Instead we lock the Branch-1 trigger
+// condition: a viewport resize must count as a camera change so the gl
+// backing-store redraws in lockstep with the 2D surface (AC-3/AC-8). The full
+// resize -> gl redraw path is verified via the Playwright visual gate.
+describe("CanvasView - resize-as-camera-change (CR H1, AC-3/AC-8)", () => {
+  const cam = { x: 0, y: 0, zoom: 16 } as Camera;
+  const vp = { width: 800, height: 600 };
+
+  it("first frame (prevCam=null) is a camera change", () => {
+    expect(computeCameraChanged(null, null, cam, vp)).toBe(true);
+  });
+
+  it("unchanged camera + viewport is NOT a camera change", () => {
+    expect(computeCameraChanged(cam, vp, cam, vp)).toBe(false);
+  });
+
+  it("camera.x change is a camera change", () => {
+    expect(computeCameraChanged(cam, vp, { ...cam, x: 5 }, vp)).toBe(true);
+  });
+
+  it("camera.y change is a camera change", () => {
+    expect(computeCameraChanged(cam, vp, { ...cam, y: 5 }, vp)).toBe(true);
+  });
+
+  it("camera.zoom change is a camera change", () => {
+    expect(computeCameraChanged(cam, vp, { ...cam, zoom: 8 }, vp)).toBe(true);
+  });
+
+  it("viewport.width change (resize) is a camera change [H1]", () => {
+    expect(computeCameraChanged(cam, vp, cam, { ...vp, width: 1024 })).toBe(true);
+  });
+
+  it("viewport.height change (resize) is a camera change [H1]", () => {
+    expect(computeCameraChanged(cam, vp, cam, { ...vp, height: 768 })).toBe(true);
+  });
+
+  it("prevVp=null (first viewport) is a camera change even when cam matches", () => {
+    expect(computeCameraChanged(cam, null, cam, vp)).toBe(true);
   });
 });

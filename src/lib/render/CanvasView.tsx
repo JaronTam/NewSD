@@ -6,6 +6,7 @@ import {
   screenToWorld,
   shouldSnap,
   snapToGrid,
+  viewportToWorldRect,
   worldToScreen,
   zoomAt,
   type Camera,
@@ -28,6 +29,9 @@ import { createElementStore, createFlow } from "../sd/store";
 import type { Flow, SDElement, Stock, ToolMode } from "../sd/types";
 import { GLYPH_H, bakeGlowAtlasCanvas, charToGlyphIdx } from "./vram/glowAtlas";
 import { VRAMRenderer, type RenderInstance } from "./vram/renderer";
+import { SpatialIndex } from "./spatial-index";
+import { DirtyRectTracker } from "./dirty-rect";
+import { PerformanceProbe } from "./perf-probe";
 
 // Story 1a.1 sub-PR #3 — FR-CANVAS-1: infinite canvas navigation.
 //
@@ -168,19 +172,56 @@ function distance(a: { x: number; y: number }, b: { x: number; y: number }): num
 // Element store (module-level singleton — single-user local app).
 // Swap out for Y.Doc in Story 1a.4 / collab AD-10.
 const elementStore = createElementStore();
-export { elementStore };
+const spatialIndex = new SpatialIndex(elementStore);
+const dirtyTracker = new DirtyRectTracker();
+const perfProbe = new PerformanceProbe();
+// CR H4: last camera/viewport used by the __e2e__.buildInstances hook so it
+// returns the culled set (matching the live render) instead of every element.
+// Updated at the end of each draw(). Module-level (single CanvasView instance).
+let lastCam: Camera | null = null;
+let lastVp: Viewport | null = null;
 
-// e2e test hook — expose store + createFlow on window for Playwright (dev only).
-// F6: also expose buildInstances (rebuilds the RenderInstance[] the renderer
-// draws, straight from the live store) and charToGlyphIdx, so the AC-17 visual
-// gate can assert specific glyphs (▼/○ marker, ┌┐└┘ corner) actually reach the
-// renderer — not just non-bg pixel growth, which path+arrow satisfy regardless
-// of the marker. buildInstances reflects whatever createFlow just wrote.
+export { elementStore, spatialIndex, dirtyTracker, perfProbe };
+
+// e2e test hook — expose store + spatialIndex + createFlow on window for
+// Playwright (dev only). Story 1a.5 extends __e2e__ with culling stats.
 if (typeof window !== "undefined" && import.meta.env.DEV) {
   (window as any).__e2e__ = {
     elementStore,
+    spatialIndex,
+    dirtyTracker,
+    perfProbe,
     createFlow,
-    buildInstances: () => buildInstancesFromStore(null),
+    buildInstances: () =>
+      buildInstancesFromStore(
+        null,
+        lastCam && lastVp ? { spatialIndex, cam: lastCam, vp: lastVp } : undefined,
+      ),
+    /** Bulk-seed N stock elements in a grid for perf/culling e2e (Story 1a.5 AC-9).
+     *  Uses setElements (single notify) to avoid O(n²) subscription cascade. */
+    seedBulk: (n: number) => {
+      const cols = Math.ceil(Math.sqrt(n));
+      const stocks: any[] = [];
+      for (let i = 0; i < n; i++) {
+        const row = Math.floor(i / cols);
+        const col = i % cols;
+        stocks.push({
+          id: crypto.randomUUID(),
+          kind: "stock",
+          name: `s${i}`,
+          x: col * 20 - cols * 10,
+          y: row * 10 - (n / cols) * 5,
+          width: 8,
+          height: 4,
+          initialValue: i,
+          currentValue: i,
+          history: [i],
+          units: "",
+          allowNegative: false,
+        });
+      }
+      elementStore.setElements(stocks);
+    },
     charToGlyphIdx,
   };
 }
@@ -222,16 +263,78 @@ function seedSampleStocks() {
 // Seed on first mount only — not at module init, so the empty-state test can
 // clear the store and verify guidance text (AR#12 / AC-16).
 
-function buildInstancesFromStore(selectedId: string | null): RenderInstance[] {
+/**
+ * Detect whether the camera or viewport changed since the previous frame
+ * (Story 1a.5 AC-3, CS钉死 #5 Branch-1 trigger). A viewport resize counts as
+ * a change: the gl backing-store must resize in lockstep with the 2D surface,
+ * otherwise the stale gl canvas is CSS-stretched over the fresh grid (CR H1).
+ *
+ * Exported as a pure function so the resize-as-camera-change invariant can be
+ * unit-tested directly - jsdom has no WebGL2 (rendererRef stays null, so
+ * renderer.render() is a no-op and cannot be spied); locking the Branch-1
+ * trigger condition here is the equivalent regression guard for the resize
+ * glitch. The full resize -> gl redraw path is verified via the Playwright
+ * visual gate.
+ */
+export function computeCameraChanged(
+  prevCam: Camera | null,
+  prevVp: { width: number; height: number } | null,
+  cam: Camera,
+  vp: { width: number; height: number },
+): boolean {
+  return (
+    prevCam === null ||
+    prevCam.x !== cam.x ||
+    prevCam.y !== cam.y ||
+    prevCam.zoom !== cam.zoom ||
+    prevVp === null ||
+    prevVp.width !== vp.width ||
+    prevVp.height !== vp.height
+  );
+}
+
+function buildInstancesFromStore(
+  selectedId: string | null,
+  opts?: { spatialIndex?: SpatialIndex | null; cam?: Camera; vp?: Viewport },
+): RenderInstance[] {
   const out: RenderInstance[] = [];
-  const elements = elementStore.getElements();
+
+  // Viewport culling (Story 1a.5 AC-2): use spatial index when available.
+  let elements: readonly SDElement[];
+  let cullStats: { total: number; visible: number } | null = null;
+  if (opts?.spatialIndex && opts?.cam && opts?.vp) {
+    const rect = viewportToWorldRect(opts.cam, opts.vp);
+    const allElements = elementStore.getElements();
+    const visible = opts.spatialIndex.search(rect);
+    // Always include the selected element even if it's outside the viewport
+    // (e.g. after a drag that pushed it partially off-screen).
+    if (selectedId && !visible.some((e) => e.id === selectedId)) {
+      const sel = allElements.find((e) => e.id === selectedId);
+      if (sel) visible.push(sel);
+    }
+    elements = visible;
+    cullStats = { total: allElements.length, visible: visible.length };
+  } else {
+    elements = elementStore.getElements();
+  }
+
+  // Expose cull stats on window for e2e assertions (dev only).
+  if (typeof window !== "undefined" && import.meta.env.DEV && cullStats) {
+    (window as any).__e2e__ = {
+      ...(window as any).__e2e__,
+      cullStats,
+    };
+  }
 
   // 1. Flow instances first (edges below nodes — CS钉死 z-order).
+  // When culling, pass the FULL element set to flowToInstances so it can find
+  // source/target stocks even if they're outside the viewport.
+  const allElements = elementStore.getElements();
   for (const el of elements) {
     if (el.kind !== "flow") continue;
     const flow = el as Flow;
     const selected = el.id === selectedId;
-    const instances = flowToInstances(flow, elements, selected);
+    const instances = flowToInstances(flow, allElements, selected);
     for (const ri of instances) out.push(ri);
   }
 
@@ -271,7 +374,12 @@ export function CanvasView() {
   // zeros under SwiftShader headless (M6 CR followup), so the default must be
   // a readable cell size from the first frame.
   const camRef = useRef<Camera>({ x: 0, y: 0, zoom: 16 });
+  const prevCamRef = useRef<Camera | null>(null); // Story 1a.5: camera-change detection for 3-branch render
   const vpRef = useRef<Viewport>({ width: 0, height: 0 });
+  // CR H1: viewport-change detection for the 3-branch render decision. A resize
+  // changes viewport dims without touching cam.x/y/zoom, so it must be tracked
+  // separately to trigger Branch 1 (full WebGL redraw + gl backing-store resize).
+  const prevVpRef = useRef<Viewport | null>(null);
   const tokensRef = useRef<Tokens>(DEFAULT_TOKENS);
   const cursorRef = useRef<Cursor | null>(null);
   // Pan state machine: active = currently dragging; spaceDown = Space held
@@ -430,13 +538,55 @@ export function CanvasView() {
       }
     }
 
-    // 6. VRAM glyph overlay (AD-9). Renders the pre-baked glow atlas via the
-    // WebGL2 instanced pipeline on the stacked gl canvas. No-op when WebGL2 is
-    // unavailable — rendererRef stays null and the grid-only surface above is
-    // the final frame (no shadowBlur fallback; AD-9/CAP-11). The renderer sizes
-    // its own backing store from the viewport, so it stays in lockstep with the
-    // 2D surface via the shared vpRef/camRef.
-    rendererRef.current?.render(cam, vp, instancesRef.current);
+    // 6. 3-branch render decision (Story 1a.5 AC-3, CS钉死 #5):
+    //    Branch 1 — camera changed or first frame: clear dirty, full rebuild, full WebGL redraw.
+    //    Branch 2 — !camera && hasDirty: rebuild visible set, full WebGL redraw of visible.
+    //    Branch 3 — !camera && !hasDirty: skip WebGL entirely (static scene, zero GPU).
+    //    2D surface (bg, grid, origin, handles) always redraws — O(viewport), not bottleneck.
+    const prevCam = prevCamRef.current;
+    const prevVp = prevVpRef.current;
+    // CR H1: viewport resize counts as a camera change (see computeCameraChanged).
+    const cameraChanged = computeCameraChanged(prevCam, prevVp, cam, vp);
+
+    if (cameraChanged) {
+      dirtyTracker.clear();
+    }
+
+    const shouldRenderWebGL = cameraChanged || dirtyTracker.hasDirty();
+
+    if (shouldRenderWebGL) {
+      // Branch 1 & 2: full visible rebuild + WebGL redraw.
+      instancesRef.current = buildInstancesFromStore(selectedIdRef.current, {
+        spatialIndex,
+        cam,
+        vp,
+      });
+
+      // 6a. Prepend flow drag preview if active (Story 1a.4).
+      if (flowDragRef.current.active && flowDragRef.current.previewInstances.length > 0) {
+        instancesRef.current = [...flowDragRef.current.previewInstances, ...instancesRef.current];
+      }
+
+      // 7. VRAM glyph overlay (AD-9). Renders the pre-baked glow atlas via the
+      // WebGL2 instanced pipeline on the stacked gl canvas. No-op when WebGL2 is
+      // unavailable — rendererRef stays null and the grid-only surface above is
+      // the final frame (no shadowBlur fallback; AD-9/CAP-11). The renderer sizes
+      // its own backing store from the viewport, so it stays in lockstep with the
+      // 2D surface via the shared vpRef/camRef.
+      rendererRef.current?.render(cam, vp, instancesRef.current);
+
+      if (!cameraChanged) {
+        // Branch 2: drain dirty rects after render.
+        dirtyTracker.consume();
+      }
+    }
+
+    // Track camera + viewport for next frame's change detection (CR H1).
+    prevCamRef.current = { x: cam.x, y: cam.y, zoom: cam.zoom };
+    prevVpRef.current = { width: vp.width, height: vp.height };
+    // CR H4: expose current cam/vp to the __e2e__.buildInstances hook.
+    lastCam = cam;
+    lastVp = vp;
   };
 
   // ---- viewport + tokens + ready transition (mount) ----
@@ -481,9 +631,51 @@ export function CanvasView() {
       }
     }
 
-    // Subscribe to element store changes: rebuild instances and redraw.
+    // Story 1a.5 AC-3: subscribe to element store, diff prev/next elements,
+    // and mark dirty rects for changed bboxes before triggering redraw.
+    let prevElements: readonly SDElement[] = elementStore.getElements();
     const unsubStore = elementStore.subscribe(() => {
-      instancesRef.current = buildInstancesFromStore(selectedIdRef.current);
+      const nextElements = elementStore.getElements();
+      const prevMap = new Map<string, SDElement>(prevElements.map((e) => [e.id, e]));
+      const nextMap = new Map<string, SDElement>(nextElements.map((e) => [e.id, e]));
+
+      // Helper: element → WorldRect for dirty marking.
+      const bboxOf = (
+        el: SDElement,
+      ): { minX: number; minY: number; maxX: number; maxY: number } => {
+        const b = getElementBounds(el, nextElements);
+        return { minX: b.x, minY: b.y, maxX: b.x + b.width, maxY: b.y + b.height };
+      };
+
+      // Added or moved/resized elements.
+      for (const [id, el] of nextMap) {
+        const prev = prevMap.get(id);
+        if (!prev) {
+          dirtyTracker.markDirty(bboxOf(el), id);
+          continue;
+        }
+        // Check whether the bbox changed (move / resize / flow-path change).
+        const oldB = bboxOf(prev);
+        const newB = bboxOf(el);
+        if (
+          oldB.minX !== newB.minX ||
+          oldB.minY !== newB.minY ||
+          oldB.maxX !== newB.maxX ||
+          oldB.maxY !== newB.maxY
+        ) {
+          dirtyTracker.markDirty(oldB, id);
+          dirtyTracker.markDirty(newB, id);
+        }
+      }
+
+      // Removed elements.
+      for (const [id, el] of prevMap) {
+        if (!nextMap.has(id)) {
+          dirtyTracker.markDirty(bboxOf(el), id);
+        }
+      }
+
+      prevElements = nextElements;
       drawRef.current();
     });
 
@@ -506,8 +698,14 @@ export function CanvasView() {
     // blank frame, while keeping the skeleton visibly present for the load
     // frame itself (F4 — non-blank during load).
     const readyTimer = setTimeout(() => setPhase("ready"), 0);
+
+    // Story 1a.5 AC-7: start performance probe (rAF frame-time sampling).
+    // Runs its own rAF loop — independent of drawRef.current().
+    perfProbe.start();
+
     return () => {
       clearTimeout(readyTimer);
+      perfProbe.stop();
       unsubStore();
       ro?.disconnect();
       rendererRef.current?.dispose();
@@ -585,7 +783,6 @@ export function CanvasView() {
           previewInstances: [],
         };
         selectedIdRef.current = null;
-        instancesRef.current = buildInstancesFromStore(null);
         drawRef.current();
       }
     };
@@ -742,7 +939,6 @@ export function CanvasView() {
         } catch {
           // jsdom — drag still works via bubbling.
         }
-        instancesRef.current = buildInstancesFromStore(hit.id);
         drawRef.current();
         e.preventDefault();
         return;
@@ -751,7 +947,6 @@ export function CanvasView() {
       // Miss: clear selection.
       if (selectedIdRef.current !== null) {
         selectedIdRef.current = null;
-        instancesRef.current = buildInstancesFromStore(null);
         drawRef.current();
       }
     }
@@ -810,9 +1005,6 @@ export function CanvasView() {
       const arrowRot = dy !== 0 ? (dy > 0 ? Math.PI / 2 : -Math.PI / 2) : dx > 0 ? 0 : Math.PI;
       pushPrev("▶", tx, ty, arrowRot);
       flowDragRef.current.previewInstances = preview;
-      // Merge preview with store instances for rendering
-      const base = buildInstancesFromStore(selectedIdRef.current);
-      instancesRef.current = [...preview, ...base];
       drawRef.current();
       return;
     }
@@ -958,7 +1150,6 @@ export function CanvasView() {
         fromPort: null,
         previewInstances: [],
       };
-      instancesRef.current = buildInstancesFromStore(selectedIdRef.current);
       containerRef.current?.style.setProperty("cursor", "crosshair");
       drawRef.current();
       return;

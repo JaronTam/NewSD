@@ -36,6 +36,28 @@ export interface Viewport {
   height: number;
 }
 
+export interface WorldRect {
+  minX: number;
+  maxX: number;
+  minY: number;
+  maxY: number;
+}
+
+/**
+ * Convert camera + viewport to the visible world-space rectangle.
+ * Used for spatial-index culling (Story 1a.5, AC-2).
+ */
+export function viewportToWorldRect(cam: Camera, vp: Viewport): WorldRect {
+  const [x0, y0] = screenToWorld(cam, vp, 0, 0);
+  const [x1, y1] = screenToWorld(cam, vp, vp.width, vp.height);
+  return {
+    minX: Math.min(x0, x1),
+    minY: Math.min(y0, y1),
+    maxX: Math.max(x0, x1),
+    maxY: Math.max(y0, y1),
+  };
+}
+
 export interface Affine {
   a: number;
   b: number;
