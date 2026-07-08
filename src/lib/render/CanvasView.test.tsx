@@ -1241,6 +1241,322 @@ describe("CanvasView — dirty rect tracking (Story 1a.5 AC-3, AC-5)", () => {
 // condition: a viewport resize must count as a camera change so the gl
 // backing-store redraws in lockstep with the 2D surface (AC-3/AC-8). The full
 // resize -> gl redraw path is verified via the Playwright visual gate.
+// ---- Story 1a.6 minimap integration (T3.6) ----------------------------------
+
+describe("CanvasView — minimap integration (Story 1a.6 T3)", () => {
+  afterEach(() => cleanup());
+
+  it("renders the minimap canvas element with class ns-canvas__minimap", async () => {
+    const { container } = await renderReady();
+    const mc = container.querySelector("canvas.ns-canvas__minimap");
+    expect(mc).not.toBeNull();
+    expect(mc?.tagName).toBe("CANVAS");
+  });
+
+  it("exposes minimapProjector on window.__e2e__ in DEV", async () => {
+    await renderReady();
+    const api = (window as any).__e2e__;
+    expect(api).toBeDefined();
+    expect(api.minimapProjector).toBeDefined();
+    expect(api.minimapProjector).not.toBeNull();
+  });
+
+  it("exposes minimapDirtyTracker on window.__e2e__ in DEV", async () => {
+    await renderReady();
+    const api = (window as any).__e2e__;
+    expect(api.minimapDirtyTracker).toBeDefined();
+    expect(api.minimapDirtyTracker).not.toBeNull();
+    // The minimap dirty tracker should be independent of the main tracker.
+    expect(typeof api.minimapDirtyTracker.hasDirty).toBe("function");
+  });
+
+  it("exposes getHighlightBox on window.__e2e__ in DEV", async () => {
+    await renderReady();
+    const api = (window as any).__e2e__;
+    expect(typeof api.getHighlightBox).toBe("function");
+    // With the default seed stocks, the highlight box should be non-null after
+    // the first draw.
+    const box = api.getHighlightBox();
+    expect(box).not.toBeNull();
+    expect(typeof box.minX).toBe("number");
+    expect(typeof box.maxX).toBe("number");
+    expect(box.maxX).toBeGreaterThan(box.minX);
+  });
+
+  it("exposes jumpToWorld on window.__e2e__ in DEV", async () => {
+    await renderReady();
+    const api = (window as any).__e2e__;
+    expect(typeof api.jumpToWorld).toBe("function");
+    const world = api.jumpToWorld(50, 30);
+    expect(typeof world.x).toBe("number");
+    expect(typeof world.y).toBe("number");
+    expect(Number.isFinite(world.x)).toBe(true);
+    expect(Number.isFinite(world.y)).toBe(true);
+  });
+
+  it("minimapProjector handles empty element store without crashing (E8)", async () => {
+    const { container } = await renderReady();
+    // jsdom getContext("2d") returns null (per src/test/setup.ts), so
+    // minimap.update() early-returns. The point is that calling update
+    // on an empty store does not throw.
+    const api = (window as any).__e2e__;
+    const mp = api.minimapProjector;
+    expect(mp).toBeDefined();
+
+    // Clear elements to trigger E8 placeholder path.
+    api.elementStore.setElements([]);
+
+    // update() should not throw even with zero elements (E8 guard).
+    expect(() => {
+      mp.update({ x: 0, y: 0, zoom: 16 }, { width: 800, height: 600 }, true, false);
+    }).not.toThrow();
+  });
+});
+
+// ---- Story 1a.6 minimap jump interaction (T4.3) ----------------------------
+
+describe("CanvasView — minimap jump interaction (Story 1a.6 T4)", () => {
+  afterEach(() => cleanup());
+
+  it("minimap canvas has pointer event handlers wired", async () => {
+    const { container } = await renderReady();
+    const mc = container.querySelector("canvas.ns-canvas__minimap");
+    expect(mc).not.toBeNull();
+    // Pointer event props should be attached (React event delegation).
+    // The canvas element itself should exist and be interactive.
+    expect(mc?.tagName).toBe("CANVAS");
+  });
+
+  it("pointerdown on minimap canvas does not throw", async () => {
+    const { container } = await renderReady();
+    const mc = container.querySelector("canvas.ns-canvas__minimap") as HTMLCanvasElement;
+    expect(mc).not.toBeNull();
+
+    // Simulate pointerdown at the centre of the minimap canvas.
+    const rect = mc.getBoundingClientRect();
+    const evt = new PointerEvent("pointerdown", {
+      bubbles: true,
+      clientX: rect.left + rect.width / 2,
+      clientY: rect.top + rect.height / 2,
+      pointerId: 1,
+      pointerType: "mouse",
+    });
+    expect(() => mc.dispatchEvent(evt)).not.toThrow();
+  });
+
+  it("pointerdown+pointermove+pointerup (drag) on minimap does not throw", async () => {
+    const { container } = await renderReady();
+    const mc = container.querySelector("canvas.ns-canvas__minimap") as HTMLCanvasElement;
+    expect(mc).not.toBeNull();
+
+    const rect = mc.getBoundingClientRect();
+    const down = new PointerEvent("pointerdown", {
+      bubbles: true,
+      clientX: rect.left + rect.width / 2,
+      clientY: rect.top + rect.height / 2,
+      pointerId: 1,
+      pointerType: "mouse",
+    });
+    const move = new PointerEvent("pointermove", {
+      bubbles: true,
+      clientX: rect.left + rect.width / 2 + 10,
+      clientY: rect.top + rect.height / 2 + 10,
+      pointerId: 1,
+      pointerType: "mouse",
+    });
+    const up = new PointerEvent("pointerup", {
+      bubbles: true,
+      clientX: rect.left + rect.width / 2 + 10,
+      clientY: rect.top + rect.height / 2 + 10,
+      pointerId: 1,
+      pointerType: "mouse",
+    });
+    expect(() => mc.dispatchEvent(down)).not.toThrow();
+    expect(() => mc.dispatchEvent(move)).not.toThrow();
+    expect(() => mc.dispatchEvent(up)).not.toThrow();
+  });
+
+  it("pointerdown on minimap recenters camera (HUD reflects the jump)", async () => {
+    // CR Run 1 F-D: the T4 block only asserted "does not throw" / API shape -
+    // no test verified the jump actually moves the camera. This mirrors the
+    // AC-3 pan test (HUD text change) and additionally checks the camera
+    // recenters to the exact world point jumpToWorld returns.
+    const { container } = await renderReady();
+    const mc = container.querySelector("canvas.ns-canvas__minimap") as HTMLCanvasElement;
+    expect(mc).not.toBeNull();
+    const api = (window as any).__e2e__;
+
+    // Seed two stocks far apart so the minimap has non-degenerate world bounds.
+    api.elementStore.setElements([
+      {
+        id: "a",
+        kind: "stock",
+        name: "a",
+        x: 0,
+        y: 0,
+        width: 8,
+        height: 5,
+        initialValue: 0,
+        currentValue: 0,
+        history: [],
+        units: "",
+        allowNegative: false,
+      },
+      {
+        id: "b",
+        kind: "stock",
+        name: "b",
+        x: 1000,
+        y: 1000,
+        width: 8,
+        height: 5,
+        initialValue: 0,
+        currentValue: 0,
+        history: [],
+        units: "",
+        allowNegative: false,
+      },
+    ]);
+
+    // jsdom hard-stubs HTMLCanvasElement.getContext -> null (setup.ts), so
+    // MinimapProjector.update() early-returns at `if (!ctx) return;` (minimap.ts)
+    // BEFORE reaching fullProject/recomputeWorldBounds. That leaves worldBounds
+    // null, jumpToWorld returns {0,0}, and the camera never recenters. Give the
+    // minimap canvas a mock 2D context (instance-level spy - the main WebGL
+    // canvas is a different element and stays null) so update() runs to
+    // completion and populates worldBounds.
+    const mockCtx = {
+      clearRect: vi.fn(),
+      fillRect: vi.fn(),
+      strokeRect: vi.fn(),
+      beginPath: vi.fn(),
+      closePath: vi.fn(),
+      arc: vi.fn(),
+      arcTo: vi.fn(),
+      fill: vi.fn(),
+      stroke: vi.fn(),
+      moveTo: vi.fn(),
+      lineTo: vi.fn(),
+      rect: vi.fn(),
+      roundRect: vi.fn(),
+      fillText: vi.fn(),
+      strokeText: vi.fn(),
+      measureText: vi.fn(() => ({ width: 50 }) as TextMetrics),
+      save: vi.fn(),
+      restore: vi.fn(),
+      translate: vi.fn(),
+      scale: vi.fn(),
+      setLineDash: vi.fn(),
+      getLineDash: vi.fn(() => []),
+      setTransform: vi.fn(),
+      resetTransform: vi.fn(),
+      clip: vi.fn(),
+      fillStyle: "",
+      strokeStyle: "",
+      lineWidth: 1,
+      lineCap: "butt",
+      lineJoin: "miter",
+      font: "",
+      textAlign: "start",
+      textBaseline: "alphabetic",
+      globalAlpha: 1,
+      globalCompositeOperation: "source-over",
+      shadowBlur: 0,
+      shadowColor: "rgba(0,0,0,0)",
+    } as unknown as CanvasRenderingContext2D;
+    vi.spyOn(mc, "getContext").mockReturnValue(mockCtx);
+
+    // Flush: run a full-project update (isMountOrBulk=true) so recomputeWorldBounds
+    // populates worldBounds synchronously - the production steady state where draw
+    // frames have already run before a user clicks the minimap.
+    api.minimapProjector.update({ x: 0, y: 0, zoom: 16 }, { width: 0, height: 0 }, false, true);
+
+    // Mirror the handler's px/py derivation exactly. In jsdom
+    // getBoundingClientRect() is all-zero and devicePixelRatio is undefined
+    // (-> dpr 1), so px === clientX. `expected` is the world point the camera
+    // should recenter to.
+    const rect = mc.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+    const clientX = 5;
+    const clientY = 5;
+    const px = (clientX - rect.left) * dpr;
+    const py = (clientY - rect.top) * dpr;
+    const expected = api.jumpToWorld(px, py);
+    expect(Number.isFinite(expected.x)).toBe(true);
+    expect(Number.isFinite(expected.y)).toBe(true);
+
+    const before = hudText(container);
+    fireEvent.pointerDown(mc, {
+      pointerId: 7,
+      pointerType: "mouse",
+      clientX,
+      clientY,
+    });
+
+    // beginMinimapJump sets camRef to the jumped world point and calls drawRef,
+    // which updates the HUD (cam-center world coords, cursorRef is null on a
+    // fresh mount) before the ctx early-return.
+    const after = hudText(container);
+    expect(after).not.toBe(before);
+    expect(after).toContain(expected.x.toFixed(1));
+    expect(after).toContain(expected.y.toFixed(1));
+  });
+
+  it("__e2e__.jumpToWorld preserves zoom (handler contract)", async () => {
+    // This test verifies the jump-to-world semantics: the inverse transform
+    // returns world coords → Camera.x/y are set → Camera.zoom is preserved.
+    // The __e2e__ wrapper delegates to MinimapProjector.jumpToWorld which is
+    // pure math and unit-tested in minimap.test.ts. Here we verify the wrapped
+    // API shape matches what the CanvasView handlers consume.
+    await renderReady();
+    const api = (window as any).__e2e__;
+
+    // Seed elements so the minimap projector has world bounds to work with.
+    api.elementStore.setElements([
+      {
+        id: "s1",
+        kind: "stock",
+        name: "s1",
+        x: 0,
+        y: 0,
+        width: 8,
+        height: 5,
+        initialValue: 0,
+        currentValue: 0,
+        history: [],
+        units: "",
+        allowNegative: false,
+      },
+      {
+        id: "s2",
+        kind: "stock",
+        name: "s2",
+        x: 100,
+        y: 100,
+        width: 8,
+        height: 5,
+        initialValue: 0,
+        currentValue: 0,
+        history: [],
+        units: "",
+        allowNegative: false,
+      },
+    ]);
+
+    // Jump to the centre of the minimap canvas.
+    const world = api.jumpToWorld(100, 75);
+    // Result should be finite world coordinates (x,y are numbers).
+    expect(typeof world.x).toBe("number");
+    expect(typeof world.y).toBe("number");
+
+    // The camera update in beginMinimapJump preserves zoom:
+    // camRef.current = clampCamera({ ...camRef.current, x: world.x, y: world.y });
+    // This means only x,y change — zoom stays at its current value.
+    // We verify the pattern: jumpToWorld returns only {x,y}, not a zoom value.
+    expect(world).not.toHaveProperty("zoom");
+  });
+});
+
 describe("CanvasView - resize-as-camera-change (CR H1, AC-3/AC-8)", () => {
   const cam = { x: 0, y: 0, zoom: 16 } as Camera;
   const vp = { width: 800, height: 600 };

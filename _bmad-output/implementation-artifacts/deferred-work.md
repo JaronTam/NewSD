@@ -54,3 +54,16 @@ CR verdict FAIL -> 回 DS 续修 must+should(H1/H2/H3/H4/H6 + 2 回归测试)。
 | E3  | dispose-stale (spatial-index.ts:152-157)                                                              | -            | **非 bug**(dispose 清 elementMap+tree + storeUnsub 正确)                               |
 | E4  | `markDirty` 无 rect 校验 (dirty-rect.ts:21)                                                           | TBD          | Edge;调用侧传 getElementBounds 合法 rect                                               |
 | E5  | (见 CR Run 1 Layer-2 报告)                                                                            | TBD          | Edge                                                                                   |
+
+---
+
+## From Story 1a.6 CR (Run 1, 2026-07-09)
+
+CR verdict **FAIL**(F-B correctness + F-A AC-2 spec violation;patch 项 F-B/F-C/F-D/F-E/F-F 待用户裁定 apply/action-items)。defer 2 项:
+
+| ID  | Item                                                                                                                       | Target Story | Rationale                                                                                          |
+| --- | -------------------------------------------------------------------------------------------------------------------------- | ------------ | -------------------------------------------------------------------------------------------------- |
+| F-G | minimap flow 端点移动不 markDirty(prev===el)->旧 flow 线段近未动端点不 clear->stale 残线(minimap.ts:99-109, 252-269)       | TBD          | LOW;camera 变化全量重绘(F-A)自愈;flows on minimap 稀疏细线;修需检测 flow bbox 随端点变 non-trivial |
+| F-H | computeWorldBounds 非对称 clamp(max 下界 / min 上界)->元素 coord 超 WORLD_CLAMP=1e15 可 minX>maxX 反转(minimap.ts:188-193) | TBD          | LOW;元素 coord >1e15 非现实(user 不在此置图元);对称 clamp + `minX<=maxX` hardening nice-to-have    |
+
+注:1a.5 H8/E2(queryLowPrecision NaN/Infinity 未守卫)已由本 story AC-7 闭环(dirty-rect.ts `markDirty` `Number.isFinite` + `queryLowPrecision` defensive skip + 23 测,签名不改),不再 defer。

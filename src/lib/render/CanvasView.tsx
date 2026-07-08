@@ -32,6 +32,7 @@ import { VRAMRenderer, type RenderInstance } from "./vram/renderer";
 import { SpatialIndex } from "./spatial-index";
 import { DirtyRectTracker } from "./dirty-rect";
 import { PerformanceProbe } from "./perf-probe";
+import { MinimapProjector } from "./minimap";
 
 // Story 1a.1 sub-PR #3 — FR-CANVAS-1: infinite canvas navigation.
 //
@@ -181,7 +182,12 @@ const perfProbe = new PerformanceProbe();
 let lastCam: Camera | null = null;
 let lastVp: Viewport | null = null;
 
-export { elementStore, spatialIndex, dirtyTracker, perfProbe };
+// Story 1a.6: minimap projector — module-level singleton (same pattern as
+// elementStore / spatialIndex / dirtyTracker / perfProbe). Instantiated on
+// mount, disposed on unmount. Exposed via __e2e__ for Playwright tests.
+let minimapProjector: MinimapProjector | null = null;
+
+export { elementStore, spatialIndex, dirtyTracker, perfProbe, minimapProjector };
 
 // e2e test hook — expose store + spatialIndex + createFlow on window for
 // Playwright (dev only). Story 1a.5 extends __e2e__ with culling stats.
@@ -223,6 +229,16 @@ if (typeof window !== "undefined" && import.meta.env.DEV) {
       elementStore.setElements(stocks);
     },
     charToGlyphIdx,
+    // Story 1a.6: minimap e2e hooks (AC-9).
+    get minimapProjector() {
+      return minimapProjector;
+    },
+    get minimapDirtyTracker() {
+      return minimapProjector?.dirtyTracker ?? null;
+    },
+    getHighlightBox: () => minimapProjector?.getHighlightBox() ?? null,
+    jumpToWorld: (px: number, py: number) =>
+      minimapProjector?.jumpToWorld(px, py) ?? { x: 0, y: 0 },
   };
 }
 
@@ -319,11 +335,10 @@ function buildInstancesFromStore(
   }
 
   // Expose cull stats on window for e2e assertions (dev only).
+  // NOTE: direct property assignment preserves getter-based minimap hooks
+  // (Story 1a.6) — Object spread evaluates getters into static values.
   if (typeof window !== "undefined" && import.meta.env.DEV && cullStats) {
-    (window as any).__e2e__ = {
-      ...(window as any).__e2e__,
-      cullStats,
-    };
+    (window as any).__e2e__.cullStats = cullStats;
   }
 
   // 1. Flow instances first (edges below nodes — CS钉死 z-order).
@@ -364,6 +379,8 @@ export function CanvasView() {
   // browsers) -> degrade to grid-only. instances holds the first-screen
   // placeholder glyphs (business glyphs arrive in 1a.3/1a.4).
   const glCanvasRef = useRef<HTMLCanvasElement>(null);
+  // Story 1a.6: minimap 2D canvas overlay (non-VRAM path, AC-1).
+  const minimapCanvasRef = useRef<HTMLCanvasElement>(null);
   const rendererRef = useRef<VRAMRenderer | null>(null);
   const instancesRef = useRef<RenderInstance[]>([]);
 
@@ -427,6 +444,9 @@ export function CanvasView() {
   // Story 1a.4: status-bar warnings (E11 parallel flows, duplicate names).
   const warnRef = useRef<string>("");
 
+  // Story 1a.6: minimap drag state for jump interaction (T4, AC-3).
+  const minimapDragRef = useRef<boolean>(false);
+
   const [phase, setPhase] = useState<Phase>("loading");
 
   // draw is reassigned every render so the [] effects below always call the
@@ -471,6 +491,21 @@ export function CanvasView() {
       warn.style.display = msg ? "block" : "none";
       if (msg) warn.textContent = msg;
     }
+
+    // 6. 3-branch render decision (Story 1a.5 AC-3, CS钉死 #5):
+    //    Branch 1 — camera changed or first frame: clear dirty, full rebuild, full WebGL redraw.
+    //    Branch 2 — !camera && hasDirty: rebuild visible set, full WebGL redraw of visible.
+    //    Branch 3 — !camera && !hasDirty: skip WebGL entirely (static scene, zero GPU).
+    //    2D surface (bg, grid, origin, handles) always redraws — O(viewport), not bottleneck.
+    const prevCam = prevCamRef.current;
+    const prevVp = prevVpRef.current;
+    // CR H1: viewport resize counts as a camera change (see computeCameraChanged).
+    const cameraChanged = computeCameraChanged(prevCam, prevVp, cam, vp);
+
+    // Story 1a.6: minimap update must run BEFORE the ctx early-return so it
+    // remains testable in jsdom (getContext("2d") returns null). The minimap
+    // projector does its own ctx null-guard internally.
+    minimapProjector?.update(cam, vp, cameraChanged, false);
 
     if (!canvas || !ctx || vp.width === 0 || vp.height === 0) return;
 
@@ -539,15 +574,6 @@ export function CanvasView() {
     }
 
     // 6. 3-branch render decision (Story 1a.5 AC-3, CS钉死 #5):
-    //    Branch 1 — camera changed or first frame: clear dirty, full rebuild, full WebGL redraw.
-    //    Branch 2 — !camera && hasDirty: rebuild visible set, full WebGL redraw of visible.
-    //    Branch 3 — !camera && !hasDirty: skip WebGL entirely (static scene, zero GPU).
-    //    2D surface (bg, grid, origin, handles) always redraws — O(viewport), not bottleneck.
-    const prevCam = prevCamRef.current;
-    const prevVp = prevVpRef.current;
-    // CR H1: viewport resize counts as a camera change (see computeCameraChanged).
-    const cameraChanged = computeCameraChanged(prevCam, prevVp, cam, vp);
-
     if (cameraChanged) {
       dirtyTracker.clear();
     }
@@ -703,9 +729,36 @@ export function CanvasView() {
     // Runs its own rAF loop — independent of drawRef.current().
     perfProbe.start();
 
+    // Story 1a.6: instantiate minimap projector (AC-1). Uses the minimap canvas
+    // overlay for 2D projection of all elements + highlight box. Own
+    // DirtyRectTracker runs parallel to the main tracker (CS钉死 #4).
+    let minimapRO: ResizeObserver | null = null;
+    const minimapCanvas = minimapCanvasRef.current;
+    if (minimapCanvas) {
+      minimapProjector = new MinimapProjector(minimapCanvas, elementStore, spatialIndex);
+      // Size the minimap canvas to its CSS layout box.
+      const sizeMinimap = () => {
+        const w = Math.max(1, Math.floor(minimapCanvas.clientWidth));
+        const h = Math.max(1, Math.floor(minimapCanvas.clientHeight));
+        const dpr = window.devicePixelRatio || 1;
+        minimapCanvas.width = Math.max(1, Math.floor(w * dpr));
+        minimapCanvas.height = Math.max(1, Math.floor(h * dpr));
+        // Bounds change triggers full projection on next update().
+        minimapProjector?.forceFullProject();
+        drawRef.current();
+      };
+      sizeMinimap();
+      // ResizeObserver for the minimap canvas (CS钉死 #10).
+      minimapRO = typeof ResizeObserver !== "undefined" ? new ResizeObserver(sizeMinimap) : null;
+      minimapRO?.observe(minimapCanvas);
+    }
+
     return () => {
       clearTimeout(readyTimer);
       perfProbe.stop();
+      minimapRO?.disconnect();
+      minimapProjector?.dispose();
+      minimapProjector = null;
       unsubStore();
       ro?.disconnect();
       rendererRef.current?.dispose();
@@ -1189,6 +1242,50 @@ export function CanvasView() {
     drawRef.current();
   };
 
+  // ---- minimap jump interaction (Story 1a.6 T4, AC-3) -----------------------
+  // Click/drag on the minimap canvas recenters the camera to the corresponding
+  // world position via minimapToWorld inverse transform. Camera zoom is preserved.
+  // Dragging gives continuous recenter (pointerdown→pointermove→pointerup).
+
+  const beginMinimapJump = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    e.preventDefault();
+    const rect = e.currentTarget.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+    // Convert CSS-pixel offset to canvas-internal pixels (canvas.width = clientWidth * dpr).
+    const px = (e.clientX - rect.left) * dpr;
+    const py = (e.clientY - rect.top) * dpr;
+    if (minimapProjector) {
+      const world = minimapProjector.jumpToWorld(px, py);
+      camRef.current = clampCamera({ ...camRef.current, x: world.x, y: world.y });
+      drawRef.current();
+      minimapDragRef.current = true;
+    }
+    // Capture so pointermove still fires even if the finger leaves the minimap rect.
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId);
+    } catch {
+      // jsdom compat — capture unsupported, drag still works via bubbling.
+    }
+  };
+
+  const moveMinimapJump = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (!minimapDragRef.current) return;
+    e.preventDefault();
+    const rect = e.currentTarget.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+    const px = (e.clientX - rect.left) * dpr;
+    const py = (e.clientY - rect.top) * dpr;
+    if (minimapProjector) {
+      const world = minimapProjector.jumpToWorld(px, py);
+      camRef.current = clampCamera({ ...camRef.current, x: world.x, y: world.y });
+      drawRef.current();
+    }
+  };
+
+  const endMinimapJump = (_e: React.PointerEvent<HTMLCanvasElement>) => {
+    minimapDragRef.current = false;
+  };
+
   return (
     <div ref={containerRef} className="ns-canvas" tabIndex={0}>
       <canvas
@@ -1203,6 +1300,16 @@ export function CanvasView() {
           and pointer-events:none so all pan/zoom/wheel input still hits the 2D
           canvas below. aria-hidden: the HUD is the accessible live region. */}
       <canvas ref={glCanvasRef} className="ns-canvas__gl" aria-hidden="true" />
+      {/* Story 1a.6: minimap 2D canvas overlay (AC-1). Positioned bottom-right,
+          above zoom controls. Own pointer events for jump interaction (T4). */}
+      <canvas
+        ref={minimapCanvasRef}
+        className="ns-canvas__minimap"
+        onPointerDown={beginMinimapJump}
+        onPointerMove={moveMinimapJump}
+        onPointerUp={endMinimapJump}
+        onPointerCancel={endMinimapJump}
+      />
       <span ref={hudRef} className="ns-canvas__hud" aria-live="polite" />
       <div ref={warnElRef} className="ns-canvas__warn" role="alert" style={{ display: "none" }} />
       <div ref={guideRef} className="ns-canvas__guide" role="status" style={{ display: "none" }} />
