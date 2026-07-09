@@ -17,7 +17,7 @@
 # - retrospective appends action_items
 
 generated: 2026-07-05
-last_updated: 2026-07-09
+last_updated: 2026-07-10
 project: NewSD
 project_key: NOKEY
 tracking_system: file-system
@@ -34,7 +34,7 @@ development_status:
   1a-4-flow-connector-port-snap: done # PR#33 squash @d405953 (CR Run 3: 8/12 LOW fixed, 4 defer); vitest 305/305 + tsc 0 + Playwright 15/15; AC 18/19 PASS; Story 1a.4 闭合, 2026-07-07)
   1a-5-spatial-index-viewport-cull: done # PR#35 squash @d553ac7 (CR Run 2 PASS: 2 HIGH + 3 MED must/should 修复, LOW/Edge defer); vitest 382/382 + tsc 0 + Playwright 22/22; AC 全 PASS; Story 1a.5 闭合, 2026-07-08)
   1a-6-minimap: done # PR#37 squash @fb3f2a1 (CR Run 1 FAIL->PASS: F-B/F-C/F-D/F-E/F-F patched + F-A spec amended; F-G/F-H defer); vitest 438/438 + tsc 0 + Playwright e2e 7/7; AC 9/9 (AC-1/2/3 RESOLVED, AC-4..8 PASS, AC-9 PASS-weak); Story 1a.6 闭合, 2026-07-09)
-  1a-7-toolbar-statusbar: backlog
+  1a-7-toolbar-statusbar: done # PR#39 squash (CR 3-layer orchestrator-direct PASS: F-cs-dep-mismatch 回退 @testing-library/user-event 恢复 CS 无新依赖 + F-dead-css 删 ns-prompt-panel__expand; minor 4 defer: COLLAPSED_H(26)vs CSS(25.6px)0.4px/testid-dup 多未答confirm/trim-cap 全confirm/autoscroll); vitest 499/499 + tsc 0 + build OK + Playwright e2e 全套件 29 passed/14 skipped (1a.7 AC-13 RED 脚手架 14 skip,无回归); F-1-4 非 modal confirm 落 PromptPanel + CS钉死#7 新建清空+重置cam{0,0,16}; Story 1a.7 闭合, 2026-07-10)
   1a-8-property-panel-formula-editor: backlog
   1a-9-i18n: backlog
   1a-10-model-settings: backlog
