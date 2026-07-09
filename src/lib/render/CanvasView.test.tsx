@@ -1,7 +1,7 @@
 import { render, fireEvent, waitFor, cleanup } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { CanvasView, computeCameraChanged } from "./CanvasView";
+import { CanvasView, computeCameraChanged, perfProbe } from "./CanvasView";
 import type { Camera } from "./camera";
 import { getElementBounds } from "./elements";
 
@@ -222,6 +222,7 @@ describe("CanvasView — VRAM overlay + WebGL2 graceful degrade (1a.2 sub-PR #2)
 // ---- Story 1a.3 Task 7: element interaction (AC-7) --------------------------
 
 import { elementStore, dirtyTracker } from "./CanvasView";
+import { promptStore } from "./promptStore";
 
 describe("CanvasView — element interaction (Story 1a.3 Task 7)", () => {
   afterEach(() => {
@@ -1591,5 +1592,401 @@ describe("CanvasView - resize-as-camera-change (CR H1, AC-3/AC-8)", () => {
 
   it("prevVp=null (first viewport) is a camera change even when cam matches", () => {
     expect(computeCameraChanged(cam, null, cam, vp)).toBe(true);
+  });
+});
+
+// ---- Story 1a.7: Toolbar & StatusBar integration tests -----------------------
+
+describe("CanvasView — AppShell layout (Story 1a.7 AC-1, AC-8)", () => {
+  afterEach(() => {
+    cleanup();
+    elementStore.setElements([]);
+  });
+
+  it("renders .ns-layout wrapper with toolbar <nav> and statusbar <footer>", async () => {
+    const { container } = await renderReady();
+    const layout = container.querySelector(".ns-layout");
+    expect(layout).not.toBeNull();
+    const toolbar = container.querySelector("[data-testid='ns-toolbar']");
+    expect(toolbar).not.toBeNull();
+    expect(toolbar!.tagName).toBe("NAV");
+    const statusbar = container.querySelector("[data-testid='ns-statusbar']");
+    expect(statusbar).not.toBeNull();
+    expect(statusbar!.tagName).toBe("FOOTER");
+  });
+
+  it("Toolbar, canvas, and StatusBar are in correct DOM order", async () => {
+    const { container } = await renderReady();
+    const layout = container.querySelector(".ns-layout")!;
+    const children = Array.from(layout.children).map(
+      (c) => (c as HTMLElement).dataset?.testid ?? "",
+    );
+    // Toolbar <nav> -> .ns-canvas <div> -> PromptPanel -> StatusBar <footer>
+    expect(children[0]).toBe("ns-toolbar");
+    expect(children[2]).toBe("ns-prompt-panel");
+    expect(children[3]).toBe("ns-statusbar");
+  });
+});
+
+describe("CanvasView — toolMode lift to React state (Story 1a.7 T7, AC-4)", () => {
+  afterEach(() => {
+    cleanup();
+    elementStore.setElements([]);
+  });
+
+  it("pressing F key switches toolMode to 'flow' in HUD", async () => {
+    const { container } = await renderReady();
+    fireEvent.keyDown(window, { code: "KeyF" });
+    expect(hudText(container)).toContain("[F]");
+  });
+
+  it("pressing S key switches toolMode to 'stock' in HUD", async () => {
+    const { container } = await renderReady();
+    fireEvent.keyDown(window, { code: "KeyS" });
+    expect(hudText(container)).toContain("[S]");
+  });
+
+  it("pressing C key switches toolMode to 'cloud' in HUD", async () => {
+    const { container } = await renderReady();
+    fireEvent.keyDown(window, { code: "KeyC" });
+    expect(hudText(container)).toContain("[C]");
+  });
+
+  it("pressing V key switches back to 'select' mode in HUD", async () => {
+    const { container } = await renderReady();
+    fireEvent.keyDown(window, { code: "KeyS" });
+    fireEvent.keyDown(window, { code: "KeyV" });
+    expect(hudText(container)).toContain("[V]");
+  });
+});
+
+describe("CanvasView — Delete/Backspace keyboard handler (Story 1a.7 T5, AC-3)", () => {
+  afterEach(() => {
+    cleanup();
+    elementStore.setElements([]);
+  });
+
+  function stockFixture(id: string) {
+    return {
+      id,
+      kind: "stock" as const,
+      name: `Stock-${id}`,
+      x: 0,
+      y: 0,
+      width: 10,
+      height: 5,
+      initialValue: 1,
+      currentValue: 1,
+      units: "",
+      allowNegative: false,
+      history: [1],
+    };
+  }
+
+  it("pressing Delete removes the selected element from the store", async () => {
+    const { container } = await renderReady();
+    const canvas = container.querySelector("canvas")!;
+
+    elementStore.setElements([stockFixture("test-del")]);
+
+    // Click to select (world 5, 2.5 — center of the stock at 0,0,10,5).
+    fireEvent.pointerDown(canvas, { button: 0, pointerId: 60, clientX: 80.5, clientY: 40.5 });
+    fireEvent.pointerUp(canvas, { pointerId: 60, clientX: 80.5, clientY: 40.5 });
+
+    expect(elementStore.getElements()).toHaveLength(1);
+
+    fireEvent.keyDown(window, { code: "Delete" });
+
+    expect(elementStore.getElements()).toHaveLength(0);
+  });
+
+  it("pressing Backspace removes the selected element from the store", async () => {
+    const { container } = await renderReady();
+    const canvas = container.querySelector("canvas")!;
+
+    elementStore.setElements([stockFixture("test-bs")]);
+
+    fireEvent.pointerDown(canvas, { button: 0, pointerId: 61, clientX: 80.5, clientY: 40.5 });
+    fireEvent.pointerUp(canvas, { pointerId: 61, clientX: 80.5, clientY: 40.5 });
+
+    fireEvent.keyDown(window, { code: "Backspace" });
+
+    expect(elementStore.getElements()).toHaveLength(0);
+  });
+
+  it("Delete with no selection is a no-op (no crash, element preserved)", async () => {
+    const { container } = await renderReady();
+    elementStore.setElements([stockFixture("test-nodelete")]);
+
+    fireEvent.keyDown(window, { code: "Delete" });
+
+    expect(elementStore.getElements()).toHaveLength(1);
+  });
+
+  it("Delete is suppressed when focus is in a text input", async () => {
+    const { container } = await renderReady();
+    elementStore.setElements([stockFixture("test-inputguard")]);
+
+    // Simulate focus on an input — the isTextInput guard should prevent deletion.
+    const input = document.createElement("input");
+    document.body.appendChild(input);
+    input.focus();
+    try {
+      fireEvent.keyDown(window, { code: "Delete" });
+      // Element preserved because target is a text input.
+      expect(elementStore.getElements()).toHaveLength(1);
+    } finally {
+      document.body.removeChild(input);
+    }
+  });
+});
+
+describe("CanvasView — Arrow key movement (Story 1a.7 T6, AC-3)", () => {
+  afterEach(() => {
+    cleanup();
+    elementStore.setElements([]);
+  });
+
+  function stockAt(x: number, y: number) {
+    return {
+      id: "test-arrow",
+      kind: "stock" as const,
+      name: "ArrowStock",
+      x,
+      y,
+      width: 10,
+      height: 5,
+      initialValue: 1,
+      currentValue: 1,
+      units: "",
+      allowNegative: false,
+      history: [1],
+    };
+  }
+
+  function cloudAt(x: number, y: number) {
+    return {
+      id: "test-cloud",
+      kind: "cloud" as const,
+      name: "ArrowCloud",
+      x,
+      y,
+    };
+  }
+
+  it("ArrowRight nudges selected stock +1 in x", async () => {
+    const { container } = await renderReady();
+    const canvas = container.querySelector("canvas")!;
+    elementStore.setElements([stockAt(0, 0)]);
+
+    // Click to select (world 5, 2.5).
+    fireEvent.pointerDown(canvas, { button: 0, pointerId: 70, clientX: 80.5, clientY: 40.5 });
+    fireEvent.pointerUp(canvas, { pointerId: 70, clientX: 80.5, clientY: 40.5 });
+
+    fireEvent.keyDown(window, { code: "ArrowRight" });
+
+    const el = elementStore.getElements().find((e) => e.id === "test-arrow");
+    expect(el).toBeDefined();
+    if (el?.kind === "stock") {
+      expect(el.x).toBe(1);
+      expect(el.y).toBe(0);
+    }
+  });
+
+  it("ArrowLeft nudges selected stock -1 in x", async () => {
+    const { container } = await renderReady();
+    const canvas = container.querySelector("canvas")!;
+    elementStore.setElements([stockAt(5, 3)]);
+
+    // Click near center of stock at (5,3,10,5) → world (10, 5.5).
+    fireEvent.pointerDown(canvas, { button: 0, pointerId: 71, clientX: 160.5, clientY: 88.5 });
+    fireEvent.pointerUp(canvas, { pointerId: 71, clientX: 160.5, clientY: 88.5 });
+
+    fireEvent.keyDown(window, { code: "ArrowLeft" });
+
+    const el = elementStore.getElements().find((e) => e.id === "test-arrow");
+    if (el?.kind === "stock") expect(el.x).toBe(4);
+  });
+
+  it("ArrowUp nudges selected stock -1 in y", async () => {
+    const { container } = await renderReady();
+    const canvas = container.querySelector("canvas")!;
+    elementStore.setElements([stockAt(0, 0)]);
+
+    fireEvent.pointerDown(canvas, { button: 0, pointerId: 72, clientX: 80.5, clientY: 40.5 });
+    fireEvent.pointerUp(canvas, { pointerId: 72, clientX: 80.5, clientY: 40.5 });
+
+    fireEvent.keyDown(window, { code: "ArrowUp" });
+
+    const el = elementStore.getElements().find((e) => e.id === "test-arrow");
+    if (el?.kind === "stock") expect(el.y).toBe(-1);
+  });
+
+  it("ArrowDown nudges selected stock +1 in y", async () => {
+    const { container } = await renderReady();
+    const canvas = container.querySelector("canvas")!;
+    elementStore.setElements([stockAt(0, 0)]);
+
+    fireEvent.pointerDown(canvas, { button: 0, pointerId: 73, clientX: 80.5, clientY: 40.5 });
+    fireEvent.pointerUp(canvas, { pointerId: 73, clientX: 80.5, clientY: 40.5 });
+
+    fireEvent.keyDown(window, { code: "ArrowDown" });
+
+    const el = elementStore.getElements().find((e) => e.id === "test-arrow");
+    if (el?.kind === "stock") expect(el.y).toBe(1);
+  });
+
+  it("ArrowRight nudges selected cloud +1 in x", async () => {
+    const { container } = await renderReady();
+    const canvas = container.querySelector("canvas")!;
+    elementStore.setElements([cloudAt(0, 0)]);
+
+    // Cloud at (0,0) — click near center.
+    fireEvent.pointerDown(canvas, { button: 0, pointerId: 74, clientX: 48.5, clientY: 24.5 });
+    fireEvent.pointerUp(canvas, { pointerId: 74, clientX: 48.5, clientY: 24.5 });
+
+    fireEvent.keyDown(window, { code: "ArrowRight" });
+
+    const el = elementStore.getElements().find((e) => e.id === "test-cloud");
+    if (el?.kind === "cloud") {
+      expect(el.x).toBe(1);
+      expect(el.y).toBe(0);
+    }
+  });
+
+  it("Arrow keys with no selection are a no-op (no crash)", async () => {
+    const { container } = await renderReady();
+    elementStore.setElements([stockAt(0, 0)]);
+
+    // No selection — arrow keys should be ignored.
+    fireEvent.keyDown(window, { code: "ArrowRight" });
+    fireEvent.keyDown(window, { code: "ArrowDown" });
+
+    const el = elementStore.getElements().find((e) => e.id === "test-arrow");
+    if (el?.kind === "stock") {
+      expect(el.x).toBe(0);
+      expect(el.y).toBe(0);
+    }
+  });
+
+  it("Arrow keys are suppressed when focus is in a text input", async () => {
+    const { container } = await renderReady();
+    elementStore.setElements([stockAt(0, 0)]);
+
+    const input = document.createElement("input");
+    document.body.appendChild(input);
+    input.focus();
+    try {
+      fireEvent.keyDown(input, { code: "ArrowRight" });
+      const el = elementStore.getElements().find((e) => e.id === "test-arrow");
+      if (el?.kind === "stock") {
+        expect(el.x).toBe(0); // unchanged
+      }
+    } finally {
+      document.body.removeChild(input);
+    }
+  });
+});
+
+describe("CanvasView – 新建 clears canvas (Story 1a.7 AC-3, CS-pinned #7)", () => {
+  afterEach(() => {
+    cleanup();
+    elementStore.setElements([]);
+    promptStore.reset();
+  });
+
+  it("confirming 新建 clears all elements", async () => {
+    const { container } = await renderReady();
+    elementStore.setElements([]); // clear mount-time seeds
+    elementStore.createStock({
+      name: "A",
+      x: 0,
+      y: 0,
+      width: 8,
+      height: 4,
+      initialValue: 0,
+      units: "",
+      allowNegative: false,
+    });
+    elementStore.createStock({
+      name: "B",
+      x: 10,
+      y: 10,
+      width: 8,
+      height: 4,
+      initialValue: 0,
+      units: "",
+      allowNegative: false,
+    });
+    expect(elementStore.getElements()).toHaveLength(2);
+
+    fireEvent.click(container.querySelector("[data-testid='ns-toolbar-btn-新建']")!);
+
+    // F-1-4: confirm is non-modal - it lands in the PromptPanel, not window.confirm.
+    await waitFor(() =>
+      expect(container.querySelector("[data-testid='ns-prompt-panel-confirm']")).not.toBeNull(),
+    );
+    fireEvent.click(container.querySelector("[data-testid='ns-prompt-panel-confirm']")!);
+
+    await waitFor(() => expect(elementStore.getElements()).toHaveLength(0));
+  });
+
+  it("cancelling 新建 leaves elements untouched", async () => {
+    const { container } = await renderReady();
+    elementStore.setElements([]); // clear mount-time seeds
+    elementStore.createStock({
+      name: "A",
+      x: 0,
+      y: 0,
+      width: 8,
+      height: 4,
+      initialValue: 0,
+      units: "",
+      allowNegative: false,
+    });
+    const before = elementStore.getElements().length;
+
+    fireEvent.click(container.querySelector("[data-testid='ns-toolbar-btn-新建']")!);
+
+    await waitFor(() =>
+      expect(container.querySelector("[data-testid='ns-prompt-panel-cancel']")).not.toBeNull(),
+    );
+    fireEvent.click(container.querySelector("[data-testid='ns-prompt-panel-cancel']")!);
+
+    expect(elementStore.getElements()).toHaveLength(before);
+  });
+
+  it("新建 on empty canvas is a no-op without prompting", async () => {
+    const { container } = await renderReady();
+    elementStore.setElements([]);
+    expect(elementStore.getElements()).toHaveLength(0);
+
+    fireEvent.click(container.querySelector("[data-testid='ns-toolbar-btn-新建']")!);
+
+    // No elements => no confirm lands in the panel; canvas stays empty.
+    await waitFor(() => expect(elementStore.getElements()).toHaveLength(0));
+    expect(container.querySelector("[data-testid='ns-prompt-panel-confirm']")).toBeNull();
+  });
+});
+
+describe("CanvasView - AC-9 statusbar FPS fallback (jsdom no rAF samples)", () => {
+  afterEach(() => cleanup());
+
+  it("shows '-' for FPS when fpsP95<=0 (guard prevents live-path '0')", async () => {
+    // jsdom may or may not pump rAF; force the no-sample condition the AC-9
+    // fallback must guard. Without the guard the render loop writes "0"
+    // (toFixed(0) of fpsP95=0), clobbering the StatusBar's initial "-".
+    const spy = vi.spyOn(perfProbe, "getMetrics").mockReturnValue({
+      fpsP95: 0,
+      loadMs: 0,
+      memP95: 0,
+    });
+    try {
+      const { container } = await renderReady();
+      const fps = container.querySelector("[data-testid='ns-statusbar-fps-value']")!;
+      expect(fps.textContent).toBe("-");
+    } finally {
+      spy.mockRestore();
+    }
   });
 });
