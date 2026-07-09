@@ -33,6 +33,10 @@ import { SpatialIndex } from "./spatial-index";
 import { DirtyRectTracker } from "./dirty-rect";
 import { PerformanceProbe } from "./perf-probe";
 import { MinimapProjector } from "./minimap";
+import { Toolbar } from "./Toolbar";
+import { StatusBar } from "./StatusBar";
+import { PromptPanel } from "./PromptPanel";
+import { promptStore } from "./promptStore";
 
 // Story 1a.1 sub-PR #3 — FR-CANVAS-1: infinite canvas navigation.
 //
@@ -187,6 +191,10 @@ let lastVp: Viewport | null = null;
 // mount, disposed on unmount. Exposed via __e2e__ for Playwright tests.
 let minimapProjector: MinimapProjector | null = null;
 
+// Story 1a.7: e2e test hooks — resolved lazily after component mount.
+let _e2eSetSelectedId: ((id: string | null) => void) | null = null;
+let _e2eGetToolMode: (() => string) | null = null;
+
 export { elementStore, spatialIndex, dirtyTracker, perfProbe, minimapProjector };
 
 // e2e test hook — expose store + spatialIndex + createFlow on window for
@@ -239,6 +247,15 @@ if (typeof window !== "undefined" && import.meta.env.DEV) {
     getHighlightBox: () => minimapProjector?.getHighlightBox() ?? null,
     jumpToWorld: (px: number, py: number) =>
       minimapProjector?.jumpToWorld(px, py) ?? { x: 0, y: 0 },
+    // Story 1a.7: e2e hooks for toolbar/statusbar tests (AC-13).
+    setSelectedElementId: (id: string | null) => {
+      // This function name is resolved lazily — the actual ref is set on mount.
+      // We store a callback that CanvasView's internal selectedIdRef will resolve.
+      (_e2eSetSelectedId as ((id: string | null) => void) | null)?.(id);
+    },
+    getToolMode: () => {
+      return (_e2eGetToolMode as (() => string) | null)?.() ?? "select";
+    },
   };
 }
 
@@ -431,7 +448,20 @@ export function CanvasView() {
   }>({ active: false, pointerId: -1, handle: "se" });
 
   // Story 1a.4: tool mode (keyboard-only, toolbar defer 1a.7).
+  // Story 1a.7 T7: lifted to React state so Toolbar buttons reflect current mode.
+  const [toolMode, setToolMode] = useState<ToolMode>("select");
   const toolModeRef = useRef<ToolMode>("select");
+  // Keep ref in sync for keyboard handlers and render-loop closures.
+  toolModeRef.current = toolMode;
+
+  // Story 1a.7 T8: dt (time step) lifted to React state for toolbar dt selector.
+  const [dt, setDt] = useState(0.1);
+
+  // Story 1a.7 T9/T10: imperative refs for zoom slider/label and statusbar live fields.
+  const zoomSliderRef = useRef<HTMLInputElement | null>(null);
+  const zoomLabelRef = useRef<HTMLSpanElement | null>(null);
+  const elementCountRef = useRef<HTMLSpanElement | null>(null);
+  const fpsRef = useRef<HTMLSpanElement | null>(null);
 
   // Story 1a.4: flow creation drag state (port snap → preview → commit).
   const flowDragRef = useRef<{
@@ -474,6 +504,31 @@ export function CanvasView() {
       const tm = toolModeRef.current;
       const modeStr = `[${modeLabel[tm] ?? tm}]`;
       hud.textContent = `${modeStr}  zoom ${zoomPct}%  ·  x ${wx.toFixed(1)}  ·  y ${wy.toFixed(1)}`;
+    }
+
+    // Story 1a.7 T9: imperative zoom slider + label (mirrors HUD pattern).
+    if (zoomSliderRef.current) {
+      const rawZoom = cam.zoom;
+      // Clamp to slider range; slider handles [0.05, 20].
+      const clamped = Math.max(0.05, Math.min(20, rawZoom));
+      if (zoomSliderRef.current.valueAsNumber !== clamped) {
+        zoomSliderRef.current.valueAsNumber = clamped;
+      }
+    }
+    if (zoomLabelRef.current) {
+      const pct = Math.round(cam.zoom * 100);
+      zoomLabelRef.current.textContent = `${pct}%`;
+    }
+
+    // Story 1a.7 T10: imperative statusbar live fields (element count + FPS).
+    if (elementCountRef.current) {
+      elementCountRef.current.textContent = String(elementStore.getElements().length);
+    }
+    if (fpsRef.current) {
+      // AC-9: fpsP95<=0 (jsdom no rAF samples / pre-sample window / backgrounded
+      // tab) must show the "-" fallback, never "0" (toFixed(0) of fpsP95=0).
+      const fps = perfProbe.getMetrics().fpsP95;
+      fpsRef.current.textContent = fps > 0 ? fps.toFixed(0) : "-";
     }
 
     // Empty-state guidance + warnings (also DOM-based, testable in jsdom).
@@ -625,6 +680,13 @@ export function CanvasView() {
     // so the canvas never shows a blank screen. Clearing the store afterward
     // (e.g. to test the empty-state guidance) does NOT re-seed — the seed is
     // only applied once at initial mount.
+    // Story 1a.7: wire e2e hooks (resolved lazily for toolbar/statusbar Playwright tests).
+    _e2eSetSelectedId = (id: string | null) => {
+      selectedIdRef.current = id;
+      drawRef.current();
+    };
+    _e2eGetToolMode = () => toolModeRef.current;
+
     if (elementStore.getElements().length === 0) {
       seedSampleStocks();
     }
@@ -759,6 +821,8 @@ export function CanvasView() {
       minimapRO?.disconnect();
       minimapProjector?.dispose();
       minimapProjector = null;
+      _e2eSetSelectedId = null;
+      _e2eGetToolMode = null;
       unsubStore();
       ro?.disconnect();
       rendererRef.current?.dispose();
@@ -828,6 +892,7 @@ export function CanvasView() {
       if (mode) {
         e.preventDefault();
         toolModeRef.current = mode;
+        setToolMode(mode);
         // Abort any in-progress flow drag when switching modes.
         flowDragRef.current = {
           active: false,
@@ -838,6 +903,53 @@ export function CanvasView() {
         selectedIdRef.current = null;
         drawRef.current();
       }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  // ---- Delete / Backspace keyboard handler (Story 1a.7 T5, AC-3) ----
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (isTextInput(e.target)) return;
+      if (e.ctrlKey || e.altKey || e.metaKey) return;
+      if (e.code === "Delete" || e.code === "Backspace") {
+        e.preventDefault();
+        const selId = selectedIdRef.current;
+        if (selId) {
+          elementStore.deleteElement(selId);
+          selectedIdRef.current = null;
+          drawRef.current();
+        }
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  // ---- Arrow key movement handler (Story 1a.7 T6, AC-3) ----
+  useEffect(() => {
+    const MOVE_STEP = 1; // world-unit step per key press
+    const onKey = (e: KeyboardEvent) => {
+      if (isTextInput(e.target)) return;
+      if (e.ctrlKey || e.altKey || e.metaKey) return;
+      const selId = selectedIdRef.current;
+      if (!selId) return;
+      const el = elementStore.getElements().find((x) => x.id === selId);
+      if (!el) return;
+      let dx = 0;
+      let dy = 0;
+      if (e.code === "ArrowUp") dy = -MOVE_STEP;
+      else if (e.code === "ArrowDown") dy = MOVE_STEP;
+      else if (e.code === "ArrowLeft") dx = -MOVE_STEP;
+      else if (e.code === "ArrowRight") dx = MOVE_STEP;
+      else return;
+      e.preventDefault();
+      if (el.kind === "stock" || el.kind === "cloud") {
+        elementStore.updateElement(el.id, { x: el.x + dx, y: el.y + dy } as Partial<SDElement>);
+      }
+      // Flow elements don't have position — arrow keys are no-op for them.
+      drawRef.current();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -1286,59 +1398,119 @@ export function CanvasView() {
     minimapDragRef.current = false;
   };
 
+  // ── Story 1a.7 handler functions (T5, T8, T9, T11) ──
+
+  const handleDelete = () => {
+    const selId = selectedIdRef.current;
+    if (selId) {
+      elementStore.deleteElement(selId);
+      selectedIdRef.current = null;
+      drawRef.current();
+    }
+  };
+
+  const handleNew = async () => {
+    // Story 1a.7 CS-pinned #7: 新建 = new model - clear all elements, clear
+    // selection, reset camera to {0,0,16}. Guard with a confirm when elements
+    // exist (misclick protection; removable once Epic 4 undo lands). The
+    // confirm is non-modal: it lands in the PromptPanel (bottom area) and
+    // handleNew awaits its promise before clearing.
+    if (elementStore.getElements().length > 0) {
+      const ok = await promptStore.confirm("新建将清空当前画布上的所有元素，确定吗?");
+      if (!ok) return;
+    }
+    elementStore.setElements([]);
+    selectedIdRef.current = null;
+    camRef.current = clampCamera({ x: 0, y: 0, zoom: 16 });
+    drawRef.current();
+  };
+
+  const handleZoomChange = (zoom: number) => {
+    camRef.current = clampCamera({ ...camRef.current, zoom });
+    drawRef.current();
+  };
+
   return (
-    <div ref={containerRef} className="ns-canvas" tabIndex={0}>
-      <canvas
-        ref={canvasRef}
-        className="ns-canvas__surface"
-        onPointerDown={beginPan}
-        onPointerMove={movePan}
-        onPointerUp={endPan}
-        onPointerCancel={endPan}
+    <div className="ns-layout">
+      {/* Story 1a.7 AC-1: top toolbar (6 control groups, Chinese labels, semantic roles). */}
+      <Toolbar
+        toolMode={toolMode}
+        setToolMode={setToolMode}
+        dt={dt}
+        setDt={setDt}
+        onDelete={handleDelete}
+        onNew={handleNew}
+        zoomSliderRef={zoomSliderRef}
+        zoomLabelRef={zoomLabelRef}
+        onZoomChange={handleZoomChange}
       />
-      {/* WebGL2 glyph overlay (AD-9). Stacked above the 2D surface; transparent
-          and pointer-events:none so all pan/zoom/wheel input still hits the 2D
-          canvas below. aria-hidden: the HUD is the accessible live region. */}
-      <canvas ref={glCanvasRef} className="ns-canvas__gl" aria-hidden="true" />
-      {/* Story 1a.6: minimap 2D canvas overlay (AC-1). Positioned bottom-right,
-          above zoom controls. Own pointer events for jump interaction (T4). */}
-      <canvas
-        ref={minimapCanvasRef}
-        className="ns-canvas__minimap"
-        onPointerDown={beginMinimapJump}
-        onPointerMove={moveMinimapJump}
-        onPointerUp={endMinimapJump}
-        onPointerCancel={endMinimapJump}
-      />
-      <span ref={hudRef} className="ns-canvas__hud" aria-live="polite" />
-      <div ref={warnElRef} className="ns-canvas__warn" role="alert" style={{ display: "none" }} />
-      <div ref={guideRef} className="ns-canvas__guide" role="status" style={{ display: "none" }} />
-      <div className="ns-canvas__ctrl" role="group" aria-label="zoom controls">
-        <button
-          type="button"
-          className="ns-canvas__btn"
-          aria-label="zoom in"
-          onClick={() => zoomByFactor(ZOOM_BUTTON_FACTOR)}
-        >
-          +
-        </button>
-        <button
-          type="button"
-          className="ns-canvas__btn"
-          aria-label="zoom out"
-          onClick={() => zoomByFactor(1 / ZOOM_BUTTON_FACTOR)}
-        >
-          −
-        </button>
-      </div>
-      {phase === "loading" && (
-        <div className="ns-canvas__skeleton" role="status" aria-busy="true">
-          <pre className="ns-ascii" aria-hidden="true">
-            {SKELETON}
-          </pre>
-          <span className="ns-canvas__hint">loading · Float64 canvas · 3×2 affine</span>
+
+      <div ref={containerRef} className="ns-canvas" tabIndex={0}>
+        <canvas
+          ref={canvasRef}
+          className="ns-canvas__surface"
+          onPointerDown={beginPan}
+          onPointerMove={movePan}
+          onPointerUp={endPan}
+          onPointerCancel={endPan}
+        />
+        {/* WebGL2 glyph overlay (AD-9). Stacked above the 2D surface; transparent
+            and pointer-events:none so all pan/zoom/wheel input still hits the 2D
+            canvas below. aria-hidden: the HUD is the accessible live region. */}
+        <canvas ref={glCanvasRef} className="ns-canvas__gl" aria-hidden="true" />
+        {/* Story 1a.6: minimap 2D canvas overlay (AC-1). Positioned bottom-right,
+            above zoom controls. Own pointer events for jump interaction (T4). */}
+        <canvas
+          ref={minimapCanvasRef}
+          className="ns-canvas__minimap"
+          onPointerDown={beginMinimapJump}
+          onPointerMove={moveMinimapJump}
+          onPointerUp={endMinimapJump}
+          onPointerCancel={endMinimapJump}
+        />
+        <span ref={hudRef} className="ns-canvas__hud" aria-live="polite" />
+        <div ref={warnElRef} className="ns-canvas__warn" role="alert" style={{ display: "none" }} />
+        <div
+          ref={guideRef}
+          className="ns-canvas__guide"
+          role="status"
+          style={{ display: "none" }}
+        />
+        <div className="ns-canvas__ctrl" role="group" aria-label="zoom controls">
+          <button
+            type="button"
+            className="ns-canvas__btn"
+            aria-label="zoom in"
+            onClick={() => zoomByFactor(ZOOM_BUTTON_FACTOR)}
+          >
+            +
+          </button>
+          <button
+            type="button"
+            className="ns-canvas__btn"
+            aria-label="zoom out"
+            onClick={() => zoomByFactor(1 / ZOOM_BUTTON_FACTOR)}
+          >
+            −
+          </button>
         </div>
-      )}
+        {phase === "loading" && (
+          <div className="ns-canvas__skeleton" role="status" aria-busy="true">
+            <pre className="ns-ascii" aria-hidden="true">
+              {SKELETON}
+            </pre>
+            <span className="ns-canvas__hint">loading · Float64 canvas · 3×2 affine</span>
+          </div>
+        )}
+      </div>
+
+      {/* Story 1a.7: prompt center (online-game style message log) - collapsed
+          single row above the statusbar; expands to a resizable log. Hosts the
+          新建 confirm (F-1-4) and future info/toast/game messages. */}
+      <PromptPanel />
+
+      {/* Story 1a.7 AC-8: bottom statusbar (7 fields, aria-live). */}
+      <StatusBar elementCountRef={elementCountRef} fpsRef={fpsRef} />
     </div>
   );
 }

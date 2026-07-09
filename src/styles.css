@@ -119,13 +119,25 @@
     max-width: 28rem;
   }
 
-  /* Story 1a.1 sub-PR #3 — infinite canvas shell (FR-CANVAS-1).
-     On-palette via tokens.css; no per-glyph shadowBlur on the canvas surface
-     (CAP-11) — glow lives in the HTML skeleton/axes only. */
-  .ns-canvas {
-    position: relative;
+  /* Story 1a.7 — AppShell flex layout: toolbar (top) + canvas (middle) + statusbar (bottom). */
+  .ns-layout {
+    display: flex;
+    flex-direction: column;
     width: 100%;
     height: 100vh;
+    overflow: hidden;
+  }
+
+  /* Story 1a.1 sub-PR #3 — infinite canvas shell (FR-CANVAS-1).
+     On-palette via tokens.css; no per-glyph shadowBlur on the canvas surface
+     (CAP-11) — glow lives in the HTML skeleton/axes only.
+     Story 1a.7: height changed from 100vh → flex:1 / min-height:0 to fit inside
+     the .ns-layout flex column (toolbar top, statusbar bottom). */
+  .ns-canvas {
+    position: relative;
+    flex: 1;
+    min-height: 0;
+    width: 100%;
     overflow: hidden;
     background-color: var(--ns-bg);
     color: var(--ns-fg);
@@ -237,5 +249,253 @@
     z-index: 1;
     display: block;
     cursor: crosshair;
+  }
+
+  /* ── Story 1a.7: Toolbar (AC-1, AC-2, AC-4, AC-7) ── */
+  .ns-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.35rem 0.6rem;
+    background-color: var(--ns-bg-elev);
+    border-bottom: 1px solid var(--ns-border);
+    flex-shrink: 0;
+    overflow-x: auto;
+    user-select: none;
+  }
+
+  .ns-toolbar__group {
+    display: flex;
+    align-items: center;
+    gap: 0.15rem;
+  }
+
+  .ns-toolbar__btn {
+    background: transparent;
+    border: 1px solid transparent;
+    color: var(--ns-fg);
+    font-family: var(--ns-font-mono);
+    font-size: 0.72rem;
+    padding: 0.15rem 0.45rem;
+    cursor: pointer;
+    white-space: nowrap;
+    line-height: 1.4;
+  }
+
+  .ns-toolbar__btn:hover:not(:disabled) {
+    border-color: var(--ns-border);
+    background-color: rgba(255, 255, 255, 0.04);
+  }
+
+  .ns-toolbar__btn:focus-visible {
+    outline: 1px solid var(--ns-stock);
+    outline-offset: -1px;
+  }
+
+  .ns-toolbar__btn:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+    color: var(--ns-fg-dim);
+  }
+
+  .ns-toolbar__btn--active {
+    color: var(--ns-stock);
+    text-shadow: 0 0 4px var(--ns-stock);
+    border-color: var(--ns-stock);
+  }
+
+  .ns-toolbar__select {
+    background: transparent;
+    border: 1px solid var(--ns-border);
+    color: var(--ns-fg);
+    font-family: var(--ns-font-mono);
+    font-size: 0.7rem;
+    padding: 0.1rem 0.3rem;
+    cursor: pointer;
+    outline: none;
+  }
+
+  .ns-toolbar__select:focus-visible {
+    outline: 1px solid var(--ns-stock);
+    outline-offset: -1px;
+  }
+
+  .ns-toolbar__select option {
+    background: var(--ns-bg-elev);
+    color: var(--ns-fg);
+  }
+
+  .ns-toolbar__zoom-label {
+    color: var(--ns-fg-mid);
+    font-size: 0.68rem;
+    min-width: 3.2em;
+    text-align: right;
+    white-space: nowrap;
+  }
+
+  .ns-toolbar__zoom-slider {
+    width: 5rem;
+    accent-color: var(--ns-stock);
+    cursor: pointer;
+  }
+
+  /* ── Story 1a.7: StatusBar (AC-8, AC-9) ── */
+  .ns-statusbar {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.25rem 0.6rem;
+    background-color: var(--ns-bg-elev);
+    border-top: 1px solid var(--ns-border);
+    flex-shrink: 0;
+    font-size: 0.68rem;
+    color: var(--ns-fg-mid);
+    user-select: none;
+    overflow-x: auto;
+    white-space: nowrap;
+  }
+
+  .ns-statusbar__field {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+  }
+
+  /* ── Story 1a.7: PromptPanel (prompt center, above statusbar) ── */
+  .ns-prompt-panel {
+    flex-shrink: 0;
+    background-color: rgba(0, 0, 0, 0.75);
+    border-top: 1px solid var(--ns-border);
+    color: var(--ns-fg);
+    font-family: var(--ns-font-mono);
+    font-size: 0.7rem;
+    user-select: none;
+    overflow: hidden;
+  }
+  .ns-prompt-panel--collapsed {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.2rem 0.6rem;
+    height: 1.6rem;
+    white-space: nowrap;
+  }
+  /* Unanswered confirm pinned to collapsed row: red border pulse. */
+  .ns-prompt-panel--pin {
+    border-top-color: var(--ns-err);
+    animation: ns-prompt-pulse 1.2s ease-in-out infinite;
+  }
+  @keyframes ns-prompt-pulse {
+    0%,
+    100% {
+      box-shadow: inset 0 1px 0 var(--ns-err);
+    }
+    50% {
+      box-shadow: inset 0 1px 5px var(--ns-err);
+    }
+  }
+  .ns-prompt-panel--expanded {
+    display: flex;
+    flex-direction: column;
+  }
+  .ns-prompt-panel__handle {
+    height: 4px;
+    cursor: ns-resize;
+    background-color: var(--ns-bg-elev);
+    flex-shrink: 0;
+    touch-action: none;
+  }
+  .ns-prompt-panel__handle:hover {
+    background-color: var(--ns-border);
+  }
+  .ns-prompt-panel__header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.15rem 0.6rem;
+    border-bottom: 1px solid var(--ns-border);
+    background-color: var(--ns-bg-elev);
+    flex-shrink: 0;
+  }
+  .ns-prompt-panel__title {
+    color: var(--ns-stock);
+    text-shadow: 0 0 4px var(--ns-stock);
+    white-space: nowrap;
+  }
+  .ns-prompt-panel__count {
+    color: var(--ns-fg-mid);
+    white-space: nowrap;
+  }
+  .ns-prompt-panel__spacer {
+    flex: 1;
+  }
+  .ns-prompt-panel__list {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 0.2rem 0.6rem;
+  }
+  .ns-prompt-panel__msg {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.1rem 0;
+    white-space: nowrap;
+  }
+  .ns-prompt-panel__msg--resolved {
+    opacity: 0.55;
+  }
+  .ns-prompt-panel__tag {
+    color: var(--ns-fg-mid);
+    flex-shrink: 0;
+  }
+  .ns-prompt-panel__tag--confirm {
+    color: var(--ns-err);
+    text-shadow: 0 0 4px var(--ns-err);
+  }
+  .ns-prompt-panel__text {
+    color: var(--ns-fg);
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  /* confirm: black-bg / red-text (ns-ascii--err vocabulary). */
+  .ns-prompt-panel__msg--confirm .ns-prompt-panel__text,
+  .ns-prompt-panel__text--confirm {
+    color: var(--ns-err);
+    text-shadow: 0 0 4px var(--ns-err);
+  }
+  .ns-prompt-panel__result {
+    color: var(--ns-fg-mid);
+    flex-shrink: 0;
+  }
+  .ns-prompt-panel__actions {
+    display: inline-flex;
+    gap: 0.3rem;
+    flex-shrink: 0;
+    margin-left: auto;
+  }
+  .ns-prompt-panel__btn,
+  .ns-prompt-panel__actions button {
+    background: transparent;
+    border: 1px solid transparent;
+    color: var(--ns-fg);
+    font-family: var(--ns-font-mono);
+    font-size: 0.7rem;
+    padding: 0 0.2rem;
+    cursor: pointer;
+    line-height: 1.4;
+  }
+  .ns-prompt-panel__btn:hover,
+  .ns-prompt-panel__actions button:hover {
+    border-color: var(--ns-border);
+    background-color: rgba(255, 255, 255, 0.04);
+  }
+  .ns-prompt-panel__btn:focus-visible,
+  .ns-prompt-panel__actions button:focus-visible {
+    outline: 1px solid var(--ns-stock);
+    outline-offset: -1px;
+  }
+  .ns-prompt-panel__empty {
+    color: var(--ns-fg-dim);
   }
 }
