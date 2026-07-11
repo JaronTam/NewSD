@@ -67,3 +67,18 @@ CR verdict **FAIL**(F-B correctness + F-A AC-2 spec violation;patch 项 F-B/F-C/
 | F-H | computeWorldBounds 非对称 clamp(max 下界 / min 上界)->元素 coord 超 WORLD_CLAMP=1e15 可 minX>maxX 反转(minimap.ts:188-193) | TBD          | LOW;元素 coord >1e15 非现实(user 不在此置图元);对称 clamp + `minX<=maxX` hardening nice-to-have    |
 
 注:1a.5 H8/E2(queryLowPrecision NaN/Infinity 未守卫)已由本 story AC-7 闭环(dirty-rect.ts `markDirty` `Number.isFinite` + `queryLowPrecision` defensive skip + 23 测,签名不改),不再 defer。
+
+---
+
+## From Story 1a.7 CR (Run 1, 2026-07-10)
+
+CR verdict **PASS**(3-layer orchestrator-direct per newsd-cr-3-layers-orchestrator-direct-not-subagents)。合并前 2 patch(F-cs-dep-mismatch 回退 @testing-library/user-event 恢复 CS「无新依赖」一致 + F-dead-css 删 ns-prompt-panel__expand)。4 minor defer 项,2026-07-10 用户裁决后处理:
+
+| ID  | Item                                                            | 处理            | Target          | Rationale                                                                                                                                                                   |
+| --- | --------------------------------------------------------------- | --------------- | --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| D1  | COLLAPSED_H(26) vs CSS(1.6rem=25.6px) 0.4px 差                  | **defer 1a.12** | 1a.12 重构      | collapsed 高度本应固定(drag floor 是 px);1a.7 本地曾修 CSS height 1.6rem->26px 对齐常量,patch 随 B3 restore 弃,1a.12 收起态胶囊重做时重实现                                 |
+| D2  | testid-dup:展开态多未答 confirm 时 ns-prompt-panel-confirm 重复 | **accept**      | TBD(1a.12 重构) | 多未答 confirm 仅连点新建(异常操作)触发;正常单 confirm 无冲突;querySelector 取首个功能正确,不修                                                                             |
+| D3  | trim-cap:100 条全未答 confirm 时 trim 无法丢,超 MAX_MESSAGES    | **accept**      | TBD             | 决策约束(未答 confirm 不推进业务下一步=清空)使 confirm 不堆积至 100;trim 跳过未答 confirm 防 awaiter 永挂的保护正确,不修                                                    |
+| D4  | autoscroll:展开态新消息不自动滚底                               | **defer 1a.12** | 1a.12 重构      | stick-to-bottom(chat/终端惯例):已在底部才自动滚,用户上滚时不抢回;1a.7 本地曾修 useEffect + scrollTop 检测(24px 阈值)+ 2 测试,patch 随 B3 restore 弃,1a.12 list 重构时重实现 |
+
+注:D1/D4 用户裁决 B3(2026-07-12):1a.7 本地 patch 随 restore 弃,defer Story 1a.12(PromptPanel 四 tab 重构)重实现(1a.8 只动属性面板不碰 PromptPanel,故非 1a.8);D2/D3 accept 不修。CR 报告门控 retrospect:1a.7 CR 跑完直接 patch+合并未先报告,已立 memory newsd-cr-report-before-execute-gate 防复发;4 defer 项本次补作决策项报告。

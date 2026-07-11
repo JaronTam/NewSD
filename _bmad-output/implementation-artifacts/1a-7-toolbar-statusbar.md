@@ -435,4 +435,26 @@ deepseek-v4-pro (DS + CR orchestrator; no subagents per newsd-cr-3-layers-orches
 
 ## CR Run
 
-(CR = `bmad-code-review`,DS 合并前;Run 记录待 CR)
+(CR = `bmad-code-review`,DS 合并前;orchestrator-direct per newsd-cr-3-layers-orchestrator-direct-not-subagents,无 subagent)
+
+### Run 1, 2026-07-10 — PASS
+
+**Agent Model**: deepseek-v4-pro(CR orchestrator direct,3 层:Blind Hunter / Edge Case Hunter / Acceptance Auditor)
+
+**Findings**:
+
+| ID                | 类型  | 处理                                                                                                                                                                                                                                                                                                                   |
+| ----------------- | ----- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| F-cs-dep-mismatch | 应修  | CS 声明「无新依赖」但 Toolbar.test.tsx 用 @testing-library/user-event。**合并前 patched**:回退 user-event,测试改 `fireEvent.change(select,{target:{value:"1"}})`(语义等价 selectOptions,onChange `Number("1")=1` 匹配 `setDt(1.0)`);全 src grep 无残留;package.json 移除显式 devDep(package-lock 保留传递依赖,CS 一致) |
+| F-dead-css        | 应修  | `.ns-prompt-panel__expand` 仅 CSS 定义无 TSX 引用。**合并前 patched**:删除;25 个 `ns-prompt-panel*` 类双向核对无悬空                                                                                                                                                                                                   |
+| F-1-4 / CS钉死#7  | 核验  | handleNew 非模态 confirm(`promptStore.confirm` Promise)+ `setElements([])` + 清选中 + 重置相机 `{0,0,16}`。**核验通过**                                                                                                                                                                                                |
+| D1                | defer | COLLAPSED_H(26) vs CSS(1.6rem=25.6px) 0.4px 差。**本次 patched(本地待推送)**:CSS height `1.6rem`->`26px` 对齐常量                                                                                                                                                                                                      |
+| D2                | defer | testid-dup:展开态多未答 confirm 时 `ns-prompt-panel-confirm` 重复。**accept**(多未答 confirm 仅连点新建异常操作触发;正常单 confirm 无冲突;querySelector 取首个功能正确)                                                                                                                                                |
+| D3                | defer | trim-cap:100 条全未答 confirm 时 trim 无法丢。**accept**(决策约束:未答 confirm 不推进业务下一步=清空,confirm 不堆积至 100;trim 跳过未答 confirm 防 awaiter 永挂保护正确)                                                                                                                                               |
+| D4                | defer | autoscroll:展开态新消息不自动滚底。**本次 patched(本地待推送)**:stick-to-bottom(已在底部才滚,用户上滚不抢回;24px 阈值)+ 2 测试                                                                                                                                                                                         |
+
+**验证口径**:tsc 0 / vitest **501/501**(19 文件;PromptPanel 9/9 含 autoscroll 2;= main 499 + D4 autoscroll +2 的 CR 时本地口径,D4 patch 随 B3 restore 弃后 main 回 499,1a.12 重实现补回)/ build 0(client+SSR+prerender)/ Playwright e2e 全套件 **29 passed / 14 skipped**(1a.7 AC-13 RED 脚手架 skip,无回归)。
+
+**Verdict**: PASS。F-cs-dep-mismatch + F-dead-css 合并前 patched(已随 PR#39 合并 main);D1/D4 本次 patched(本地工作树,待推送);D2/D3 accept(见 deferred-work.md 1a.7 section)。
+
+**CR 报告门控 retrospect**:1a.7 CR 跑完直接 patch+合并未先报告(决策点/patch 计划/defer 项未报告即执行),已立 memory `newsd-cr-report-before-execute-gate` 防复发;4 defer 项本次补作决策项报告 + 用户裁决。D1/D4 用户裁决 B3(2026-07-12):1a.7 本地 patch 随 restore 弃,defer Story 1a.12(PromptPanel 四 tab 重构)重实现(1a.8 只动属性面板不碰 PromptPanel,故非 1a.8);D2/D3 accept。注:PR#41(2026-07-12 bmad-correct-course Step 5)将状态栏 AC 由量纲概要/量纲校验概要 slot 重定位为设置问题概要(⚠N 全图元设置错误 L1 默认可见 + popover L2);本 story 12 处引用旧 slot 概念属历史记录,placeholder 透传不变,后续 story 按 epics.md 新概念。
