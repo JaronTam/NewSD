@@ -92,6 +92,43 @@
 5. [CR] bmad-code-review: 并行对抗审查 (Blind Hunter/Edge Case/Acceptance Auditor)
 6. sprint-status 1a-3 → done, 进入 1a.4
 
+## 6. CC Step 5 路由 (2026-07-12, bmad-correct-course)
+
+> 来源: [sprint-change-proposal-2026-07-10.md](sprint-change-proposal-2026-07-10.md) §5 Handoff; **Major scope** 裁定(用户批准 "A" 继续)。
+> epics.md 已回写 7 提案(PromptPanel 四 tab 重构 + 游戏化中心规格 + 图元命名机制 + flow 端点完整性 + 错误二分归宿 + FR-UI-3 修订),逐条 old->new 见提案 §4。
+
+### 6.1 新增 story 编号定夺(本节定,提案 "编号留 SP")
+
+| 提案标签               | 编号  | slug                           | Epic | 状态    | 依赖                |
+| ---------------------- | ----- | ------------------------------ | ---- | ------- | ------------------- |
+| FR-ELEM-5 命名机制     | 1a.11 | 1a-11-entity-naming-mechanism  | 1a   | backlog | 1a.8                |
+| 1a.8+ PromptPanel 重构 | 1a.12 | 1a-12-prompt-panel-restructure | 1a   | backlog | 1a-11 命名机制      |
+| Story 5.4 游戏化中心   | 5.4   | 5-4-gamification-center        | 5    | backlog | 点3 讨论 + 5.3 就绪 |
+
+- **不重编号**: 1a.9(i18n)/1a.10(model-settings) 编号不变,执行顺序后移。
+- **执行顺序**: 1a.8 -> 1a.11(FR-ELEM-5 命名机制) -> 1a.12(1a.8+ 重构) -> 1a.9(i18n) -> 1a.10(model-settings)。i18n 对 1a.8+ 最终 tab 结构抽 key 避免返工。
+- **Story 5.4 门控**: 待点 3(游戏化中心详细设计:表盘/等级/徽章墙交互与数据模型)讨论收敛 + 5.3(badge-system-master-switch)就绪后方可启动 CS;AC 细节当前留 CS。
+
+### 6.2 点 3 独立待办(Story 5.4 前置,不阻塞 Epic 1a)
+
+- 游戏化中心详细设计(表盘 + 等级机制 + 徽章墙的交互/触发条件/数据模型)尚未细化,作为独立设计讨论项,不阻塞 Epic 1a 推进。
+- 收敛后回写 epics.md Story 5.4 AC 细节(当前留 CS),再启动 5.4 CS(另需 5.3 就绪)。
+
+### 6.3 1a.7 defer 独立推(不夹带本次 CC 回写)
+
+- 1a.7 defer 5 文件(PromptPanel.tsx / PromptPanel.test.tsx / styles.css / deferred-work.md / 1a-7-toolbar-statusbar.md)独立推送,**不夹带**本次 CC epics.md 回写提交。
+- 详见提案 §5 附录。
+
+### 6.4 下一步 story-cycle
+
+1. [CC] 本提交(epics.md 回写 + sprint-plan/status 同步)合并 main(Major scope,走 PR)
+2. [CS] bmad-create-story: 1a.8 property-panel-formula-editor(功能逻辑层:公式编辑/校验/量纲 stub + 最简 UI 容器;容器层 tab 化/新 tab/错误二分归宿在 1a.12 重构)
+3. [VS/DS/CR] 1a.8 完整 story-cycle
+4. [CS] 1a.11 entity-naming-mechanism(FR-ELEM-5 命名机制独立小 story)
+5. [CS] 1a.12 prompt-panel-restructure(1a.8+ 四 tab 重构)
+6. [CS] 1a.9 i18n / 1a.10 model-settings(执行顺序后移)
+7. [设计讨论] 点 3 游戏化中心 -> [CS] 5.4 gamification-center(待 5.3 就绪)
+
 ---
 
 关联: [story-cycle-formalization.md](story-cycle-formalization.md) | [epics.md](epics.md) | [reverse-cr-1a1-1a2-findings.md](reverse-cr-1a1-1a2-findings.md) | sprint-status: `../implementation-artifacts/sprint-status.yaml`
