@@ -41,13 +41,14 @@
 - 测试标准 (TDD red-green)
 - 依赖 (前置 story/AD) 标注
 - ZERO USER INTERVENTION (除初始选择)
+- IR 前置轻量核 (step1 前: AD/CAP 引用存在 + 依赖 story 存在, 防 epic↔story drift - #8 落地)
 
 ### 2.2 VS (Validate Story)
 
 **流程**:
 
 - reviewer 检查 story 文件质量
-- gate: 零歧义 (AC 无多种解读) + 零遗漏 (epic AC 全覆盖) + 可执行 (dev 能直接做) + web research 显式记录 (step4 no-op 也算, 禁静默 skip — VS 门控拦截 CS step4 缺失, 不留到事后审计)
+- gate: 零歧义 (AC 无多种解读) + 零遗漏 (epic AC 全覆盖) + 可执行 (dev 能直接做) + web research 显式记录 (step4 no-op 也算, 禁静默 skip — VS 门控拦截 CS step4 缺失, 不留到事后审计) + task↔CS钉死 一致性 (Tasks/Subtasks 行实现方向须与 CS 钉死项逐条一致, 矛盾拦在 VS 不漏到 CR, 1a.7 教训: DS 按 T11 偏离 CS钉死#7 致 F-1-4 漏到 CR)
 - pass → 进入 DS; fail → 回 CS 修订
 
 **artifacts**:
@@ -88,6 +89,8 @@
 - CI 全绿 (frontend/go/wasm/build-image)
 - NEVER implement anything not mapped to task/subtask
 - NEVER mark complete unless 全验证门控 pass
+- step8 mark complete 前 baseline diff review: `git diff <baseline_commit>..HEAD` 逐文件核, 声明与 diff 一致 (防 DS 虚假声明 - 1a.4 F9 抓 12+ false claims / 1a.7 偏离 CS钉死#7; #1 落地)
+- step9 DoD 双源核验: 逐条对照 epic AC ∪ story AC, 遗漏即 fail (防 AC 遗漏 - 1a.4 AC-12b/12c 靠 VS 修订补; #4 落地)
 
 ### 2.4 CR (Code Review)
 
@@ -101,6 +104,7 @@
 3. 汇总 findings
 4. fix (dev) 或 accept (reviewer)
 5. sprint-status -> done (独立 chore PR, 合后推) + story 文件 Status -> done (随 story PR 提交, CR pass 时改 - 1a.4 偏离#5 修正: 禁留 review)
+- read-only 守卫: 每层 review 起止 `git status --porcelain` 断言空 (防 CR 越界改码 - 1a.4 改 elements.ts +11/test +32-5; orchestrator-direct 直跑易加, #2 落地)
 
 **artifacts**:
 
@@ -108,6 +112,11 @@
 - 输出: CR 报告 + 修订 (若需)
 
 **gate**: CR pass -> done (须双写: sprint-status->done + story 文件 Status->done; 1a.4 偏离#5 教训: story 文件 Status 禁留 review); fail -> 回 DS 修订
+
+**CR 产物完整性** (pass 前双产物齐, 1a.7 教训: 漏 deferred-work + 漏 CR Run section 回填):
+- 产物 1 deferred-work.md: defer 项落 `implementation-artifacts/deferred-work.md` (per-story section `## From Story X CR (Run N, date)` + 表 ID/Item/Target Story/Rationale; accept 项也记, 1a.7 加 处理 列 defer/accept)
+- 产物 2 story CR Run section: story 文件回填 `## CR Run` -> `### Run N, date - verdict` (Agent Model / 3 层 Findings 表 ID/类型/处理 / patch 记录 / defer 项交叉引用 deferred-work / 验证口径 tsc+vitest+build+Playwright 全套件 count / Verdict / retrospect)
+- report-before-execute gate: 3 层 review 跑完 -> 报告 (决策点 / patch 计划 / defer 项) -> 等用户确认 -> 才 patch/合并 (memory newsd-cr-report-before-execute-gate; 合并 PR 不可逆)
 
 ## 3. sprint-status 状态机
 
@@ -144,11 +153,12 @@ VS 在 `.claude/skills/` 无独立 skill, 引用 dev-story step1 的 `*validate-
 - **选项 B**: 手动检查清单:
   - AC 完备 (Given/When/Then, 覆盖 epic 全 AC)
   - 任务可执行 (子任务粒度 dev 能直接做)
+  - task↔CS钉死 一致性 (Tasks/Subtasks 行实现方向须与 CS 钉死项逐条一致, 矛盾拦在 VS 不漏到 CR, 1a.7 教训)
   - 约束引用 (AD/CAP 显式)
   - 测试标准 (TDD red-green)
   - web research 显式记录 (step4: 有新依赖记 version+why+breaking; 无新依赖记 no-op 引用基座 version 锁; 禁静默 skip)
   - 依赖标注 (前置 story/AD)
-- **gate**: 零歧义 + 零遗漏 + 可执行
+- **gate**: 零歧义 + 零遗漏 + 可执行 + web research 显式记录 + task↔CS钉死 一致性 (Tasks/Subtasks 须与 CS 钉死项逐条一致, 矛盾拦在 VS)
 
 ## 6. 单 PR vs sub-PR 决策
 
@@ -167,6 +177,15 @@ CR/DS 必查红线 (违则 fail):
 - 读图 (PNG/截图/设计稿/视觉 gate) 前先 ⚠ 切多模态停手等确认
 - 文档标点: prd 全角 / epics+spine 半角
 - 定位变更须传播到全部措辞
+
+## 8. CC Step 5 回写 checklist (规格层变更回写)
+
+CC (bmad-correct-course) Step 5 触发规格层变更时, 须按四项 checklist 回写, 防 PR#41 类遗漏 (漏建 story 块 / 漏清占位 / 漏标执行链 / 漏同步下游)。完整 SOP 见 [correct-course-sop.md](correct-course-sop.md)。
+
+- 项 1 建 story 块: 新增 story 须在 epics.md 建完整 block (标题 + As a/I want/So that + AC + guard 段), 非仅加 FR 定义+mapping
+- 项 2 清占位: 清除 "编号留 SP/待 SP/TBD" 占位 (标题/guard/执行链三处), `grep` 核验 = 0
+- 项 3 标执行链: 执行顺序显式标 guard 段, 不重编号 story 注明 "编号不变执行后移", 三源对齐 (epic == sprint-plan §6.x == sprint-status 注释)
+- 项 4 同步下游: sprint-plan §6.x 裁定 + sprint-status.yaml 新 key + memory 项目记忆, 三源与 epic 一致性核验
 
 ---
 
