@@ -165,3 +165,75 @@ export function formatFormulaForEditor(formula: string, nameMap: Record<string, 
 
   return result;
 }
+
+// ---------------------------------------------------------------------------
+// validateFormulaSyntax (Story 1a.8 T6 — RED PHASE stub)
+// ---------------------------------------------------------------------------
+
+export interface FormulaSyntaxResult {
+  ok: boolean;
+  error?: string;
+}
+
+/**
+ * Validate formula syntax (tokenize + structural parse).
+ *
+ * Distinguishes syntax errors from semantic errors (unknown @uuid names).
+ * Tokenizer handles: numbers, identifiers, @uuid refs, [单位] annotations, CJK chars.
+ *
+ * Checks performed:
+ * - Tokenizer errors (bad numbers, unexpected chars, unclosed annotations)
+ * - Paren balance
+ * - No trailing operator
+ * - No consecutive binary operators
+ */
+export function validateFormulaSyntax(formula: string): FormulaSyntaxResult {
+  let toks: Tok[];
+  try {
+    toks = tokenize(formula);
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+
+  // Validate number literals: the tokenizer regex [0-9.]* is permissive
+  // (parseFloat silently stops at the second dot). Reject multi-dot numbers.
+  const numRe = /[0-9][0-9.]*/g;
+  let nm: RegExpExecArray | null;
+  while ((nm = numRe.exec(formula)) !== null) {
+    const s = nm[0];
+    if (s.split(".").length > 2 || Number.isNaN(Number(s))) {
+      return { ok: false, error: `Bad number literal '${s}'` };
+    }
+  }
+
+  // Empty / annotation-only formula is valid no-op.
+  if (toks.length === 0) return { ok: true };
+
+  // Paren balance check.
+  let depth = 0;
+  for (const t of toks) {
+    if (t.t === "lp") depth++;
+    if (t.t === "rp") {
+      depth--;
+      if (depth < 0) return { ok: false, error: "Unexpected ')'" };
+    }
+  }
+  if (depth > 0) return { ok: false, error: "Unclosed '('" };
+
+  // No trailing binary operator.
+  const last = toks[toks.length - 1];
+  if (last.t === "op") {
+    return { ok: false, error: `Trailing operator '${last.v}'` };
+  }
+
+  // No consecutive binary operators (e.g. "1 + * 2").
+  for (let i = 1; i < toks.length; i++) {
+    const prev = toks[i - 1];
+    const cur = toks[i];
+    if (prev.t === "op" && cur.t === "op") {
+      return { ok: false, error: `Consecutive operators '${prev.v}' and '${cur.v}'` };
+    }
+  }
+
+  return { ok: true };
+}

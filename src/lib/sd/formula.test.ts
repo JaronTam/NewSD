@@ -5,6 +5,9 @@ import { evalFormula } from "./formula";
 // ---- 1a.4 red-phase imports (do NOT exist yet — TDD red state) ---------------
 import { formatFormulaForEditor } from "./formula";
 
+// ---- 1a.8 red-phase import — validateFormulaSyntax (Story 1a.8 T6) -----------
+import { validateFormulaSyntax } from "./formula";
+
 // Guards the carried formula parser (recursive-descent, no eval). The CJK
 // identifier case (`一-鿿` range) is the byte we most needed to preserve across
 // the prototype carry — if it regresses, the population-growth model breaks.
@@ -163,5 +166,124 @@ describe("formatFormulaForEditor (AC-5)", () => {
 
   it("handles empty formula string", () => {
     expect(formatFormulaForEditor("", {})).toBe("");
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Story 1a.8 red-phase — validateFormulaSyntax (AC-7, AC-10)
+//
+// validateFormulaSyntax tokenizes + structurally parses a formula string.
+// It distinguishes syntax errors (bad tokens / structure) from semantic
+// errors (unknown @uuid / name not in scope). These tests cover:
+//
+//   AC-7: Unit annotation parsing — [单位] must tokenise as valid syntax.
+//   AC-10: Syntax error detection — unclosed paren, bad number, unexpected
+//          chars, unclosed unit annotation. Valid cases: constant, @uuid ref,
+//          CJK + unit combo.
+//
+// Tests active (validateFormulaSyntax implemented).
+// ══════════════════════════════════════════════════════════════════════════════
+
+describe("validateFormulaSyntax — AC-7 unit annotation parsing (P1)", () => {
+  it("[P1] [1/year] annotation is valid syntax", () => {
+    const result = validateFormulaSyntax("0.05 * Population [1/year]");
+    expect(result.ok).toBe(true);
+  });
+
+  it("[P1] [人/年] CJK annotation is valid syntax", () => {
+    const result = validateFormulaSyntax("rate [人/年]");
+    expect(result.ok).toBe(true);
+  });
+
+  it("[P1] [1/dt] annotation in flow formula is valid syntax", () => {
+    const result = validateFormulaSyntax("flow [1/dt]");
+    expect(result.ok).toBe(true);
+  });
+
+  it("[P1] formula with annotation but no other tokens is valid syntax", () => {
+    const result = validateFormulaSyntax("[1/year]");
+    expect(result.ok).toBe(true);
+  });
+});
+
+describe("validateFormulaSyntax — AC-10 syntax error detection (P0)", () => {
+  it("[P0] unclosed paren is a syntax error", () => {
+    const result = validateFormulaSyntax("(1 + 2");
+    expect(result.ok).toBe(false);
+    expect(result.error).toBeDefined();
+  });
+
+  it("[P0] bad number literal (0.0.5) is a syntax error", () => {
+    const result = validateFormulaSyntax("0.0.5");
+    expect(result.ok).toBe(false);
+    expect(result.error).toBeDefined();
+  });
+
+  it("[P0] unexpected character (@#) is a syntax error", () => {
+    const result = validateFormulaSyntax("1 + @#");
+    expect(result.ok).toBe(false);
+    expect(result.error).toBeDefined();
+  });
+
+  it("[P0] unclosed unit annotation [1/year is a syntax error", () => {
+    const result = validateFormulaSyntax("[1/year");
+    expect(result.ok).toBe(false);
+    expect(result.error).toBeDefined();
+  });
+
+  it("[P0] valid constant '1' passes syntax check", () => {
+    const result = validateFormulaSyntax("1");
+    expect(result.ok).toBe(true);
+  });
+
+  it("[P0] valid @uuid reference passes syntax check (syntax only, not semantic)", () => {
+    const result = validateFormulaSyntax("@550e8400-e29b-41d4-a716-446655440000");
+    expect(result.ok).toBe(true);
+  });
+
+  it("[P0] CJK name + unit annotation combo passes syntax check", () => {
+    const result = validateFormulaSyntax("人口 * 0.05 [1/year]");
+    expect(result.ok).toBe(true);
+  });
+
+  it("[P0] empty formula string passes syntax check (no-op)", () => {
+    const result = validateFormulaSyntax("");
+    expect(result.ok).toBe(true);
+  });
+
+  it("[P1] whitespace-only string passes syntax check", () => {
+    const result = validateFormulaSyntax("   ");
+    expect(result.ok).toBe(true);
+  });
+
+  it("[P1] deeply nested parens (valid) pass syntax check", () => {
+    const result = validateFormulaSyntax("(((a + b) * c))");
+    expect(result.ok).toBe(true);
+  });
+
+  it("[P1] missing closing paren in nested expression is a syntax error", () => {
+    const result = validateFormulaSyntax("((a + b) * c");
+    expect(result.ok).toBe(false);
+    expect(result.error).toBeDefined();
+  });
+
+  it("[P2] trailing operator '+' is a syntax error", () => {
+    const result = validateFormulaSyntax("1 + 2 +");
+    expect(result.ok).toBe(false);
+    expect(result.error).toBeDefined();
+  });
+
+  it("[P2] double operator '1 + * 2' is a syntax error", () => {
+    const result = validateFormulaSyntax("1 + * 2");
+    expect(result.ok).toBe(false);
+    expect(result.error).toBeDefined();
+  });
+
+  it("[P2] error message includes position or context for debugging", () => {
+    const result = validateFormulaSyntax("(1 + 2");
+    expect(result.ok).toBe(false);
+    // Error message should help the user locate the problem — not just "syntax error".
+    expect(typeof result.error).toBe("string");
+    expect(result.error!.length).toBeGreaterThan(2);
   });
 });

@@ -89,7 +89,15 @@
 - CI 全绿 (frontend/go/wasm/build-image)
 - NEVER implement anything not mapped to task/subtask
 - NEVER mark complete unless 全验证门控 pass
-- step8 mark complete 前 baseline diff review: `git diff <baseline_commit>..HEAD` 逐文件核, 声明与 diff 一致 (防 DS 虚假声明 - 1a.4 F9 抓 12+ false claims / 1a.7 偏离 CS钉死#7; #1 落地)
+- 测试质量 gate (DS step6 author tests 时遵守):
+  - reactive AC (AC 含 "实时/响应/刷新/更新/同步" 迁移语义) 测试须断言状态迁移三元组: before 值 + 触发动作 + after 值, 且 `after !== before` + after 语义正确; 禁以 `toBeTruthy()`/`toBeDefined()`/`not.toBeNull()` 作唯一断言收尾 (存在性 AC 用存在性断言 OK; 1a.8 F-1 教训: AC-9 test 3 原仅 truthy, 派生单位不刷新 bug 下字段仍存在测试仍绿)
+  - 组件含 "选中实体切换" 交互 (props/state 含 selectedId/selection) 时, 须有跨图元切换测试: 切换后字段显示新图元值 (不泄漏旧图元值) + 切换前未提交编辑 (blur 前) 不污染新图元; 要点骨架 `render A -> change A field (no blur) -> rerender B -> assert B field = B value, ≠ A edit, ≠ A value` (1a.8 F-2 教训: 跨图元字段泄漏无覆盖)
+- step8 mark complete 前 baseline diff review: `git diff <baseline_commit>..HEAD` 逐文件核, **须产出可审计逐文件核验表** (防 DS 虚假声明 - 1a.4 F9 抓 12+ false claims / 1a.7 偏离 CS钉死#7; #1 落地):
+  - 落 story `## Dev Agent Record` (Dev Log 后) `### step8 baseline diff review`, 表列 `文件 | Dev Log 声明 | diff 实际 | 一致?`, 每个 `git diff baseline..HEAD` 改动文件一行
+  - 行号辅助定位: "Dev Log 声明" 列注声明编号(如 T4), "diff 实际" 列注行号 + 内容锚(如 `L203 read selectedElement.units`); 行号会 drift, 以内容锚为准, 行号仅辅助定位
+  - 声明↔diff 不一致 = 矛盾, 当场修 (修声明或修代码), 禁过 step8
+  - 留痕双目的: (a) 事后审计 (CR/过程审计) 直接查表, 非重跑 diff; (b) 留痕过程本身逼诚实 - DS 须写出 "声明 X / diff Y", 写不出一致行即暴露
+  - 教训锚: 1a.8 F-1 (Dev Log T4 声明 `deriveFlowUnits` vs 实读 `selectedElement.units`) 无此表存活到 CR Layer3; 若有表, T4 行 "一致? NO" 当场暴露过不了 step8
 - step9 DoD 双源核验: 逐条对照 epic AC ∪ story AC, 遗漏即 fail (防 AC 遗漏 - 1a.4 AC-12b/12c 靠 VS 修订补; #4 落地)
 
 ### 2.4 CR (Code Review)
@@ -104,7 +112,13 @@
 3. 汇总 findings
 4. fix (dev) 或 accept (reviewer)
 5. sprint-status -> done (独立 chore PR, 合后推) + story 文件 Status -> done (随 story PR 提交, CR pass 时改 - 1a.4 偏离#5 修正: 禁留 review)
+
 - read-only 守卫: 每层 review 起止 `git status --porcelain` 断言空 (防 CR 越界改码 - 1a.4 改 elements.ts +11/test +32-5; orchestrator-direct 直跑易加, #2 落地)
+- Layer3 交叉核 DS step8 留痕: Acceptance Auditor 审 AC 覆盖时, 核 story `## Dev Agent Record` 有 `### step8 baseline diff review` 逐文件核验表 + 抽样核表内 "diff 实际" 列 ↔ 真实 `git diff baseline..HEAD` 一致 (防 DS 留假表/漏表 - 1a.8 F-1 无表存活到 CR; §2.3 #1 留痕机制的对端审计; patch 前核, CR patch 后表为 DS step8 快照不更新, patch 记 CR Run section)
+- Layer3 hollow 测试审计: Acceptance Auditor 审 AC 覆盖时, 核每个 AC 对应测试非 hollow (防名义覆盖零断言 - 1a.8 L878 空 if-body 名义测切换更新字段零断言, F-2 无覆盖漏到 CR):
+  - 空 if-body / 空 then 分支 = hollow
+  - 唯一断言为 `toBeTruthy()`/`toBeDefined()`/`not.toBeNull()` 且 AC 非存在性 AC = hollow (与 §2.3 测试质量 gate reactive 三元组呼应)
+  - `test.skip()` 须有原因注释 (1a.8 T9 re-skip "uncontrolled inputs 设计限制" 有注释 = 合规; 无注释 skip = hollow; TDD 红期 skip 是流程非 hollow)
 
 **artifacts**:
 
@@ -114,6 +128,7 @@
 **gate**: CR pass -> done (须双写: sprint-status->done + story 文件 Status->done; 1a.4 偏离#5 教训: story 文件 Status 禁留 review); fail -> 回 DS 修订
 
 **CR 产物完整性** (pass 前双产物齐, 1a.7 教训: 漏 deferred-work + 漏 CR Run section 回填):
+
 - 产物 1 deferred-work.md: defer 项落 `implementation-artifacts/deferred-work.md` (per-story section `## From Story X CR (Run N, date)` + 表 ID/Item/Target Story/Rationale; accept 项也记, 1a.7 加 处理 列 defer/accept)
 - 产物 2 story CR Run section: story 文件回填 `## CR Run` -> `### Run N, date - verdict` (Agent Model / 3 层 Findings 表 ID/类型/处理 / patch 记录 / defer 项交叉引用 deferred-work / 验证口径 tsc+vitest+build+Playwright 全套件 count / Verdict / retrospect)
 - report-before-execute gate: 3 层 review 跑完 -> 报告 (决策点 / patch 计划 / defer 项) -> 等用户确认 -> 才 patch/合并 (memory newsd-cr-report-before-execute-gate; 合并 PR 不可逆)
