@@ -42,13 +42,14 @@
 - 依赖 (前置 story/AD) 标注
 - ZERO USER INTERVENTION (除初始选择)
 - IR 前置轻量核 (step1 前: AD/CAP 引用存在 + 依赖 story 存在, 防 epic↔story drift - #8 落地)
+- e2e AC 门槛实现路径 (AC 含 e2e 测试时): CS 须钉实现路径非留 defer - 1a.8 教训: e2e canvas-click 基础设施 (CanvasView WebGL canvas 无 DOM overlay/testid) 应在 CS 识别并归属 story (实现 testid/DOM overlay 或明确 defer 归 1b epic 规划), 禁 defer 到 DS 才发现 selector mismatch
 
 ### 2.2 VS (Validate Story)
 
 **流程**:
 
 - reviewer 检查 story 文件质量
-- gate: 零歧义 (AC 无多种解读) + 零遗漏 (epic AC 全覆盖) + 可执行 (dev 能直接做) + web research 显式记录 (step4 no-op 也算, 禁静默 skip — VS 门控拦截 CS step4 缺失, 不留到事后审计) + task↔CS钉死 一致性 (Tasks/Subtasks 行实现方向须与 CS 钉死项逐条一致, 矛盾拦在 VS 不漏到 CR, 1a.7 教训: DS 按 T11 偏离 CS钉死#7 致 F-1-4 漏到 CR)
+- gate: 零歧义 (AC 无多种解读) + 零遗漏 (epic AC 全覆盖) + 可执行 (dev 能直接做) + web research 显式记录 (step4 no-op 也算, 禁静默 skip — VS 门控拦截 CS step4 缺失, 不留到事后审计) + task↔CS钉死 一致性 (Tasks/Subtasks 行实现方向须与 CS 钉死项逐条一致, 矛盾拦在 VS 不漏到 CR, 1a.7 教训: DS 按 T11 偏离 CS钉死#7 致 F-1-4 漏到 CR) + e2e spec 可跑性 gate (AC 含 e2e 时): VS 须核 e2e selector 可跑 - 1a.8 教训: CanvasView 纯 WebGL canvas 无 DOM overlay, property-panel.spec.ts selector mismatch 致 green-phase 不可行 7 test .skip() defer D4 归 1b; AC 含 e2e 时核渲染架构 (DOM 可断言 vs canvas-only), 拦 selector mismatch 不留 DS
 - pass → 进入 DS; fail → 回 CS 修订
 
 **artifacts**:
@@ -99,6 +100,7 @@
   - 留痕双目的: (a) 事后审计 (CR/过程审计) 直接查表, 非重跑 diff; (b) 留痕过程本身逼诚实 - DS 须写出 "声明 X / diff Y", 写不出一致行即暴露
   - 教训锚: 1a.8 F-1 (Dev Log T4 声明 `deriveFlowUnits` vs 实读 `selectedElement.units`) 无此表存活到 CR Layer3; 若有表, T4 行 "一致? NO" 当场暴露过不了 step8
 - step9 DoD 双源核验: 逐条对照 epic AC ∪ story AC, 遗漏即 fail (防 AC 遗漏 - 1a.4 AC-12b/12c 靠 VS 修订补; #4 落地)
+- e2e ATDD scaffold 渲染架构 gate (AC 含 e2e + ATDD 红脚手架时): DS 须核 ATDD scaffold 渲染架构 - green-phase 须 DOM 可断言; 1a.8 教训: CanvasView WebGL canvas 无 DOM overlay, ATDD red-phase 写 DOM selector 致 green-phase 不可行 (e2e defer B accept 落 D4); DS 前 /bmad-testarch-atdd 须核渲染路径, canvas-only 渲染须先实现 testid/DOM overlay 或 defer e2e
 
 ### 2.4 CR (Code Review)
 
