@@ -36,6 +36,7 @@ import { MinimapProjector } from "./minimap";
 import { Toolbar } from "./Toolbar";
 import { StatusBar } from "./StatusBar";
 import { PromptPanel } from "./PromptPanel";
+import { PropertyPanel } from "./PropertyPanel";
 import { promptStore } from "./promptStore";
 
 // Story 1a.1 sub-PR #3 — FR-CANVAS-1: infinite canvas navigation.
@@ -428,7 +429,11 @@ export function CanvasView() {
   const pinchRef = useRef<{ active: boolean; prevDist: number }>({ active: false, prevDist: 0 });
 
   // Element interaction state (Task 7, AC-7).
+  // T1.4: lift to React state + keep ref sync for draw loop (mirrors 1a.7 toolMode pattern).
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const selectedIdRef = useRef<string | null>(null);
+  // Keep ref in sync for render-loop closures.
+  selectedIdRef.current = selectedId;
   // Drag state: when active, tracks the world-offset from pointer to element origin.
   const dragRef = useRef<{
     active: boolean;
@@ -683,6 +688,7 @@ export function CanvasView() {
     // Story 1a.7: wire e2e hooks (resolved lazily for toolbar/statusbar Playwright tests).
     _e2eSetSelectedId = (id: string | null) => {
       selectedIdRef.current = id;
+      setSelectedId(id);
       drawRef.current();
     };
     _e2eGetToolMode = () => toolModeRef.current;
@@ -901,6 +907,7 @@ export function CanvasView() {
           previewInstances: [],
         };
         selectedIdRef.current = null;
+        setSelectedId(null);
         drawRef.current();
       }
     };
@@ -919,6 +926,7 @@ export function CanvasView() {
         if (selId) {
           elementStore.deleteElement(selId);
           selectedIdRef.current = null;
+          setSelectedId(null);
           drawRef.current();
         }
       }
@@ -1093,6 +1101,7 @@ export function CanvasView() {
 
         // Select + begin drag (AC-7, AC-14).
         selectedIdRef.current = hit.id;
+        setSelectedId(hit.id);
         dragRef.current = {
           active: true,
           pointerId: e.pointerId,
@@ -1112,6 +1121,7 @@ export function CanvasView() {
       // Miss: clear selection.
       if (selectedIdRef.current !== null) {
         selectedIdRef.current = null;
+        setSelectedId(null);
         drawRef.current();
       }
     }
@@ -1405,6 +1415,7 @@ export function CanvasView() {
     if (selId) {
       elementStore.deleteElement(selId);
       selectedIdRef.current = null;
+      setSelectedId(null);
       drawRef.current();
     }
   };
@@ -1421,6 +1432,7 @@ export function CanvasView() {
     }
     elementStore.setElements([]);
     selectedIdRef.current = null;
+    setSelectedId(null);
     camRef.current = clampCamera({ x: 0, y: 0, zoom: 16 });
     drawRef.current();
   };
@@ -1445,63 +1457,73 @@ export function CanvasView() {
         onZoomChange={handleZoomChange}
       />
 
-      <div ref={containerRef} className="ns-canvas" tabIndex={0}>
-        <canvas
-          ref={canvasRef}
-          className="ns-canvas__surface"
-          onPointerDown={beginPan}
-          onPointerMove={movePan}
-          onPointerUp={endPan}
-          onPointerCancel={endPan}
-        />
-        {/* WebGL2 glyph overlay (AD-9). Stacked above the 2D surface; transparent
-            and pointer-events:none so all pan/zoom/wheel input still hits the 2D
-            canvas below. aria-hidden: the HUD is the accessible live region. */}
-        <canvas ref={glCanvasRef} className="ns-canvas__gl" aria-hidden="true" />
-        {/* Story 1a.6: minimap 2D canvas overlay (AC-1). Positioned bottom-right,
-            above zoom controls. Own pointer events for jump interaction (T4). */}
-        <canvas
-          ref={minimapCanvasRef}
-          className="ns-canvas__minimap"
-          onPointerDown={beginMinimapJump}
-          onPointerMove={moveMinimapJump}
-          onPointerUp={endMinimapJump}
-          onPointerCancel={endMinimapJump}
-        />
-        <span ref={hudRef} className="ns-canvas__hud" aria-live="polite" />
-        <div ref={warnElRef} className="ns-canvas__warn" role="alert" style={{ display: "none" }} />
-        <div
-          ref={guideRef}
-          className="ns-canvas__guide"
-          role="status"
-          style={{ display: "none" }}
-        />
-        <div className="ns-canvas__ctrl" role="group" aria-label="zoom controls">
-          <button
-            type="button"
-            className="ns-canvas__btn"
-            aria-label="zoom in"
-            onClick={() => zoomByFactor(ZOOM_BUTTON_FACTOR)}
-          >
-            +
-          </button>
-          <button
-            type="button"
-            className="ns-canvas__btn"
-            aria-label="zoom out"
-            onClick={() => zoomByFactor(1 / ZOOM_BUTTON_FACTOR)}
-          >
-            −
-          </button>
-        </div>
-        {phase === "loading" && (
-          <div className="ns-canvas__skeleton" role="status" aria-busy="true">
-            <pre className="ns-ascii" aria-hidden="true">
-              {SKELETON}
-            </pre>
-            <span className="ns-canvas__hint">loading · Float64 canvas · 3×2 affine</span>
+      <div className="ns-workspace">
+        <div ref={containerRef} className="ns-canvas" tabIndex={0}>
+          <canvas
+            ref={canvasRef}
+            className="ns-canvas__surface"
+            onPointerDown={beginPan}
+            onPointerMove={movePan}
+            onPointerUp={endPan}
+            onPointerCancel={endPan}
+          />
+          {/* WebGL2 glyph overlay (AD-9). Stacked above the 2D surface; transparent
+              and pointer-events:none so all pan/zoom/wheel input still hits the 2D
+              canvas below. aria-hidden: the HUD is the accessible live region. */}
+          <canvas ref={glCanvasRef} className="ns-canvas__gl" aria-hidden="true" />
+          {/* Story 1a.6: minimap 2D canvas overlay (AC-1). Positioned bottom-right,
+              above zoom controls. Own pointer events for jump interaction (T4). */}
+          <canvas
+            ref={minimapCanvasRef}
+            className="ns-canvas__minimap"
+            onPointerDown={beginMinimapJump}
+            onPointerMove={moveMinimapJump}
+            onPointerUp={endMinimapJump}
+            onPointerCancel={endMinimapJump}
+          />
+          <span ref={hudRef} className="ns-canvas__hud" aria-live="polite" />
+          <div
+            ref={warnElRef}
+            className="ns-canvas__warn"
+            role="alert"
+            style={{ display: "none" }}
+          />
+          <div
+            ref={guideRef}
+            className="ns-canvas__guide"
+            role="status"
+            style={{ display: "none" }}
+          />
+          <div className="ns-canvas__ctrl" role="group" aria-label="zoom controls">
+            <button
+              type="button"
+              className="ns-canvas__btn"
+              aria-label="zoom in"
+              onClick={() => zoomByFactor(ZOOM_BUTTON_FACTOR)}
+            >
+              +
+            </button>
+            <button
+              type="button"
+              className="ns-canvas__btn"
+              aria-label="zoom out"
+              onClick={() => zoomByFactor(1 / ZOOM_BUTTON_FACTOR)}
+            >
+              −
+            </button>
           </div>
-        )}
+          {phase === "loading" && (
+            <div className="ns-canvas__skeleton" role="status" aria-busy="true">
+              <pre className="ns-ascii" aria-hidden="true">
+                {SKELETON}
+              </pre>
+              <span className="ns-canvas__hint">loading · Float64 canvas · 3×2 affine</span>
+            </div>
+          )}
+        </div>
+
+        {/* Story 1a.8 T1: property panel sidebar (right of canvas). */}
+        <PropertyPanel elementStore={elementStore} selectedId={selectedId} />
       </div>
 
       {/* Story 1a.7: prompt center (online-game style message log) - collapsed

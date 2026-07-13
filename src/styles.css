@@ -128,6 +128,95 @@
     overflow: hidden;
   }
 
+  /* Story 1a.8 T1 — workspace wraps canvas + property panel in a flex row. */
+  .ns-workspace {
+    display: flex;
+    flex-direction: row;
+    flex: 1;
+    min-height: 0;
+  }
+
+  /* Story 1a.8 T1 — right-side property panel (280px fixed sidebar). */
+  .ns-property-panel {
+    width: 280px;
+    flex-shrink: 0;
+    border-left: 1px solid var(--ns-border);
+    background-color: var(--ns-bg);
+    color: var(--ns-fg);
+    font-family: var(--ns-font-mono);
+    overflow-y: auto;
+    padding: 0.75rem;
+  }
+
+  .ns-property-panel__empty {
+    color: var(--ns-fg-dim);
+    font-size: 0.75rem;
+    text-align: center;
+    padding: 2rem 0.5rem;
+  }
+
+  .ns-property-panel__fields {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .ns-property-panel__field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    font-size: 0.75rem;
+  }
+
+  .ns-property-panel__label {
+    color: var(--ns-fg-dim);
+    font-size: 0.6875rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .ns-property-panel__input {
+    background-color: var(--ns-bg);
+    color: var(--ns-fg);
+    border: 1px solid var(--ns-border);
+    padding: 0.25rem 0.5rem;
+    font-family: var(--ns-font-mono);
+    font-size: 0.75rem;
+    border-radius: 2px;
+  }
+
+  .ns-property-panel__input:focus {
+    outline: none;
+    border-color: var(--ns-accent);
+  }
+
+  .ns-property-panel__textarea {
+    resize: vertical;
+    min-height: 3rem;
+  }
+
+  .ns-property-panel__readonly {
+    display: block;
+    opacity: 0.7;
+    user-select: none;
+  }
+
+  .ns-property-panel__input--error {
+    border-color: var(--ns-error, #ff4444);
+  }
+
+  .ns-property-panel__error {
+    color: var(--ns-error, #ff4444);
+    font-size: 0.6875rem;
+    line-height: 1.3;
+  }
+
+  .ns-property-panel__dim-status {
+    color: var(--ns-fg-dim);
+    font-size: 0.6875rem;
+    line-height: 1.3;
+  }
+
   /* Story 1a.1 sub-PR #3 — infinite canvas shell (FR-CANVAS-1).
      On-palette via tokens.css; no per-glyph shadowBlur on the canvas surface
      (CAP-11) — glow lives in the HTML skeleton/axes only.
