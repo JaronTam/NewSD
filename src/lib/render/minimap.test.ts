@@ -30,7 +30,7 @@ function stock(id: string, x: number, y: number, w = 8, h = 5): Stock {
 }
 
 function cloud(id: string, x: number, y: number): Cloud {
-  return { id, kind: "cloud", x, y };
+  return { id, kind: "cloud", name: id, x, y };
 }
 
 function flow(id: string, fromId: string, toId: string): Flow {
@@ -62,6 +62,7 @@ function createStoreMock(initial: SDElement[] = []): {
     getSnapshot: () => mock.elements,
     createStock: vi.fn() as any,
     createCloud: vi.fn() as any,
+    createFlow: vi.fn() as any,
     updateElement: vi.fn(),
     deleteElement: vi.fn(),
     setElements: (els: readonly SDElement[]) => {

@@ -43,13 +43,19 @@
 - ZERO USER INTERVENTION (除初始选择)
 - IR 前置轻量核 (step1 前: AD/CAP 引用存在 + 依赖 story 存在, 防 epic↔story drift - #8 落地)
 - e2e AC 门槛实现路径 (AC 含 e2e 测试时): CS 须 pin 实现路径非留 defer - 1a.8 教训: e2e canvas-click 基础设施 (CanvasView WebGL canvas 无 DOM overlay/testid) 应在 CS 识别并归属 story (实现 testid/DOM overlay 或明确 defer 归 1b epic 规划), 禁 defer 到 DS 才发现 selector mismatch
+- **CS SDR 编写规范** (SDR = Story Decision Record, ADR-aligned 设计决策权威载体; enforcement 靠 §2.2 VS 核非靠 "SDR" 词 - 1a.7 教训: DS 跟 Task T11 偏离 CS SDR#7, SDR prose section 被结构性绕过; SDR 只写 target 不写 delta/guard 致反向债埋散文, DS "加 throw 留旧软警告分支" 半实现):
+  - 分类三段 (禁混, 每条标类别): 设计契约 (真 SDR, 需 DS 实现) / 保留不变量 (勿动, 前序 story 已就位仅声明) / 流程meta (单PR/IR/e2e scope 等 CS SDR 非代码)
+  - 每条设计契约 = (现状 / 目标 / 守卫) 三元: 现状 = 当前代码反例 + `file:line` 锚 (含反向债: 当前代码与 SDR 正相反, 如允许重名/软警告/可选字段/max+1 复用序号); 目标 = delta (改/拆什么); 守卫 = 对应 AC# + 红测试断言 (含 "旧态消失" 断言, 如旧 AC-15 "重名允许" 测试组改写为 "重名拒绝")
+  - 反向债显式拆除项: 现状与目标相反的 SDR, 目标列标 "拆除 X (`file:line`)" + 独立红测试 (防半实现 - 1a.8 F-1 声明↔代码不一致类)
+  - Task 行内联 `gov: SDR#N` (权威倒置): 每 Task/Subtask 行 cite 其 governing SDR# (如 `T6(AC-7) [gov: #4]`), 让 SDR 成 Task 前置依赖而非平行 section, 读 Task 即强制读 SDR
 
 ### 2.2 VS (Validate Story)
 
 **流程**:
 
 - reviewer 检查 story 文件质量
-- gate: 零歧义 (AC 无多种解读) + 零遗漏 (epic AC 全覆盖) + 可执行 (dev 能直接做) + web research 显式记录 (step4 no-op 也算, 禁静默 skip — VS 门控拦截 CS step4 缺失, 不留到事后审计) + task↔SDR 一致性 (Tasks/Subtasks 行实现方向须与 SDR 逐条一致, 矛盾拦在 VS 不漏到 CR, 1a.7 教训: DS 按 T11 偏离 SDR#7 致 F-1-4 漏到 CR) + e2e spec 可跑性 gate (AC 含 e2e 时): VS 须核 e2e selector 可跑 - 1a.8 教训: CanvasView 纯 WebGL canvas 无 DOM overlay, property-panel.spec.ts selector mismatch 致 green-phase 不可行 7 test .skip() defer D4 归 1b; AC 含 e2e 时核渲染架构 (DOM 可断言 vs canvas-only), 拦 selector mismatch 不留 DS
+- gate: 零歧义 (AC 无多种解读) + 零遗漏 (epic AC 全覆盖) + 可执行 (dev 能直接做) + web research 显式记录 (step4 no-op 也算, 禁静默 skip — VS 门控拦截 CS step4 缺失, 不留到事后审计) + task↔CS SDR 一致性 (Tasks/Subtasks 行实现方向须与 CS SDR 项逐条一致, 矛盾拦在 VS 不漏到 CR, 1a.7 教训: DS 按 T11 偏离 CS SDR#7 致 F-1-4 漏到 CR) + e2e spec 可跑性 gate (AC 含 e2e 时): VS 须核 e2e selector 可跑 - 1a.8 教训: CanvasView 纯 WebGL canvas 无 DOM overlay, property-panel.spec.ts selector mismatch 致 green-phase 不可行 7 test .skip() defer D4 归 1b; AC 含 e2e 时核渲染架构 (DOM 可断言 vs canvas-only), 拦 selector mismatch 不留 DS
+- **SDR↔AC↔Task 追溯矩阵** (§2.1 CS SDR 编写规范 的对端核, 1a.7 task↔SDR mismatch 漏到 CR F-1-4 的根因补丁): VS 须机械核 (a) 每 Task 有 `gov: SDR#N` 引用 (b) 每个设计契约 SDR 有 ≥1 Task + ≥1 AC 覆盖 (c) 每守卫红测试存在且断言 "旧态消失" (反向债拆除项必查); 矩阵缺口 = 矛盾, 拦在 VS; 轻量: 内联 `gov:` 引用即矩阵边, 不必单开表
 - pass → 进入 DS; fail → 回 CS 修订
 
 **artifacts**:
@@ -93,7 +99,7 @@
 - 测试质量 gate (DS step6 author tests 时遵守):
   - reactive AC (AC 含 "实时/响应/刷新/更新/同步" 迁移语义) 测试须断言状态迁移三元组: before 值 + 触发动作 + after 值, 且 `after !== before` + after 语义正确; 禁以 `toBeTruthy()`/`toBeDefined()`/`not.toBeNull()` 作唯一断言收尾 (存在性 AC 用存在性断言 OK; 1a.8 F-1 教训: AC-9 test 3 原仅 truthy, 派生单位不刷新 bug 下字段仍存在测试仍绿)
   - 组件含 "选中实体切换" 交互 (props/state 含 selectedId/selection) 时, 须有跨图元切换测试: 切换后字段显示新图元值 (不泄漏旧图元值) + 切换前未提交编辑 (blur 前) 不污染新图元; 要点骨架 `render A -> change A field (no blur) -> rerender B -> assert B field = B value, ≠ A edit, ≠ A value` (1a.8 F-2 教训: 跨图元字段泄漏无覆盖)
-- step8 mark complete 前 baseline diff review: `git diff <baseline_commit>..HEAD` 逐文件核, **须产出可审计逐文件核验表** (防 DS 虚假声明 - 1a.4 F9 抓 12+ false claims / 1a.7 偏离 SDR#7; #1 落地):
+- step8 mark complete 前 baseline diff review: `git diff <baseline_commit>..HEAD` 逐文件核, **须产出可审计逐文件核验表** (防 DS 虚假声明 - 1a.4 F9 抓 12+ false claims / 1a.7 偏离 CS SDR#7; #1 落地):
   - 落 story `## Dev Agent Record` (Dev Log 后) `### step8 baseline diff review`, 表列 `文件 | Dev Log 声明 | diff 实际 | 一致?`, 每个 `git diff baseline..HEAD` 改动文件一行
   - 行号辅助定位: "Dev Log 声明" 列注声明编号(如 T4), "diff 实际" 列注行号 + 内容锚(如 `L203 read selectedElement.units`); 行号会 drift, 以内容锚为准, 行号仅辅助定位
   - 声明↔diff 不一致 = 矛盾, 当场修 (修声明或修代码), 禁过 step8
@@ -115,6 +121,7 @@
 4. fix (dev) 或 accept (reviewer)
 5. sprint-status -> done (独立 chore PR, 合后推) + story 文件 Status -> done (随 story PR 提交, CR pass 时改 - 1a.4 偏离#5 修正: 禁留 review)
 
+- **orchestrator-direct 不起 subagent** (ark-code/DeepSeek 后端): 编排层自己 Read/grep/`git show <baseline>:<path>` 跑全 3 层 (Blind Hunter = Markdown 列表 cynical findings 只描述; Edge Case Hunter = JSON 数组 {location, trigger_condition, guard_snippet, potential_consequence}; Acceptance Auditor = AC-by-AC Markdown 列表); subagent 两轴崩 (同步 prompt-too-long + 异步越界改码 被 TaskStop 杀); 换 Claude 级强模型可重试 subagent 但须 per-file diff + read-only leash + 内联 SKILL.md (1a.4 教训; memory newsd-cr-3-layers-orchestrator-direct-not-subagents + newsd-bmad-skill-strict-invocation-and-prompt)
 - read-only 守卫: 每层 review 起止 `git status --porcelain` 断言空 (防 CR 越界改码 - 1a.4 改 elements.ts +11/test +32-5; orchestrator-direct 直跑易加, #2 落地)
 - Layer3 交叉核 DS step8 留痕: Acceptance Auditor 审 AC 覆盖时, 核 story `## Dev Agent Record` 有 `### step8 baseline diff review` 逐文件核验表 + 抽样核表内 "diff 实际" 列 ↔ 真实 `git diff baseline..HEAD` 一致 (防 DS 留假表/漏表 - 1a.8 F-1 无表存活到 CR; §2.3 #1 留痕机制的对端审计; patch 前核, CR patch 后表为 DS step8 快照不更新, patch 记 CR Run section)
 - Layer3 hollow 测试审计: Acceptance Auditor 审 AC 覆盖时, 核每个 AC 对应测试非 hollow (防名义覆盖零断言 - 1a.8 L878 空 if-body 名义测切换更新字段零断言, F-2 无覆盖漏到 CR):
@@ -134,6 +141,7 @@
 - 产物 1 deferred-work.md: defer 项落 `implementation-artifacts/deferred-work.md` (per-story section `## From Story X CR (Run N, date)` + 表 ID/Item/Target Story/Rationale; accept 项也记, 1a.7 加 处理 列 defer/accept)
 - 产物 2 story CR Run section: story 文件回填 `## CR Run` -> `### Run N, date - verdict` (Agent Model / 3 层 Findings 表 ID/类型/处理 / patch 记录 / defer 项交叉引用 deferred-work / 验证口径 tsc+vitest+build+Playwright 全套件 count / Verdict / retrospect)
 - report-before-execute gate: 3 层 review 跑完 -> 报告 (决策点 / patch 计划 / defer 项) -> 等用户确认 -> 才 patch/合并 (memory newsd-cr-report-before-execute-gate; 合并 PR 不可逆)
+- **e2e 验证口径全套件**: CR 验证须记全套件 count (如 "Playwright e2e 29/29") 非新 story 子集 (如 "7/7"); AC-8 无回归 = 全套件绿; 记子集 understates 验证范围 (共享文件改动可让其他 spec e2e 回归在 done 时未核实即溜过); 1a.6 教训: 记 7/7 退步于 1a.5 的 22/22, 现实全套件 29/29 绿; memory newsd-e2e-attestation-full-suite-not-subset
 
 ## 3. sprint-status 状态机
 
@@ -170,12 +178,12 @@ VS 在 `.claude/skills/` 无独立 skill, 引用 dev-story step1 的 `*validate-
 - **选项 B**: 手动检查清单:
   - AC 完备 (Given/When/Then, 覆盖 epic 全 AC)
   - 任务可执行 (子任务粒度 dev 能直接做)
-  - task↔SDR 一致性 (Tasks/Subtasks 行实现方向须与 SDR 逐条一致, 矛盾拦在 VS 不漏到 CR, 1a.7 教训)
+  - task↔CS SDR 一致性 (见 §2.1 CS SDR 编写规范 + §2.2 追溯矩阵; Tasks 须 cite `gov: SDR#N`, 矛盾拦在 VS, 1a.7 教训)
   - 约束引用 (AD/CAP 显式)
   - 测试标准 (TDD red-green)
   - web research 显式记录 (step4: 有新依赖记 version+why+breaking; 无新依赖记 no-op 引用基座 version 锁; 禁静默 skip)
   - 依赖标注 (前置 story/AD)
-- **gate**: 零歧义 + 零遗漏 + 可执行 + web research 显式记录 + task↔SDR 一致性 (Tasks/Subtasks 须与 SDR 逐条一致, 矛盾拦在 VS)
+- **gate**: 零歧义 + 零遗漏 + 可执行 + web research 显式记录 + task↔CS SDR 一致性 + SDR↔AC↔Task 追溯矩阵 (见 §2.2; Tasks 须 cite `gov: SDR#N`, 矛盾拦在 VS)
 
 ## 6. 单 PR vs sub-PR 决策
 

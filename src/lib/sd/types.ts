@@ -32,8 +32,8 @@ export interface Cloud {
   kind: "cloud";
   x: number;
   y: number;
-  /** Optional display name (AC-11). */
-  name?: string;
+  /** Display name — always assigned (auto-generated `cloud_N` when omitted, per FR-ELEM-5). */
+  name: string;
 }
 
 export interface Flow {

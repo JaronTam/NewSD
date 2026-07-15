@@ -1092,7 +1092,14 @@ export function CanvasView() {
           const currentName = (hit as { name?: string }).name ?? "";
           const newName = window.prompt("Edit name:", currentName);
           if (newName !== null && newName.trim().length > 0) {
-            elementStore.updateElement(hit.id, { name: newName.trim() } as Partial<SDElement>);
+            try {
+              elementStore.updateElement(hit.id, { name: newName.trim() } as Partial<SDElement>);
+            } catch {
+              // Collision or empty-name rejection (SDR#4 / AC-7b): surface via
+              // alert; the original name is preserved (throw prevents write).
+              // TODO(1a.9): i18n for this single alert call site.
+              window.alert("名称已存在,请重试");
+            }
           }
           e.preventDefault();
           return;

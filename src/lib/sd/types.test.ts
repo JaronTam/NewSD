@@ -71,18 +71,19 @@ describe("Stock type contract", () => {
 });
 
 describe("Cloud type contract", () => {
-  it("has required fields matching epic AC-11", () => {
+  it("has required fields matching FR-ELEM-5 (1a.11 rewired)", () => {
     const c: Cloud = {
       id: "00000000-0000-4000-8000-000000000010",
       kind: "cloud",
+      name: "c",
       x: 3,
       y: 7,
     };
     expect(c.kind).toBe("cloud");
-    expect(c.name).toBeUndefined(); // optional, omitted by default
+    expect(c.name).toBe("c"); // required per 1a.11 (was optional)
   });
 
-  it("accepts optional name field (AC-11)", () => {
+  it("name field is required (was optional before 1a.11)", () => {
     const c: Cloud = {
       id: "00000000-0000-4000-8000-000000000011",
       kind: "cloud",
@@ -97,6 +98,7 @@ describe("Cloud type contract", () => {
     const c: Cloud = {
       id: "00000000-0000-4000-8000-000000000012",
       kind: "cloud",
+      name: "c12",
       x: 0,
       y: 0,
     };
@@ -204,6 +206,7 @@ describe("SDElement discriminated union", () => {
     const cloud: SDElement = {
       id: "2",
       kind: "cloud",
+      name: "c2",
       x: 0,
       y: 0,
     };

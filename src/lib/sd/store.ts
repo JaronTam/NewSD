@@ -2,7 +2,7 @@
 // In-memory store for Story 1a.3; designed as a replaceable adapter
 // so 1a.4 / collab (AD-10 Y.Doc) can swap out the backing store later.
 
-import type { Cloud, Flow, SDElement, Stock } from "./types";
+import type { Cloud, ElementKind, Flow, SDElement, Stock } from "./types";
 
 // ---------------------------------------------------------------------------
 // E9 stock size validation (AC-8, AC-9)
@@ -46,10 +46,14 @@ export function validateStockSize(width: unknown, height: unknown): StockSizeRes
 export interface ElementStore {
   /** Immutable snapshot of all elements (ordered by insertion). */
   getElements(): readonly SDElement[];
-  /** Create a new stock element. Returns the fully-hydrated Stock. */
-  createStock(partial: Omit<Stock, "id" | "kind" | "currentValue" | "history">): Stock;
-  /** Create a new cloud element. Returns the fully-hydrated Cloud. */
-  createCloud(partial: Omit<Cloud, "id" | "kind">): Cloud;
+  /** Create a new stock element. name auto-assigned `stock_N` when omitted. Returns the fully-hydrated Stock. */
+  createStock(
+    partial: Omit<Stock, "id" | "kind" | "currentValue" | "history" | "name"> & { name?: string },
+  ): Stock;
+  /** Create a new cloud element. name auto-assigned `cloud_N` when omitted. Returns the fully-hydrated Cloud. */
+  createCloud(partial: Omit<Cloud, "id" | "kind" | "name"> & { name?: string }): Cloud;
+  /** Create a new flow element. name auto-assigned `flow_N` when omitted. */
+  createFlow(input: CreateFlowInput, onWarn?: (msg: string | null) => void): Flow;
   /** Update one element's mutable fields. No-op if id not found. */
   updateElement(id: string, patch: Partial<SDElement>): void;
   /** Remove an element by id. No-op if not found. */
@@ -70,8 +74,102 @@ export function createElementStore(): ElementStore {
   let elements: SDElement[] = [];
   const listeners = new Set<() => void>();
 
+  // Per-type monotonic high-water counters (SDR#2). Incremented only on auto-name;
+  // never decremented (delete/rename do not reclaim). Initialised at 0; setElements
+  // re-derives them from the element snapshot via deriveSeq (A2 load path, SDR#13).
+  let stockSeq = 0;
+  let cloudSeq = 0;
+  let flowSeq = 0;
+
   const notify = () => {
     for (const cb of listeners) cb();
+  };
+
+  /**
+   * Return the next default name for `kind` (SDR#3: `<type>_<N>` format).
+   * SDR#14 skip-forward semantics: if the canonical candidate `<type>_<N>` is
+   * already taken (rename→canonical case), keep incrementing seq until the
+   * candidate is free. Terminates because `elements` is finite and `seq` is
+   * strictly increasing. Auto-name never throws, never collides.
+   */
+  const nextDefaultName = (kind: ElementKind): string => {
+    const taken = new Set(
+      elements.map((e) => (e as { name?: string }).name).filter(Boolean) as string[],
+    );
+    let candidate: string;
+    switch (kind) {
+      case "stock":
+        do {
+          stockSeq++;
+          candidate = `stock_${stockSeq}`;
+        } while (taken.has(candidate));
+        return candidate;
+      case "cloud":
+        do {
+          cloudSeq++;
+          candidate = `cloud_${cloudSeq}`;
+        } while (taken.has(candidate));
+        return candidate;
+      case "flow":
+        do {
+          flowSeq++;
+          candidate = `flow_${flowSeq}`;
+        } while (taken.has(candidate));
+        return candidate;
+    }
+  };
+
+  /**
+   * Derive the per-kind sequence counter from the current element snapshot
+   * (SDR#2 load path, A2 ruling). Scans all elements of the given kind,
+   * extracts the maximum N from names matching `^<type>_(\d+)$`, and sets
+   * the counter. Non-canonical names (non-matching / empty / above
+   * Number.MAX_SAFE_INTEGER) are skipped. Called by setElements for each
+   * kind on every full replacement.
+   */
+  const deriveSeq = (kind: ElementKind): void => {
+    const prefix = `${kind}_`;
+    let maxN = 0;
+    for (const el of elements) {
+      if (el.kind !== kind) continue;
+      const name = (el as { name?: string }).name;
+      if (!name || !name.startsWith(prefix)) continue;
+      const suffix = name.slice(prefix.length);
+      // Double-anchored: must be all digits, no extra chars.
+      if (!/^\d+$/.test(suffix)) continue;
+      const n = Number(suffix);
+      if (!Number.isFinite(n) || n > Number.MAX_SAFE_INTEGER) continue;
+      if (n > maxN) maxN = n;
+    }
+    switch (kind) {
+      case "stock":
+        stockSeq = maxN;
+        break;
+      case "cloud":
+        cloudSeq = maxN;
+        break;
+      case "flow":
+        flowSeq = maxN;
+        break;
+    }
+  };
+
+  /**
+   * Assert name is available across ALL elements (single namespace, SDR#1).
+   * Rejects empty/whitespace-only names (SDR#11). `exceptId` excludes the
+   * element being renamed from the collision scan (no-op renames allowed).
+   * @throws {Error} on collision or empty name.
+   */
+  const assertNameAvailable = (name: string, exceptId?: string): void => {
+    if (!name || !name.trim()) {
+      throw new Error("Name must not be empty");
+    }
+    const collision = elements.find(
+      (e) => e.id !== exceptId && (e as { name?: string }).name === name,
+    );
+    if (collision) {
+      throw new Error(`Name "${name}" is already in use`);
+    }
   };
 
   return {
@@ -83,8 +181,13 @@ export function createElementStore(): ElementStore {
       // E9 guard (AC-8/AC-9): clamp invalid/too-small dimensions to defaults
       // before they reach the renderer (which assumes w>=3, h>=3 for a valid box).
       const { width, height } = validateStockSize(partial.width, partial.height);
+      const explicitName = partial.name !== undefined;
+      // Empty/whitespace explicit names throw (SDR#11); auto-name when omitted.
+      const name = explicitName ? partial.name! : nextDefaultName("stock");
+      if (explicitName) assertNameAvailable(partial.name!);
       const stock: Stock = {
         ...partial,
+        name,
         width,
         height,
         id: crypto.randomUUID(),
@@ -98,8 +201,12 @@ export function createElementStore(): ElementStore {
     },
 
     createCloud(partial): Cloud {
+      const explicitName = partial.name !== undefined;
+      const name = explicitName ? partial.name! : nextDefaultName("cloud");
+      if (explicitName) assertNameAvailable(partial.name!);
       const cloud: Cloud = {
         ...partial,
+        name,
         id: crypto.randomUUID(),
         kind: "cloud",
       };
@@ -108,9 +215,65 @@ export function createElementStore(): ElementStore {
       return cloud;
     },
 
+    createFlow(input, onWarn): Flow {
+      // ① Endpoint validity
+      const fromEl = elements.find((e) => e.id === input.fromId);
+      const toEl = elements.find((e) => e.id === input.toId);
+
+      if (!fromEl || fromEl.kind === "flow" || !toEl || toEl.kind === "flow") {
+        throw new Error("Invalid flow endpoint");
+      }
+
+      // ② Self-loop guard
+      if (input.fromId === input.toId) {
+        throw new Error("Self-loop not allowed");
+      }
+
+      // Derive units from target stock + formula time annotation
+      const units = deriveFlowUnits(input.formula, input.toId, elements);
+
+      const explicitName = input.name !== undefined;
+      const name = explicitName ? input.name! : nextDefaultName("flow");
+      if (explicitName) assertNameAvailable(input.name!);
+
+      const flow: Flow = {
+        id: crypto.randomUUID(),
+        kind: "flow",
+        name,
+        fromId: input.fromId,
+        toId: input.toId,
+        formula: input.formula,
+        isVariable: input.isVariable,
+        lastValue: 0,
+        units,
+      };
+
+      // Capture pre-add state for warning computation (same semantics as
+      // the standalone createFlow which computed against the snapshot before append).
+      const preAddElements = elements;
+
+      elements = [...elements, flow];
+      notify();
+
+      // F3: non-blocking E11/AC-15 warnings (computed against the pre-add state).
+      if (onWarn) onWarn(flowCreateWarning(preAddElements, input));
+
+      return flow;
+    },
+
     updateElement(id, patch): void {
       const idx = elements.findIndex((e) => e.id === id);
       if (idx === -1) return;
+      // Collision check for name changes (SDR#4, exclude self so no-op rename is safe).
+      // AC-19: reject non-string name (undefined/null/number) — `"name" in patch` is
+      // true even when the value is undefined, and `String(undefined)` would silently
+      // corrupt the element.
+      if ("name" in patch) {
+        if (typeof patch.name !== "string") {
+          throw new Error("Name must be a string");
+        }
+        assertNameAvailable(patch.name, id);
+      }
       const updated = { ...elements[idx], ...patch } as SDElement;
       elements = [...elements.slice(0, idx), updated, ...elements.slice(idx + 1)];
       notify();
@@ -125,6 +288,12 @@ export function createElementStore(): ElementStore {
 
     setElements(els): void {
       elements = [...els];
+      // A2 load path: re-derive all three per-kind seq counters from the
+      // new element snapshot (SDR#2/SDR#13). Full-replacement semantics —
+      // does NOT accumulate on top of old seq values.
+      deriveSeq("stock");
+      deriveSeq("cloud");
+      deriveSeq("flow");
       notify();
     },
 
@@ -202,8 +371,9 @@ export interface CreateFlowInput {
  *
  * - E11 parallel flows: another flow already connects the same ordered pair
  *   (fromId→toId). Allowed (non-blocking), but flagged for the UI.
- * - AC-15 duplicate names: another flow shares the proposed (or auto-generated)
- *   name. Allowed (non-blocking), but flagged.
+ * - Duplicate-name check REMOVED (SDR#4 / AC-11): name collisions are hard-
+ *   rejected at create-time by assertNameAvailable, so this function no longer
+ *   returns a dup-name warning. The parallel-flow gate (E11) is preserved.
  */
 export function flowCreateWarning(
   elements: readonly SDElement[],
@@ -215,83 +385,38 @@ export function flowCreateWarning(
     const names = parallels.map((f) => f.name).join(", ");
     return `Parallel flow(s) already exist (${names}): ${input.fromId}→${input.toId}`;
   }
-  const flowNums = flows.map((f) => {
-    const m = f.name.match(/^Flow (\d+)$/);
-    return m ? parseInt(m[1], 10) : 0;
-  });
-  const nextFlowNum = Math.max(0, ...flowNums) + 1;
-  const name = input.name ?? `Flow ${nextFlowNum}`;
-  if (flows.some((f) => f.name === name)) {
-    return `Duplicate flow name: "${name}"`;
-  }
+  // Duplicate-name branch REMOVED (SDR#4): name collision is hard-rejected at
+  // create-time (assertNameAvailable in createStore.createFlow), so this pure
+  // function no longer needs a dup-name gate. AC-11 + AC-15 rewired accordingly.
   return null;
 }
 
 /**
  * Create a Flow element and append it to the store.
  *
- * Guard sequence (AC-12/AC-12b, throw form — preserves Flow return type):
+ * Guard sequence (AC-12/AC-12b/AC-1, throw form — preserves Flow return type):
  * ① Endpoint validity — fromId/toId must point to existing Stock or Cloud
  *    (rejects nonexistent ids and Flow→Flow connections)
  * ② Self-loop guard — fromId === toId → reject
+ * ③ Name uniqueness (SDR#4/AC-1) — assertNameAvailable rejects duplicates
+ *    across all element kinds (single namespace, SDR#1) and empty/whitespace
+ *    names (SDR#11).
  *
- * E11 (parallel flows) and AC-15 (duplicate names) are allowed (non-blocking);
- * when `onWarn` is supplied it is invoked with a warning string (or null when
- * the flow is clean) after the flow is appended. Throwing guards do NOT call
- * onWarn (the flow was not created).
+ * E11 (parallel flows) is non-blocking; when `onWarn` is supplied it is
+ * invoked with a warning string (or null when the flow is clean) after the
+ * flow is appended. Duplicate-name warnings REMOVED (SDR#4/AC-11) — dup names
+ * are hard-rejected in step ③, so `onWarn` no longer surfaces them.
+ * Throwing guards do NOT call onWarn (the flow was not created).
  *
  * @throws {Error} "Invalid flow endpoint" if endpoints are invalid.
  * @throws {Error} "Self-loop not allowed" if fromId === toId.
- * @param onWarn Optional sink for non-blocking E11/AC-15 warnings.
+ * @throws {Error} on duplicate or empty name (SDR#4/SDR#11).
+ * @param onWarn Optional sink for non-blocking E11 warnings.
  */
 export function createFlow(
   store: ElementStore,
   input: CreateFlowInput,
   onWarn?: (msg: string | null) => void,
 ): Flow {
-  const elements = [...store.getElements()];
-
-  // ① Endpoint validity (AC-12b)
-  const fromEl = elements.find((e) => e.id === input.fromId);
-  const toEl = elements.find((e) => e.id === input.toId);
-
-  if (!fromEl || fromEl.kind === "flow" || !toEl || toEl.kind === "flow") {
-    throw new Error("Invalid flow endpoint");
-  }
-
-  // ② Self-loop guard (AC-12)
-  if (input.fromId === input.toId) {
-    throw new Error("Self-loop not allowed");
-  }
-
-  // Derive units from target stock + formula time annotation
-  const units = deriveFlowUnits(input.formula, input.toId, elements);
-
-  // Auto-name: use max existing Flow-N + 1 (not length+1, which can collide after deletions).
-  const flowNums = elements
-    .filter((e) => e.kind === "flow")
-    .map((f) => {
-      const m = f.name.match(/^Flow (\d+)$/);
-      return m ? parseInt(m[1], 10) : 0;
-    });
-  const nextFlowNum = Math.max(0, ...flowNums) + 1;
-
-  const flow: Flow = {
-    id: crypto.randomUUID(),
-    kind: "flow",
-    name: input.name ?? `Flow ${nextFlowNum}`,
-    fromId: input.fromId,
-    toId: input.toId,
-    formula: input.formula,
-    isVariable: input.isVariable,
-    lastValue: 0,
-    units,
-  };
-
-  store.setElements([...elements, flow]);
-
-  // F3: non-blocking E11/AC-15 warnings (computed against the pre-add state).
-  if (onWarn) onWarn(flowCreateWarning(elements, input));
-
-  return flow;
+  return store.createFlow(input, onWarn);
 }

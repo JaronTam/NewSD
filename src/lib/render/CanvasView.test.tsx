@@ -441,6 +441,79 @@ describe("CanvasView — double-click edit name (AC-7)", () => {
 
     promptSpy.mockRestore();
   });
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // Story 1a.11 AC-7(b) RED — dbl-click rename with a colliding name MUST
+  // surface an error (window.alert) and leave the stored name unchanged.
+  // Product code today has no collision guard here, so the alert spy sees 0
+  // calls and the assertion fails — that's the red anchor.
+  // ═══════════════════════════════════════════════════════════════════════
+
+  it("AC-7(b): dbl-click rename collision → window.alert + name unchanged (1a.11 RED)", async () => {
+    // gov: AC-7(b) + SDR#4 + T6
+    const { container } = await renderReady();
+    const canvas = container.querySelector("canvas")!;
+
+    // Seed two stocks so "B" is already taken; the dbl-click target is stock "A"
+    // at world (0,0,10,5) → body center screen (80.5, 40.5).
+    elementStore.setElements([
+      {
+        id: "stock-a",
+        kind: "stock",
+        name: "A",
+        x: 0,
+        y: 0,
+        width: 10,
+        height: 5,
+        initialValue: 1,
+        currentValue: 1,
+        units: "",
+        allowNegative: false,
+        history: [1],
+      },
+      {
+        id: "stock-b",
+        kind: "stock",
+        name: "B",
+        x: 40,
+        y: 40,
+        width: 10,
+        height: 5,
+        initialValue: 1,
+        currentValue: 1,
+        units: "",
+        allowNegative: false,
+        history: [1],
+      },
+    ]);
+
+    const promptSpy = vi.spyOn(window, "prompt").mockReturnValue("B");
+    const alertSpy = vi.spyOn(window, "alert").mockImplementation(() => undefined);
+
+    // before
+    const before = elementStore.getElements().find((e) => e.id === "stock-a");
+    if (before && before.kind === "stock") expect(before.name).toBe("A");
+
+    // action: double-click on stock A body, prompt returns "B" (collision)
+    fireEvent.pointerDown(canvas, { button: 0, pointerId: 70, clientX: 80.5, clientY: 40.5 });
+    fireEvent.pointerUp(canvas, { pointerId: 70, clientX: 80.5, clientY: 40.5 });
+    fireEvent.pointerDown(canvas, { button: 0, pointerId: 71, clientX: 80.5, clientY: 40.5 });
+    fireEvent.pointerUp(canvas, { pointerId: 71, clientX: 80.5, clientY: 40.5 });
+
+    // (i) alert surfaced
+    expect(alertSpy).toHaveBeenCalledTimes(1);
+
+    // (ii) name unchanged — anti-anchor: NOT "B"
+    const after = elementStore.getElements().find((e) => e.id === "stock-a");
+    expect(after).toBeDefined();
+    if (after && after.kind === "stock") {
+      expect(after.name).toBe("A");
+      expect(after.name).not.toBe("B");
+    }
+
+    promptSpy.mockRestore();
+    alertSpy.mockRestore();
+  });
 });
 
 // ---- Story 1a.3 CR followup (L9): element resize (AC-7 调整大小) -------------
@@ -590,7 +663,9 @@ describe("CanvasView — element resize (Story 1a.3 CR followup L9, AC-7)", () =
     const { container } = await renderReady();
     const canvas = container.querySelector("canvas")!;
 
-    elementStore.setElements([{ id: "test-cloud-noresize", kind: "cloud", x: 0, y: 0 }]);
+    elementStore.setElements([
+      { id: "test-cloud-noresize", kind: "cloud", name: "c1", x: 0, y: 0 },
+    ]);
 
     // Select the cloud: body click at world (1, 1) -> screen (16.5, 16.5).
     fireEvent.pointerDown(canvas, { button: 0, pointerId: 76, clientX: 16.5, clientY: 16.5 });

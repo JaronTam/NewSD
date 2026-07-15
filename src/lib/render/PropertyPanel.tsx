@@ -6,7 +6,7 @@
 //
 // T1: skeleton + empty state. Field rendering in T2-T4.
 
-import { useSyncExternalStore, useState } from "react";
+import { useSyncExternalStore, useRef, useState } from "react";
 import { type ElementStore, deriveFlowUnits } from "../sd/store";
 import { validateFormulaSyntax, formatFormulaForEditor } from "../sd/formula";
 import { checkDimensions, type DimensionalCheckResult } from "../sd/dimensionalCheck";
@@ -28,11 +28,16 @@ export function PropertyPanel({ elementStore, selectedId }: PropertyPanelProps) 
   const [formulaError, setFormulaError] = useState<string | null>(null);
   // Dimensional check result (AC-11). Reset when selection changes.
   const [dimStatus, setDimStatus] = useState<DimensionalCheckResult | null>(null);
+  // Name collision error state (SDR#4 / AC-7). Reset when selection changes.
+  const [nameError, setNameError] = useState<string | null>(null);
   const [lastSelectedId, setLastSelectedId] = useState<string | null>(null);
+  // Ref for name input revert on collision (SDR#4 / AC-7a).
+  const nameInputRef = useRef<HTMLInputElement>(null);
   if (selectedElement && selectedElement.id !== lastSelectedId) {
     setLastSelectedId(selectedElement.id);
     if (formulaError !== null) setFormulaError(null);
     if (dimStatus !== null) setDimStatus(null);
+    if (nameError !== null) setNameError(null);
   }
 
   // Empty state: no selection.
@@ -76,13 +81,39 @@ export function PropertyPanel({ elementStore, selectedId }: PropertyPanelProps) 
     <label key="name" className="ns-property-panel__field">
       <span className="ns-property-panel__label">名称</span>
       <input
+        ref={nameInputRef}
         type="text"
         data-testid="ns-property-field-name"
-        className="ns-property-panel__input"
+        className={`ns-property-panel__input${nameError ? " ns-property-panel__input--error" : ""}`}
         aria-label="名称"
-        defaultValue={selectedElement.name ?? ""}
-        onBlur={persistField("name")}
+        defaultValue={selectedElement.name}
+        onBlur={(e) => {
+          const raw = e.target.value;
+          try {
+            elementStore.updateElement(selectedElement.id, {
+              name: raw,
+            } as Partial<typeof selectedElement>);
+            setNameError(null);
+          } catch (err) {
+            // Collision or empty-name rejection (SDR#4 / SDR#11): surface error,
+            // revert input to the element's stored name. All element kinds
+            // guarantee name: string (SDR#5), so no nullish fallback needed.
+            setNameError(err instanceof Error ? err.message : "名称无效");
+            if (nameInputRef.current) {
+              nameInputRef.current.value = selectedElement.name;
+            }
+          }
+        }}
       />
+      {nameError && (
+        <div
+          data-testid="ns-property-name-error"
+          className="ns-property-panel__error"
+          aria-live="assertive"
+        >
+          {nameError}
+        </div>
+      )}
     </label>,
   );
 
