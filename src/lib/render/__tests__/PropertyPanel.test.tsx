@@ -984,3 +984,84 @@ describe("PropertyPanel — selection change reactivity", () => {
     }
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Story 1a.11 图元命名机制 — RED PHASE SCAFFOLDS
+//
+// AC-7(a): PropertyPanel name rename collision surfacing.
+//   Blur on name input with a value that collides with another element's name
+//   MUST: (i) surface error via [data-testid="ns-property-name-error"],
+//         (ii) revert input value to the store's current name,
+//         (iii) NOT persist the collision (store.name unchanged).
+//
+// AC-7(a-x): Cross-selection F-2 (1a.8 教训): editing name for A without
+//   blur, then re-rendering with B selected, MUST show B's name — never leak
+//   A's in-flight edit into B's input.
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe("PropertyPanel — AC-7(a) rename collision surfacing (1a.11 RED)", () => {
+  it.skip("blur collision → nameError DOM + input reverts + store.name unchanged", async () => {
+    // gov: AC-7(a) + SDR#4 + T6
+    const store = setupStore(["stock", "stock"]);
+    const stocks = store.getElements().filter((e) => e.kind === "stock") as Stock[];
+    // Rename them to distinct known values so the collision target is deterministic.
+    act(() => {
+      store.updateElement(stocks[0].id, { name: "A" } as Partial<Stock>);
+      store.updateElement(stocks[1].id, { name: "B" } as Partial<Stock>);
+    });
+    const { container } = renderPanel(store, stocks[0].id);
+
+    // before
+    const nameInput = container.querySelector(
+      "[data-testid='ns-property-field-name']",
+    ) as HTMLInputElement;
+    expect(nameInput.value).toBe("A");
+
+    // action: user types "B" (existing) and blurs
+    fireEvent.change(nameInput, { target: { value: "B" } });
+    fireEvent.blur(nameInput);
+
+    // after (i) — nameError DOM appears
+    const errorEl = await waitFor(() =>
+      container.querySelector("[data-testid='ns-property-name-error']"),
+    );
+    expect(errorEl).not.toBeNull();
+    expect(errorEl?.textContent ?? "").not.toBe("");
+
+    // after (ii) — input reverts to "A"
+    expect(nameInput.value).toBe("A");
+    expect(nameInput.value).not.toBe("B");
+
+    // after (iii) — store.name is still "A"
+    const stored = store.getElements().find((e) => e.id === stocks[0].id) as Stock;
+    expect(stored.name).toBe("A");
+    expect(stored.name).not.toBe("B");
+  });
+
+  it.skip("AC-7(a-x) cross-selection: A edit not blurred, switch to B → B input shows B's name", () => {
+    // gov: AC-7(a) + SDR#4 + T6 + 1a.8 F-2 教训
+    const store = setupStore(["stock", "stock"]);
+    const stocks = store.getElements().filter((e) => e.kind === "stock") as Stock[];
+    act(() => {
+      store.updateElement(stocks[0].id, { name: "A" } as Partial<Stock>);
+      store.updateElement(stocks[1].id, { name: "B" } as Partial<Stock>);
+    });
+
+    // Render A first, edit input WITHOUT blur.
+    const { container, rerender } = renderPanel(store, stocks[0].id);
+    const inputA = container.querySelector(
+      "[data-testid='ns-property-field-name']",
+    ) as HTMLInputElement;
+    fireEvent.change(inputA, { target: { value: "in-flight-A-edit" } });
+
+    // Switch selection to B (rerender with new selectedId).
+    rerender(<PropertyPanel elementStore={store} selectedId={stocks[1].id} />);
+
+    // The re-mounted input should reflect B's stored name, not A's in-flight text.
+    const inputB = container.querySelector(
+      "[data-testid='ns-property-field-name']",
+    ) as HTMLInputElement;
+    expect(inputB.value).toBe("B");
+    expect(inputB.value).not.toBe("in-flight-A-edit");
+  });
+});
