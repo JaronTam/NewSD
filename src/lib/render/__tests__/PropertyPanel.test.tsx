@@ -26,10 +26,12 @@ function setupStore(seeds: ("stock" | "cloud" | "flow")[] = ["stock"]) {
   const store = createElementStore();
   store.setElements([]);
 
+  let stockIdx = 0;
   for (const kind of seeds) {
     if (kind === "stock") {
+      stockIdx++;
       store.createStock({
-        name: "TestStock",
+        name: `Stock${stockIdx}`,
         x: 0,
         y: 0,
         width: 8,
@@ -39,7 +41,7 @@ function setupStore(seeds: ("stock" | "cloud" | "flow")[] = ["stock"]) {
         allowNegative: false,
       });
     } else if (kind === "cloud") {
-      store.createCloud({ name: "TestCloud", x: 0, y: 0 });
+      store.createCloud({ name: `Cloud${stockIdx + 1}`, x: 0, y: 0 });
     } else if (kind === "flow") {
       // Need two stocks first for endpoints.
       const stocks = store.getElements().filter((e) => e.kind === "stock");
@@ -225,7 +227,7 @@ describe("PropertyPanel — AC-3 stock field rendering (P0)", () => {
     ) as HTMLInputElement;
     expect(nameInput).not.toBeNull();
     if (nameInput) {
-      expect(nameInput.value ?? nameInput.textContent).toContain("TestStock");
+      expect(nameInput.value ?? nameInput.textContent).toContain("Stock1");
     }
 
     // initialValue should show 100.
@@ -1000,7 +1002,7 @@ describe("PropertyPanel — selection change reactivity", () => {
 // ═══════════════════════════════════════════════════════════════════════════
 
 describe("PropertyPanel — AC-7(a) rename collision surfacing (1a.11 RED)", () => {
-  it.skip("blur collision → nameError DOM + input reverts + store.name unchanged", async () => {
+  it("blur collision → nameError DOM + input reverts + store.name unchanged", async () => {
     // gov: AC-7(a) + SDR#4 + T6
     const store = setupStore(["stock", "stock"]);
     const stocks = store.getElements().filter((e) => e.kind === "stock") as Stock[];
@@ -1038,7 +1040,7 @@ describe("PropertyPanel — AC-7(a) rename collision surfacing (1a.11 RED)", () 
     expect(stored.name).not.toBe("B");
   });
 
-  it.skip("AC-7(a-x) cross-selection: A edit not blurred, switch to B → B input shows B's name", () => {
+  it("AC-7(a-x) cross-selection: A edit not blurred, switch to B → B input shows B's name", () => {
     // gov: AC-7(a) + SDR#4 + T6 + 1a.8 F-2 教训
     const store = setupStore(["stock", "stock"]);
     const stocks = store.getElements().filter((e) => e.kind === "stock") as Stock[];

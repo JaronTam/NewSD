@@ -183,10 +183,9 @@ describe("createStock — E9 integration guard (AC-8, AC-9)", () => {
 
 function seedStock(
   store: ReturnType<typeof createElementStore>,
-  overrides: Partial<Stock> = {},
+  overrides: Partial<Stock> & { name?: string } = {},
 ): Stock {
   return store.createStock({
-    name: "TestStock",
     x: 0,
     y: 0,
     width: 8,
@@ -195,7 +194,7 @@ function seedStock(
     units: "people",
     allowNegative: false,
     ...overrides,
-  });
+  } as Parameters<typeof store.createStock>[0]);
 }
 
 function seedCloud(
@@ -465,55 +464,58 @@ describe("createFlow — E11 parallel flows (AC-14)", () => {
   });
 });
 
-// ---- AC-15: 重名软警告 — allow duplicate names ---------------------------------
+// ---- AC-15: 重名硬拒绝 — duplicate names REJECTED (SDR#4 rewired) ---------------
 
-describe("createFlow — duplicate name allowed (AC-15)", () => {
-  it("allows two flows with the same name", () => {
+describe("createFlow — duplicate name REJECTED (AC-15 rewired per SDR#4)", () => {
+  it("rejects second flow with duplicate explicit name", () => {
     const store = createElementStore();
     const s1 = seedStock(store, { id: "s1" });
     const s2 = seedStock(store, { id: "s2" });
     const s3 = seedStock(store, { id: "s3" });
 
-    const f1 = createFlow(store, {
+    createFlow(store, {
       fromId: s1.id,
       toId: s2.id,
       formula: "a",
       isVariable: false,
       name: "FlowX",
     });
-    const f2 = createFlow(store, {
-      fromId: s1.id,
-      toId: s3.id,
-      formula: "b",
-      isVariable: true,
-      name: "FlowX",
-    });
-
-    expect(f1.name).toBe("FlowX");
-    expect(f2.name).toBe("FlowX");
-    // Both exist in store
+    // Second flow with same explicit name MUST throw (SDR#4 hard-reject).
+    expect(() =>
+      createFlow(store, {
+        fromId: s1.id,
+        toId: s3.id,
+        formula: "b",
+        isVariable: true,
+        name: "FlowX",
+      }),
+    ).toThrow();
+    // Only the first flow exists in store.
     const flows = store.getElements().filter((e) => e.kind === "flow");
-    expect(flows.length).toBe(2);
+    expect(flows.length).toBe(1);
   });
 
-  it("allows a flow with the same name as an existing stock", () => {
+  it("rejects a flow with the same name as an existing stock", () => {
     const store = createElementStore();
     const s1 = seedStock(store, { id: "s1", name: "DuplicateName" });
     const s2 = seedStock(store, { id: "s2" });
 
-    const flow = createFlow(store, {
-      fromId: s1.id,
-      toId: s2.id,
-      formula: "1",
-      isVariable: false,
-      name: "DuplicateName",
-    });
-    // Name collision between stock and flow is allowed
-    expect(flow.name).toBe("DuplicateName");
+    // Name collision between stock and flow is now hard-rejected (SDR#1 single namespace).
+    expect(() =>
+      createFlow(store, {
+        fromId: s1.id,
+        toId: s2.id,
+        formula: "1",
+        isVariable: false,
+        name: "DuplicateName",
+      }),
+    ).toThrow();
+    // Only stock exists — flow was never created.
     const names = store
       .getElements()
-      .map((e) => ("name" in e ? (e as Stock).name : (e as { name?: string }).name));
-    expect(names.filter((n) => n === "DuplicateName").length).toBe(2);
+      .map((e) => (e as { name?: string }).name)
+      .filter(Boolean);
+    expect(names.filter((n) => n === "DuplicateName").length).toBe(1);
   });
 });
 
@@ -554,7 +556,7 @@ describe("createFlow — F3 onWarn callback + flowCreateWarning", () => {
     expect(warn).toContain("Parallel");
   });
 
-  it("flowCreateWarning returns a duplicate-name warning (AC-15)", () => {
+  it("flowCreateWarning returns null for duplicate name (AC-15 rewired per SDR#4)", () => {
     const store = createElementStore();
     const s1 = seedStock(store, { id: "s1" });
     const s2 = seedStock(store, { id: "s2" });
@@ -566,6 +568,8 @@ describe("createFlow — F3 onWarn callback + flowCreateWarning", () => {
       isVariable: false,
       name: "FlowX",
     });
+    // Dup-name gate removed; collision is hard-rejected at create-time.
+    // flowCreateWarning no longer returns a dup-name string.
     const warn = flowCreateWarning(store.getElements(), {
       fromId: s1.id,
       toId: s3.id,
@@ -573,8 +577,7 @@ describe("createFlow — F3 onWarn callback + flowCreateWarning", () => {
       isVariable: true,
       name: "FlowX",
     });
-    expect(warn).not.toBeNull();
-    expect(warn).toContain("Duplicate flow name");
+    expect(warn).toBeNull();
   });
 
   it("createFlow invokes onWarn with null when the flow is clean", () => {
@@ -659,7 +662,7 @@ function cloudShape(id: string, name: string) {
 // ---- AC-1: 显式撞名跨类型拒绝 (SDR#1 / T3) ----------------------------------
 
 describe("1a.11 AC-1: assertNameAvailable — 显式撞名拒绝", () => {
-  it.skip("createCloud 显式撞已有 stock name → throw + store 未新增", () => {
+  it("createCloud 显式撞已有 stock name → throw + store 未新增", () => {
     // gov: AC-1 + SDR#1 + T3
     const store = createElementStore();
     seedStock(store, { name: "A" });
@@ -673,7 +676,7 @@ describe("1a.11 AC-1: assertNameAvailable — 显式撞名拒绝", () => {
 // ---- AC-2: create-path seq monotonic (SDR#2 + #3 / T1) ---------------------
 
 describe("1a.11 AC-2: createStock auto-name 单调递增", () => {
-  it.skip("空 store 连续 3 次 createStock (name undefined) → stock_1/stock_2/stock_3", () => {
+  it("空 store 连续 3 次 createStock (name undefined) → stock_1/stock_2/stock_3", () => {
     // gov: AC-2 + SDR#2 + SDR#3 + T1
     const store = createElementStore();
     // Casting is intentional: DS will loosen the createStock Omit<> to make name optional.
@@ -711,14 +714,14 @@ describe("1a.11 AC-2: createStock auto-name 单调递增", () => {
 // ---- AC-3: cloud_1 / flow_1 首次自动名 (SDR#3 / T1) ------------------------
 
 describe("1a.11 AC-3: createCloud/createFlow 首次自动命名", () => {
-  it.skip("空 store createCloud (name undefined) → cloud_1", () => {
+  it("空 store createCloud (name undefined) → cloud_1", () => {
     // gov: AC-3 + SDR#3 + T1
     const store = createElementStore();
     const c = store.createCloud({ x: 20, y: 0 });
     expect(c.name).toBe("cloud_1");
   });
 
-  it.skip("空 store createFlow (name undefined) → flow_1 (不再是 'Flow 1')", () => {
+  it("空 store createFlow (name undefined) → flow_1 (不再是 'Flow 1')", () => {
     // gov: AC-3 + SDR#3 + T1
     const store = createElementStore();
     const s1 = seedStock(store, { name: "src" });
@@ -732,7 +735,7 @@ describe("1a.11 AC-3: createCloud/createFlow 首次自动命名", () => {
 // ---- AC-4a: 删除后 create-path 不复用 (SDR#2 + #12 / T2) --------------------
 
 describe("1a.11 AC-4a: delete → createStock 计数器不复用", () => {
-  it.skip("seq=3 delete stock_3 后 createStock → stock_4 (create 路径不复用)", () => {
+  it("seq=3 delete stock_3 后 createStock → stock_4 (create 路径不复用)", () => {
     // gov: AC-4a + SDR#2 + SDR#12 + T2
     const store = createElementStore();
     const s1 = store.createStock({} as unknown as Parameters<typeof store.createStock>[0]);
@@ -750,7 +753,7 @@ describe("1a.11 AC-4a: delete → createStock 计数器不复用", () => {
 // ---- AC-4b: setElements 载入推导 (SDR#2 load 路径 / T2) --------------------
 
 describe("1a.11 AC-4b: setElements → deriveSeq 载入承接", () => {
-  it.skip("setElements([stock_1, stock_5]) + createStock → stock_6", () => {
+  it("setElements([stock_1, stock_5]) + createStock → stock_6", () => {
     // gov: AC-4b + SDR#2 + T2
     const store = createElementStore();
     store.setElements([stockShape("id-1", "stock_1"), stockShape("id-5", "stock_5")]);
@@ -762,7 +765,7 @@ describe("1a.11 AC-4b: setElements → deriveSeq 载入承接", () => {
 // ---- AC-4c: setElements 空数组 → seq 归 0 (SDR#2 / T2) ---------------------
 
 describe("1a.11 AC-4c: setElements([]) → seq 归 0", () => {
-  it.skip("setElements([]) + createStock → stock_1 (归 0)", () => {
+  it("setElements([]) + createStock → stock_1 (归 0)", () => {
     // gov: AC-4c + SDR#2 + T2
     const store = createElementStore();
     // First seed then wipe to prove seq is derived from current elements, not history.
@@ -777,7 +780,7 @@ describe("1a.11 AC-4c: setElements([]) → seq 归 0", () => {
 // ---- AC-5: updateElement 撞名拒绝 (SDR#4 / T3) ----------------------------
 
 describe("1a.11 AC-5: updateElement 撞名拒绝", () => {
-  it.skip("stock A + stock B, updateElement(B,{name:'A'}) → throw + B.name 仍 'B'", () => {
+  it("stock A + stock B, updateElement(B,{name:'A'}) → throw + B.name 仍 'B'", () => {
     // gov: AC-5 + SDR#4 + T3
     const store = createElementStore();
     const a = seedStock(store, { name: "A" });
@@ -797,7 +800,7 @@ describe("1a.11 AC-5: updateElement 撞名拒绝", () => {
 // ---- AC-6: rename → id 不变 + 公式预览联动 (SDR#6 / T5) ---------------------
 
 describe("1a.11 AC-6: rename id 稳定 + 公式预览联动", () => {
-  it.skip("stock 'A'(s1) + flow @s1 → rename s1→'C' → id 不变 + preview='C'", async () => {
+  it("stock 'A'(s1) + flow @s1 → rename s1→'C' → id 不变 + preview='C'", async () => {
     // gov: AC-6 + SDR#6 + T5
     const { formatFormulaForEditor } = await import("./formula");
     const store = createElementStore();
@@ -827,7 +830,7 @@ describe("1a.11 AC-6: rename id 稳定 + 公式预览联动", () => {
 // ---- AC-8: 跨类型 flow×stock 显式撞名 (SDR#1 / T3) --------------------------
 
 describe("1a.11 AC-8: 跨类型 flow×stock 显式撞名拒绝", () => {
-  it.skip("flow 'X' 存在 + createStock 显式 'X' → throw", () => {
+  it("flow 'X' 存在 + createStock 显式 'X' → throw", () => {
     // gov: AC-8 + SDR#1 + T3
     const store = createElementStore();
     const s1 = seedStock(store, { name: "src" });
@@ -846,7 +849,7 @@ describe("1a.11 AC-8: 跨类型 flow×stock 显式撞名拒绝", () => {
 // ---- AC-9: cloud auto-name 非 undefined (SDR#5 / T1) ------------------------
 
 describe("1a.11 AC-9: Cloud.name 必为 string", () => {
-  it.skip("createCloud 无 name → Cloud.name === 'cloud_1' (非 undefined)", () => {
+  it("createCloud 无 name → Cloud.name === 'cloud_1' (非 undefined)", () => {
     // gov: AC-9 + SDR#5 + T1
     const store = createElementStore();
     const c = store.createCloud({ x: 0, y: 0 });
@@ -858,7 +861,7 @@ describe("1a.11 AC-9: Cloud.name 必为 string", () => {
 // ---- AC-10: 连续 create 单调 (paste 契约代理 SDR#7 / T7) --------------------
 
 describe("1a.11 AC-10: 连续 createStock 单调递增", () => {
-  it.skip("createStock 连续 5 次无 name → stock_1..stock_5 数组精确等于", () => {
+  it("createStock 连续 5 次无 name → stock_1..stock_5 数组精确等于", () => {
     // gov: AC-10 + SDR#7 + T7 (paste 契约代理)
     const store = createElementStore();
     const names: string[] = [];
@@ -873,7 +876,7 @@ describe("1a.11 AC-10: 连续 createStock 单调递增", () => {
 // ---- AC-11: flowCreateWarning 撞名分支移除 (SDR#4 / T4) ---------------------
 
 describe("1a.11 AC-11: flowCreateWarning 撞名 → null", () => {
-  it.skip("flowCreateWarning(撞名 input) → null (非 'Duplicate flow name')", () => {
+  it("flowCreateWarning(撞名 input) → null (非 'Duplicate flow name')", () => {
     // gov: AC-11 + SDR#4 + T4
     const store = createElementStore();
     const s1 = seedStock(store, { name: "src" });
@@ -904,7 +907,7 @@ describe("1a.11 AC-11: flowCreateWarning 撞名 → null", () => {
 // ---- AC-14a: 空名 createStock 拒绝 (SDR#11 / T3) ----------------------------
 
 describe("1a.11 AC-14a: 空名 createStock 拒绝", () => {
-  it.skip("createStock({name:''}) → throw", () => {
+  it("createStock({name:''}) → throw", () => {
     // gov: AC-14a + SDR#11 + T3
     const store = createElementStore();
     expect(() =>
@@ -925,7 +928,7 @@ describe("1a.11 AC-14a: 空名 createStock 拒绝", () => {
 // ---- AC-14b: 空白名 updateElement 拒绝 + 原名保留 (SDR#11 / T3) -------------
 
 describe("1a.11 AC-14b: 空白名 updateElement 拒绝", () => {
-  it.skip("updateElement(id,{name:'   '}) → throw + 原名保留", () => {
+  it("updateElement(id,{name:'   '}) → throw + 原名保留", () => {
     // gov: AC-14b + SDR#11 + T3
     const store = createElementStore();
     const s = seedStock(store, { name: "keep" });
@@ -943,7 +946,7 @@ describe("1a.11 AC-14b: 空白名 updateElement 拒绝", () => {
 // ---- AC-16a: 载入推导跨类型混合 (SDR#2 + #13 / T2) --------------------------
 
 describe("1a.11 AC-16a: setElements 混合载入 + create 三类新元素", () => {
-  it.skip("setElements([stock_7, stock_2, cloud_3]) → new stock=stock_8, cloud=cloud_4, flow=flow_1", () => {
+  it("setElements([stock_7, stock_2, cloud_3]) → new stock=stock_8, cloud=cloud_4, flow=flow_1", () => {
     // gov: AC-16a + SDR#2 + SDR#13 + T2
     const store = createElementStore();
     store.setElements([
@@ -968,7 +971,7 @@ describe("1a.11 AC-16a: setElements 混合载入 + create 三类新元素", () =
 // ---- AC-16b: setElements 全量替换语义 (SDR#13 / T2) -------------------------
 
 describe("1a.11 AC-16b: setElements 全量替换 seq 不累加", () => {
-  it.skip("setElements 二次调用 → seq 从新元素推导 (不叠加旧 seq)", () => {
+  it("setElements 二次调用 → seq 从新元素推导 (不叠加旧 seq)", () => {
     // gov: AC-16b + SDR#13 + T2
     const store = createElementStore();
     // First set: seq should be 5.
@@ -984,7 +987,7 @@ describe("1a.11 AC-16b: setElements 全量替换 seq 不累加", () => {
 // ---- AC-17a: deriveSeq 正则忽略非匹配名 (SDR#2 / T2) ------------------------
 
 describe("1a.11 AC-17a: deriveSeq 只识别 canonical 名", () => {
-  it.skip("setElements 含 '营收'/'stock_9x'/'my_stock_3'/'stock_5' → createStock → stock_6", () => {
+  it("setElements 含 '营收'/'stock_9x'/'my_stock_3'/'stock_5' → createStock → stock_6", () => {
     // gov: AC-17a + SDR#2 + T2
     const store = createElementStore();
     store.setElements([
@@ -1002,7 +1005,7 @@ describe("1a.11 AC-17a: deriveSeq 只识别 canonical 名", () => {
 // ---- AC-17b: 溢出边界 (SDR#2 / T2) ------------------------------------------
 
 describe("1a.11 AC-17b: MAX_SAFE_INTEGER 溢出 guard", () => {
-  it.skip("setElements 含 'stock_99999999999999999999' → deriveSeq 跳过 → createStock 不 NaN/Infinity", () => {
+  it("setElements 含 'stock_99999999999999999999' → deriveSeq 跳过 → createStock 不 NaN/Infinity", () => {
     // gov: AC-17b + SDR#2 + T2
     const store = createElementStore();
     store.setElements([stockShape("id-big", "stock_99999999999999999999")]);
@@ -1018,7 +1021,7 @@ describe("1a.11 AC-17b: MAX_SAFE_INTEGER 溢出 guard", () => {
 // ---- AC-17c: 正则双端锚定 (SDR#2 / T2) --------------------------------------
 
 describe("1a.11 AC-17c: 双端锚定正则", () => {
-  it.skip("setElements(['my_stock_1']) → stockSeq=0 → createStock → stock_1", () => {
+  it("setElements(['my_stock_1']) → stockSeq=0 → createStock → stock_1", () => {
     // gov: AC-17c + SDR#2 + T2
     const store = createElementStore();
     store.setElements([stockShape("id-my", "my_stock_1")]);

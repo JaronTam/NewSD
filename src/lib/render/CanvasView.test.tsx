@@ -449,7 +449,7 @@ describe("CanvasView — double-click edit name (AC-7)", () => {
   // calls and the assertion fails — that's the red anchor.
   // ═══════════════════════════════════════════════════════════════════════
 
-  it.skip("AC-7(b): dbl-click rename collision → window.alert + name unchanged (1a.11 RED)", async () => {
+  it("AC-7(b): dbl-click rename collision → window.alert + name unchanged (1a.11 RED)", async () => {
     // gov: AC-7(b) + SDR#4 + T6
     const { container } = await renderReady();
     const canvas = container.querySelector("canvas")!;
@@ -663,7 +663,9 @@ describe("CanvasView — element resize (Story 1a.3 CR followup L9, AC-7)", () =
     const { container } = await renderReady();
     const canvas = container.querySelector("canvas")!;
 
-    elementStore.setElements([{ id: "test-cloud-noresize", kind: "cloud", x: 0, y: 0 }]);
+    elementStore.setElements([
+      { id: "test-cloud-noresize", kind: "cloud", name: "c1", x: 0, y: 0 },
+    ]);
 
     // Select the cloud: body click at world (1, 1) -> screen (16.5, 16.5).
     fireEvent.pointerDown(canvas, { button: 0, pointerId: 76, clientX: 16.5, clientY: 16.5 });

@@ -1,6 +1,10 @@
+---
+baseline_commit: 4de373d522285d1ed477023ca352fafa6d7637ed
+---
+
 # Story 1a.11: 图元命名机制 (entity-naming-mechanism)
 
-Status: ready-for-dev
+Status: in-progress
 
 ## Story
 

@@ -249,6 +249,7 @@ function makeCloud(overrides: Partial<Cloud> = {}): Cloud {
   return {
     id: "c1",
     kind: "cloud",
+    name: "c1",
     x: 0,
     y: 0,
     ...overrides,

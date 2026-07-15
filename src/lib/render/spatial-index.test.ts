@@ -26,6 +26,7 @@ function makeStock(overrides: Partial<Stock> & { id: string }): Stock {
 function makeCloud(overrides: Partial<Cloud> & { id: string }): Cloud {
   return {
     kind: "cloud",
+    name: overrides.id,
     x: overrides.x ?? 0,
     y: overrides.y ?? 0,
     ...overrides,
