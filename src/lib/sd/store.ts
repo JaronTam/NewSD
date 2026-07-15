@@ -85,18 +85,37 @@ export function createElementStore(): ElementStore {
     for (const cb of listeners) cb();
   };
 
-  /** Return the next default name for `kind` (SDR#3: `<type>_<N>` format). */
+  /**
+   * Return the next default name for `kind` (SDR#3: `<type>_<N>` format).
+   * SDR#14 skip-forward semantics: if the canonical candidate `<type>_<N>` is
+   * already taken (rename→canonical case), keep incrementing seq until the
+   * candidate is free. Terminates because `elements` is finite and `seq` is
+   * strictly increasing. Auto-name never throws, never collides.
+   */
   const nextDefaultName = (kind: ElementKind): string => {
+    const taken = new Set(
+      elements.map((e) => (e as { name?: string }).name).filter(Boolean) as string[],
+    );
+    let candidate: string;
     switch (kind) {
       case "stock":
-        stockSeq++;
-        return `stock_${stockSeq}`;
+        do {
+          stockSeq++;
+          candidate = `stock_${stockSeq}`;
+        } while (taken.has(candidate));
+        return candidate;
       case "cloud":
-        cloudSeq++;
-        return `cloud_${cloudSeq}`;
+        do {
+          cloudSeq++;
+          candidate = `cloud_${cloudSeq}`;
+        } while (taken.has(candidate));
+        return candidate;
       case "flow":
-        flowSeq++;
-        return `flow_${flowSeq}`;
+        do {
+          flowSeq++;
+          candidate = `flow_${flowSeq}`;
+        } while (taken.has(candidate));
+        return candidate;
     }
   };
 
@@ -246,8 +265,14 @@ export function createElementStore(): ElementStore {
       const idx = elements.findIndex((e) => e.id === id);
       if (idx === -1) return;
       // Collision check for name changes (SDR#4, exclude self so no-op rename is safe).
+      // AC-19: reject non-string name (undefined/null/number) — `"name" in patch` is
+      // true even when the value is undefined, and `String(undefined)` would silently
+      // corrupt the element.
       if ("name" in patch) {
-        assertNameAvailable(String(patch.name), id);
+        if (typeof patch.name !== "string") {
+          throw new Error("Name must be a string");
+        }
+        assertNameAvailable(patch.name, id);
       }
       const updated = { ...elements[idx], ...patch } as SDElement;
       elements = [...elements.slice(0, idx), updated, ...elements.slice(idx + 1)];
@@ -369,19 +394,24 @@ export function flowCreateWarning(
 /**
  * Create a Flow element and append it to the store.
  *
- * Guard sequence (AC-12/AC-12b, throw form — preserves Flow return type):
+ * Guard sequence (AC-12/AC-12b/AC-1, throw form — preserves Flow return type):
  * ① Endpoint validity — fromId/toId must point to existing Stock or Cloud
  *    (rejects nonexistent ids and Flow→Flow connections)
  * ② Self-loop guard — fromId === toId → reject
+ * ③ Name uniqueness (SDR#4/AC-1) — assertNameAvailable rejects duplicates
+ *    across all element kinds (single namespace, SDR#1) and empty/whitespace
+ *    names (SDR#11).
  *
- * E11 (parallel flows) and AC-15 (duplicate names) are allowed (non-blocking);
- * when `onWarn` is supplied it is invoked with a warning string (or null when
- * the flow is clean) after the flow is appended. Throwing guards do NOT call
- * onWarn (the flow was not created).
+ * E11 (parallel flows) is non-blocking; when `onWarn` is supplied it is
+ * invoked with a warning string (or null when the flow is clean) after the
+ * flow is appended. Duplicate-name warnings REMOVED (SDR#4/AC-11) — dup names
+ * are hard-rejected in step ③, so `onWarn` no longer surfaces them.
+ * Throwing guards do NOT call onWarn (the flow was not created).
  *
  * @throws {Error} "Invalid flow endpoint" if endpoints are invalid.
  * @throws {Error} "Self-loop not allowed" if fromId === toId.
- * @param onWarn Optional sink for non-blocking E11/AC-15 warnings.
+ * @throws {Error} on duplicate or empty name (SDR#4/SDR#11).
+ * @param onWarn Optional sink for non-blocking E11 warnings.
  */
 export function createFlow(
   store: ElementStore,

@@ -1029,3 +1029,85 @@ describe("1a.11 AC-17c: 双端锚定正则", () => {
     expect(s.name).toBe("stock_1"); // prefix "my_" must NOT match ^stock_\d+$
   });
 });
+
+// ---- AC-18: nextDefaultName skip-forward (SDR#14 / T2) ---------------------
+
+describe("1a.11 AC-18: auto-name skip-forward on rename-to-canonical", () => {
+  it("rename stock_2 → 'stock_5', then createStock ×3 skips 'stock_5' → stock_3, stock_4, stock_6", () => {
+    // gov: AC-18 + SDR#14 + T2
+    const store = createElementStore();
+    const s1 = store.createStock({} as unknown as Parameters<typeof store.createStock>[0]);
+    const s2 = store.createStock({} as unknown as Parameters<typeof store.createStock>[0]);
+    expect(s1.name).toBe("stock_1");
+    expect(s2.name).toBe("stock_2");
+
+    // Rename s2 to a future canonical form.
+    store.updateElement(s2.id, { name: "stock_5" });
+
+    // Subsequent auto-names must skip "stock_5" — no throw, no collision.
+    const s3 = store.createStock({} as unknown as Parameters<typeof store.createStock>[0]);
+    const s4 = store.createStock({} as unknown as Parameters<typeof store.createStock>[0]);
+    const s5 = store.createStock({} as unknown as Parameters<typeof store.createStock>[0]);
+    expect(s3.name).toBe("stock_3");
+    expect(s4.name).toBe("stock_4");
+    expect(s5.name).toBe("stock_6"); // stock_5 skipped (occupied)
+
+    // All names remain globally unique (SDR#1).
+    const names = store.getElements().map((e) => (e as { name?: string }).name);
+    expect(new Set(names).size).toBe(names.length);
+  });
+
+  it("cloud and flow skip-forward independently", () => {
+    // gov: AC-18 + SDR#14 + T2
+    const store = createElementStore();
+    const c1 = store.createCloud({ x: 0, y: 0 });
+    store.updateElement(c1.id, { name: "cloud_3" });
+    const c2 = store.createCloud({ x: 1, y: 1 });
+    const c3 = store.createCloud({ x: 2, y: 2 });
+    expect(c2.name).toBe("cloud_2");
+    expect(c3.name).toBe("cloud_4"); // cloud_3 skipped
+  });
+});
+
+// ---- AC-19: updateElement non-string name rejection (SDR#11 / T3) ----------
+
+describe("1a.11 AC-19: updateElement rejects non-string name", () => {
+  it("updateElement(id, { name: undefined }) throws + original name preserved", () => {
+    // gov: AC-19 + SDR#11 + T3
+    const store = createElementStore();
+    const s = store.createStock({
+      name: "A",
+    } as unknown as Parameters<typeof store.createStock>[0]);
+    expect(() =>
+      store.updateElement(s.id, { name: undefined } as unknown as Partial<typeof s>),
+    ).toThrow(/must be a string/i);
+    const after = store.getElements().find((e) => e.id === s.id);
+    expect((after as { name?: string })?.name).toBe("A");
+  });
+
+  it("updateElement(id, { name: null }) throws + original name preserved", () => {
+    // gov: AC-19 + SDR#11 + T3
+    const store = createElementStore();
+    const s = store.createStock({
+      name: "B",
+    } as unknown as Parameters<typeof store.createStock>[0]);
+    expect(() => store.updateElement(s.id, { name: null } as unknown as Partial<typeof s>)).toThrow(
+      /must be a string/i,
+    );
+    const after = store.getElements().find((e) => e.id === s.id);
+    expect((after as { name?: string })?.name).toBe("B");
+  });
+
+  it("updateElement(id, { name: 42 }) throws + original name preserved", () => {
+    // gov: AC-19 + SDR#11 + T3
+    const store = createElementStore();
+    const s = store.createStock({
+      name: "C",
+    } as unknown as Parameters<typeof store.createStock>[0]);
+    expect(() => store.updateElement(s.id, { name: 42 } as unknown as Partial<typeof s>)).toThrow(
+      /must be a string/i,
+    );
+    const after = store.getElements().find((e) => e.id === s.id);
+    expect((after as { name?: string })?.name).toBe("C");
+  });
+});

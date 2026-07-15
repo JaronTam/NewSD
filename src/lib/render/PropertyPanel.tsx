@@ -86,7 +86,7 @@ export function PropertyPanel({ elementStore, selectedId }: PropertyPanelProps) 
         data-testid="ns-property-field-name"
         className={`ns-property-panel__input${nameError ? " ns-property-panel__input--error" : ""}`}
         aria-label="名称"
-        defaultValue={selectedElement.name ?? ""}
+        defaultValue={selectedElement.name}
         onBlur={(e) => {
           const raw = e.target.value;
           try {
@@ -96,10 +96,11 @@ export function PropertyPanel({ elementStore, selectedId }: PropertyPanelProps) 
             setNameError(null);
           } catch (err) {
             // Collision or empty-name rejection (SDR#4 / SDR#11): surface error,
-            // revert input to the element's stored name.
+            // revert input to the element's stored name. All element kinds
+            // guarantee name: string (SDR#5), so no nullish fallback needed.
             setNameError(err instanceof Error ? err.message : "名称无效");
             if (nameInputRef.current) {
-              nameInputRef.current.value = selectedElement.name ?? "";
+              nameInputRef.current.value = selectedElement.name;
             }
           }
         }}
