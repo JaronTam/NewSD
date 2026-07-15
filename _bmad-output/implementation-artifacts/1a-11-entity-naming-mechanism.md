@@ -147,7 +147,7 @@ DS 阶段前跑 `/bmad-testarch-atdd`(TEA v1.19.0)产红脚手架. 本 story 测
 
 ### SDR
 
-> 每条 SDR 标分类(**[设计契约]**=真决策需 DS 实现 / **[保留不变量]**=勿动 / **[流程 meta]**=单PR/IR/e2e scope 非代码); 设计契约 SDR 含 (现状/目标/守卫) 三元, 守卫=AC# + 红测试断言(含"旧态消失"反向债拆除断言). Task 行 `gov: SDR#N` 引用见 Tasks 段(formalization §2.1/§2.2 追溯矩阵).
+> 每条 SDR 标分类(**[设计契约]**=真决策需 DS 实现 / **[保留不变量]**=勿动 / **[流程 meta]**=单PR/IR/e2e scope 非代码); 设计契约 SDR 含 (现状/目标/守卫) 三元, 守卫=AC# + 红测试断言(含"旧态消失"反向债拆除断言). Task 行 `gov: SDR#N` 引用见 Tasks 段(formalization §2.1/§2.2 追溯矩阵). 共 13 SDR.
 
 1. **[设计契约] 全局唯一跨类型(单一命名空间)**: 现状=store.ts createX 无撞名 throw + updateElement 无撞名检查(L259-264 仅 endpoint/self-loop throw); 目标=抽 `assertNameAvailable(elements, name, exceptId?)` 扫全部 SDElement 不分 kind(排除自身); 守卫=AC-1(createCloud 显式 "A" 撞 stock throw)+ AC-8(createStock 显式 "X" 撞 flow throw, 跨类型). [FR-ELEM-5 L51 "跨 stock/cloud/flow"]
 2. **[设计契约] 序号 = per-type 单调 high-water 计数器 + 双路径(create/load)**: 现状=store.ts L271-277 `Math.max(0,...flowNums)+1` 正则解析法(删除尾号最大元素后复用序号的 BUG)+ 无 stockSeq/cloudSeq/flowSeq; 目标=elementStore 闭包内 stockSeq/cloudSeq/flowSeq(初始 0); **create 路径**: 自动命名 name 省略时 `++`, 删除不回退, 显式命名不消耗序号 -- **拆除** L271-277 max+1 正则法; **load 路径**(A2, Q1 2026-07-15 裁定): setElements 内 `deriveSeq(kind)` 用 `^<type>_(\d+)$` 双端锚定正则扫 elements[kind==kind] 取最大 N -- **保留(非拆除)** max(seq) 语义, 但 (i)从 create 路径每次调用移到 load 路径单次全扫, (ii)扫描输入是"当前全量元素快照"非"函数内 filter 结果", (iii)非匹配名跳过(非规范/含 x/超 MAX_SAFE_INTEGER); 守卫=AC-4(create + load 双路径 + 空 setElements 归 0)+ AC-16(deriveSeq 三 kind 契约)+ AC-17(健壮性: 非规范跳过 + 正则锚定 + Number 边界)+ 红测试断言旧态消失(create 路径不再 filter+regex+Math.max). [FR-ELEM-5 L51 删除不复用 + Q1=A2]
