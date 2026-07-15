@@ -20,7 +20,7 @@ You are a **Developer** implementing Story 1a.5 ("Spatial Index & Viewport Culli
 Before writing any code, read these files in order:
 
 1. **Story file** (THE authoritative spec): `_bmad-output/implementation-artifacts/1a-5-spatial-index-viewport-cull.md`
-   - Parse ALL sections: Story, Acceptance Criteria (AC-1..AC-9), Tasks/Subtasks (6 tasks), Dev Notes, CS钉死 decisions (11 items), Domain Model Reconciliation, Project Structure, References
+   - Parse ALL sections: Story, Acceptance Criteria (AC-1..AC-9), Tasks/Subtasks (6 tasks), Dev Notes, SDR decisions (11 items), Domain Model Reconciliation, Project Structure, References
    - The story file is your single source of truth for WHAT to build
 
 2. **Sprint status**: `_bmad-output/implementation-artifacts/sprint-status.yaml`
@@ -63,7 +63,7 @@ Before writing any code, read these files in order:
 Load all context from the story file's Dev Notes section:
 
 - Architecture constraints: AD-9 (F1 VRAM render), AD-2 (viewport), CAP-11 (no runtime shadowBlur), F1-quality locked constants, E7 (Float64 precision)
-- CS钉死 decisions: 11 items that MUST be followed exactly
+- SDR decisions: 11 items that MUST be followed exactly
 - Domain Model Reconciliation table: what each module already has, what 1a.5 adds
 - Web research: rbush v4.0.1 (ESM-only, quickselect ^3.0.0 dep)
 - §6 single-PR assessment: default = single PR
@@ -149,11 +149,11 @@ Implement MINIMAL code to make tests pass:
 2. Create `dirty-rect.test.ts` with all tests
 3. Integrate dirty decision in `CanvasView.tsx` render loop:
    - Store subscribe → diff changed elements → `markDirty(oldBbox)` + `markDirty(newBbox)`
-   - **3-branch render decision** (CS钉死 #5):
+   - **3-branch render decision** (SDR #5):
      - Camera change OR first frame → `dirtyTracker.clear()` + full visible rebuild + full WebGL redraw
      - !camera && `hasDirty()` → rebuild dirty only + full WebGL redraw of visible set
      - !camera && !hasDirty → **skip WebGL render entirely** (static scene, zero GPU work)
-   - **WebGL scissor out-of-scope** (CS钉死: additive glow + post-culling small visible set)
+   - **WebGL scissor out-of-scope** (SDR: additive glow + post-culling small visible set)
    - 2D surface canvas: keep full redraw (O(viewport), not bottleneck)
 4. Add dirty decision tests to `CanvasView.test.tsx`
 
@@ -288,9 +288,9 @@ Only then mark the task checkbox [x] in the story file. Update File List section
 
 5. **Float64 precision**: WORLD_CLAMP=1e15 (camera.ts). viewportToWorldRect operates within clamp. rbush bbox uses world coordinates (Float64 safe).
 
-6. **WebGL scissor out-of-scope**: CS钉死 #5. No `gl.scissor()` usage. "Partial redraw" is at instance-build layer, not screen-pixel layer.
+6. **WebGL scissor out-of-scope**: SDR #5. No `gl.scissor()` usage. "Partial redraw" is at instance-build layer, not screen-pixel layer.
 
-7. **NFR verification split** (CS钉死 #7): Playwright validates culling effectiveness (`buildInstances().length`), NOT absolute FPS. Absolute FPS via PerformanceProbe/RUM in real browsers.
+7. **NFR verification split** (SDR #7): Playwright validates culling effectiveness (`buildInstances().length`), NOT absolute FPS. Absolute FPS via PerformanceProbe/RUM in real browsers.
 
 8. **B-obs-1 RUM**: Partial delivery + explicit defer. PerformanceProbe (client sampling + P95) is delivered. Network upload + server + dashboard are explicitly deferred (not silently missed).
 
@@ -300,9 +300,9 @@ Only then mark the task checkbox [x] in the story file. Update File List section
 
 11. **`__e2e__` hook extensions**: `buildInstances()` (current visible instances), `seedBulk(n)` (test-only, not production), `spatialIndex` (SpatialIndex instance), `perfProbe` (PerformanceProbe instance).
 
-### CS钉死 Decisions (11 items — MUST follow exactly)
+### SDR Decisions (11 items — MUST follow exactly)
 
-These are in the story file Dev Notes → CS钉死决策. Every one must be implemented as specified, no deviation:
+These are in the story file Dev Notes → SDR 决策. Every one must be implemented as specified, no deviation:
 
 1. R-tree = rbush v4.0.1 (not @turf/turf, not hand-rolled)
 2. Index object = SDElement by world bbox (getElementBounds → {minX,minY,maxX,maxY})

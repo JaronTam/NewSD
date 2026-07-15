@@ -315,14 +315,14 @@ As a 单人建模者,
 I want 游戏化中心(表盘+等级+徽章墙)奖励建模行为,
 So that 建模有进阶感与成就驱动。
 
-**注:** 范围与依赖已定(决策点2),AC 细节留 CS--待点3 游戏化中心讨论钉死(表盘 UI/等级机制 XP 或徽章数/徽章墙数据关系/等级触发"完成搭建"语义/原 5.3 toast 即时反馈是否保留)。
+**注:** 范围与依赖已定(决策点2),AC 细节留 CS--待点3 游戏化中心讨论 pin(表盘 UI/等级机制 XP 或徽章数/徽章墙数据关系/等级触发"完成搭建"语义/原 5.3 toast 即时反馈是否保留)。
 
 **Acceptance Criteria(范围骨架,细节留 CS):**
 
 **Given** FR-GAME-2 行为徽章(5.3)+ 1a 建模 + 1b 仿真就绪
 **When** 实现游戏化中心
 **Then** 表盘 + 等级机制 + 徽章墙(范围,UI/数值细节留 CS)
-**And** 等级触发挂 SD 建模行为("完成搭建"语义:可运行+通过校验?待 CS 钉死)
+**And** 等级触发挂 SD 建模行为("完成搭建"语义:可运行+通过校验?待 CS pin)
 **And** 表盘归游戏化中心(非状态栏非 PromptPanel)
 **And** 里程碑 tab(FR-UI-7)回顾内容在本 story 实现(结构在 1a.8+ 重构 story defer 到此)
 **And** 与 FR-GAME-2 行为徽章关系(徽章解锁计入等级?)留 CS
@@ -360,7 +360,7 @@ So that 建模有进阶感与成就驱动。
 - **Apply 阶段**(Step 5 批准后):将提案 1-7 old->new apply 到 `_bmad-output/planning-artifacts/epics.md`;同步 Epic 1a FRs covered(line 263,+FR-ELEM-5/6 +FR-UI-7/8/9)。
 - **编号定夺**(SP):1a.8+(PromptPanel 重构)/FR-ELEM-5 命名机制独立小 story/Story 5.4(游戏化中心)实际编号由 sprint-plan 定。
 - **后续 story-cycle**:1a.8(property-panel-formula-editor)-> FR-ELEM-5 命名机制 -> 1a.8+ 重构 -> 1a.9 i18n;Story 5.4 待点 3 讨论 + 5.3 就绪。
-- **独立待办**:点 3 游戏化中心细节讨论(表盘 UI/等级机制/徽章墙数据关系/等级触发语义/原 5.3 toast 保留)-> 钉死 Story 5.4 AC。
+- **独立待办**:点 3 游戏化中心细节讨论(表盘 UI/等级机制/徽章墙数据关系/等级触发语义/原 5.3 toast 保留)-> pin Story 5.4 AC。
 
 **Success Criteria**:
 
@@ -374,6 +374,6 @@ So that 建模有进阶感与成就驱动。
 
 ## 附录:未覆盖(留 CS/独立待办,不进本 Proposal apply)
 
-- 点 3 游戏化中心细节(表盘 UI/等级机制 XP/徽章墙数据关系/等级触发"完成搭建"语义/原 5.3 toast 保留):独立讨论,钉死 Story 5.4 AC。
-- 1a.8+ / FR-ELEM-5 / Story 5.4 的 CS 钉死(数据 schema/组件 slot/挂载点/store 写回路径/脉冲描边样式/红光闪烁动画/深浅色终端适配):各 story CS 阶段定。
+- 点 3 游戏化中心细节(表盘 UI/等级机制 XP/徽章墙数据关系/等级触发"完成搭建"语义/原 5.3 toast 保留):独立讨论,pin Story 5.4 AC。
+- 1a.8+ / FR-ELEM-5 / Story 5.4 的 CS pin(数据 schema/组件 slot/挂载点/store 写回路径/脉冲描边样式/红光闪烁动画/深浅色终端适配):各 story CS 阶段定。
 - 1a.7 defer 5 文件 PR(styles.css/PromptPanel.tsx/PromptPanel.test.tsx/deferred-work.md/1a-7-toolbar-statusbar.md):独立推,不夹带重构。
