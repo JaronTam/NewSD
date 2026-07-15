@@ -2,9 +2,9 @@
 // Wraps rbush v4.0.1 (ESM-only, OMT bulk-load) with SDElement id→object
 // resolution and incremental store.subscribe sync.
 //
-// CS钉死 #1: rbush v4.0.1 (not @turf/turf, not hand-rolled)
-// CS钉死 #2: index object = SDElement by world bbox (getElementBounds → {minX,minY,maxX,maxY})
-// CS钉死 #3: sync = incremental diff (store.subscribe → diff prev/next → insert/remove/update changed only);
+// CS 决策 #1: rbush v4.0.1 (not @turf/turf, not hand-rolled)
+// CS 决策 #2: index object = SDElement by world bbox (getElementBounds → {minX,minY,maxX,maxY})
+// CS 决策 #3: sync = incremental diff (store.subscribe → diff prev/next → insert/remove/update changed only);
 //             camera change does NOT re-sync
 
 import RBush from "rbush";
@@ -13,7 +13,7 @@ import { getElementBounds } from "./elements";
 import type { ElementStore } from "../sd/store";
 import type { WorldRect } from "./camera";
 
-// ---- rbush item shape (CS钉死) -----------------------------------------
+// ---- rbush item shape (CS 决策) -----------------------------------------
 
 export interface IndexItem {
   minX: number;
@@ -44,10 +44,10 @@ export class SpatialIndex {
     this._elementStore = elementStore;
     this.maxEntries = maxEntries;
 
-    // Subscribe to store changes for auto-sync (CS钉死 #3). Batch replaces
+    // Subscribe to store changes for auto-sync (CS 决策 #3). Batch replaces
     // (setElements/seedBulk: many added+removed at once) downgrade to a single
     // rbush.load bulk rebuild - O(n log n) OMT vs per-item insert/remove with
-    // tree rebalancing (CR H3, CS钉死 #3 PARTIAL -> full).
+    // tree rebalancing (CR H3, CS 决策 #3 PARTIAL -> full).
     this.storeUnsub = elementStore.subscribe(() => {
       const next = elementStore.getElements();
       if (this.isBatchReplace(this.prevElements, next)) {
@@ -67,7 +67,7 @@ export class SpatialIndex {
   }
 
   /**
-   * Detect a batch replace (CS钉死 #3): when the added+removed id count exceeds
+   * Detect a batch replace (CS 决策 #3): when the added+removed id count exceeds
    * 2*maxEntries, a full bulk-load is cheaper than incremental diff. Threshold
    * tuned so single-element edits still go through sync (incremental).
    */
@@ -140,7 +140,7 @@ export class SpatialIndex {
 
   /**
    * Incremental sync: diff prev vs next element arrays, only update changed
-   * items (CS钉死 #3). Camera change does NOT call this — elements haven't
+   * items (CS 决策 #3). Camera change does NOT call this — elements haven't
    * changed, only the viewport has.
    */
   sync(prev: readonly SDElement[], next: readonly SDElement[]): void {

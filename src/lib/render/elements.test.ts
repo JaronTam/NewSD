@@ -741,7 +741,7 @@ describe("flowToInstances — AC-12c dangling ref guard", () => {
   });
 
   it("returns empty array + warns when fromId endpoint element doesn't exist", () => {
-    // Option B (VS钉死决策): silent empty + console.warn — don't throw.
+    // Option B (VS 决策): silent empty + console.warn — don't throw.
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
     const elements: SDElement[] = [makeStock({ id: "s2", x: 20, y: 0, width: 10, height: 5 })];
     const instances = flowToInstances(makeFlow({ fromId: "nonexistent", toId: "s2" }), elements);

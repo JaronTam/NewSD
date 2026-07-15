@@ -18,7 +18,7 @@ export interface PropertyPanelProps {
 
 /** Story 1a.8 T1: skeleton + empty state. */
 export function PropertyPanel({ elementStore, selectedId }: PropertyPanelProps) {
-  // Subscribe to element store for field reactivity (CS钉死 #5: dual-channel).
+  // Subscribe to element store for field reactivity (CS 决策 #5: dual-channel).
   const elements = useSyncExternalStore(elementStore.subscribe, elementStore.getSnapshot);
 
   // Find the selected element (null if no selection or not found).

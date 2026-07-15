@@ -1,9 +1,9 @@
 // Dirty-rect tracker for incremental render decisions (Story 1a.5, AC-3/AC-5).
 //
-// CS钉死 #5: 3-branch render decision — camera/first-frame → full rebuild;
+// CS 决策 #5: 3-branch render decision — camera/first-frame → full rebuild;
 // !camera && hasDirty → rebuild dirty + full redraw; static → skip WebGL.
-// CS钉死 #6: queryLowPrecision(step) API contract locked for 1a.6 minimap.
-// WebGL scissor is explicitly out-of-scope (CS钉死 #5).
+// CS 决策 #6: queryLowPrecision(step) API contract locked for 1a.6 minimap.
+// WebGL scissor is explicitly out-of-scope (CS 决策 #5).
 //
 // AC-5: queryLowPrecision returns grid-coarsened dirty rects for the minimap.
 // 1a.6 consumes this API without changing the signature.

@@ -2,11 +2,11 @@
 // 2D canvas overlay rendering world overview + highlight box.
 // Non-VRAM path — no glyph rendering, no shadowBlur risk (CAP-11/AD-9).
 //
-// CS钉死 #1: projection = positioning dots/blocks (low-precision, no ASCII glyphs)
-// CS钉死 #2: queryLowPrecision step = max(1, round(MINIMAP_DIRTY_CELL_PX / minimapScale))
-// CS钉死 #3: 3-branch update (camera→highlight-only, dirty→incremental, else→skip)
-// CS钉死 #4: independent DirtyRectTracker (parallel to main tracker, no drain coupling)
-// CS钉死 #9: world bounds = min/max bbox + padding, single/collocated uses min span
+// CS 决策 #1: projection = positioning dots/blocks (low-precision, no ASCII glyphs)
+// CS 决策 #2: queryLowPrecision step = max(1, round(MINIMAP_DIRTY_CELL_PX / minimapScale))
+// CS 决策 #3: 3-branch update (camera→highlight-only, dirty→incremental, else→skip)
+// CS 决策 #4: independent DirtyRectTracker (parallel to main tracker, no drain coupling)
+// CS 决策 #9: world bounds = min/max bbox + padding, single/collocated uses min span
 
 import type { Camera, Viewport, WorldRect } from "./camera";
 import { viewportToWorldRect, WORLD_CLAMP } from "./camera";
@@ -18,11 +18,11 @@ import { getElementBounds } from "./elements";
 
 // ---- constants -----------------------------------------------------------
 
-/** Default minimap dirty-cell size in minimap pixels (CS钉死 #2). */
+/** Default minimap dirty-cell size in minimap pixels (CS 决策 #2). */
 export const MINIMAP_DIRTY_CELL_PX = 4;
 /** Default padding inside the minimap canvas (pixels). */
 const DEFAULT_PADDING = 8;
-/** Minimum world span for single-element / collocated case (CS钉死 #9). */
+/** Minimum world span for single-element / collocated case (CS 决策 #9). */
 const MIN_WORLD_SPAN = 1;
 /** Placeholder text shown when zero elements exist (AC-5). */
 const PLACEHOLDER_TEXT = "No elements";
@@ -36,7 +36,7 @@ const HIGHLIGHT_LINE_WIDTH = 1.5;
 // ---- MinimapProjector ----------------------------------------------------
 
 export class MinimapProjector {
-  /** Independent dirty-rect tracker for minimap (CS钉死 #4). */
+  /** Independent dirty-rect tracker for minimap (CS 决策 #4). */
   readonly dirtyTracker: DirtyRectTracker;
 
   private readonly canvas: HTMLCanvasElement;
@@ -160,7 +160,7 @@ export class MinimapProjector {
 
   /**
    * Compute the world rectangle that encompasses all elements.
-   * Single / collocated elements get a minimum span (CS钉死 #9).
+   * Single / collocated elements get a minimum span (CS 决策 #9).
    */
   private computeWorldBounds(elements: readonly SDElement[]): WorldRect | null {
     if (elements.length === 0) return null;
@@ -181,7 +181,7 @@ export class MinimapProjector {
 
     if (!Number.isFinite(minX)) return null; // all elements degenerate
 
-    // Minimum span for single / collocated elements (CS钉死 #9).
+    // Minimum span for single / collocated elements (CS 决策 #9).
     if (maxX - minX < MIN_WORLD_SPAN) {
       const midX = (minX + maxX) / 2;
       minX = midX - MIN_WORLD_SPAN / 2;
@@ -228,7 +228,7 @@ export class MinimapProjector {
     ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
   }
 
-  /** Draw a single element as a low-precision dot / block (CS钉死 #1). */
+  /** Draw a single element as a low-precision dot / block (CS 决策 #1). */
   private drawElementDot(
     ctx: CanvasRenderingContext2D,
     el: SDElement,
@@ -390,7 +390,7 @@ export class MinimapProjector {
     ctx.fillText(PLACEHOLDER_TEXT, this.canvas.width / 2, this.canvas.height / 2);
   }
 
-  // ---- 3-branch update (CS钉死 #3) ---------------------------------------
+  // ---- 3-branch update (CS 决策 #3) ---------------------------------------
 
   /**
    * Main update entry point. Call from the render loop.
@@ -465,7 +465,7 @@ export class MinimapProjector {
     return { x: wx, y: wy };
   }
 
-  // ---- dirty-step derivation (CS钉死 #2) ---------------------------------
+  // ---- dirty-step derivation (CS 决策 #2) ---------------------------------
 
   /** Compute the queryLowPrecision step for the current minimap scale. */
   computeDirtyStep(): number {

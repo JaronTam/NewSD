@@ -722,9 +722,9 @@ describe("MinimapProjector", () => {
     });
   });
 
-  // -- single-element / collocated span (CS钉死 #9) -----------------------
+  // -- single-element / collocated span (CS 决策 #9) -----------------------
 
-  describe("single-element world bounds (CS钉死 #9)", () => {
+  describe("single-element world bounds (CS 决策 #9)", () => {
     it("single element gets minimum span — no div-by-zero", () => {
       store.setElements([stock("s1", 50, 50, 8, 5)]);
 

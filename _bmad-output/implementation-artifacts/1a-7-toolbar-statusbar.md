@@ -14,7 +14,7 @@ As a 单人建模者,
 I want 工具栏切换工具与状态栏查看模型信息,
 So that 高效操作建模与监控状态.
 
-**实现模式裁定**: 单 PR(详见 §6 评估)。1a.7 = DOM UI chrome(顶部工具栏 + 底部状态栏)+ AR#11 a11y(键盘/色盲/对比度)+ 键盘 Delete/方向键补全。单一技术子系统(DOM chrome),AC 13 条 < 20 阈值,无 findings fold(snap-tolerance re-defer,见 §CS钉死 #8)。走完整 story-cycle(CS->VS->DS->CR),一个 story 一个 PR。
+**实现模式裁定**: 单 PR(详见 §6 评估)。1a.7 = DOM UI chrome(顶部工具栏 + 底部状态栏)+ AR#11 a11y(键盘/色盲/对比度)+ 键盘 Delete/方向键补全。单一技术子系统(DOM chrome),AC 13 条 < 20 阈值,无 findings fold(snap-tolerance re-defer,见 §CS 决策 #8)。走完整 story-cycle(CS->VS->DS->CR),一个 story 一个 PR。
 
 **前置依赖已闭合**:
 
@@ -64,7 +64,7 @@ So that 高效操作建模与监控状态.
 
 **Given** 工具栏渲染(AC-1)
 **When** 点工具切换按钮(选择/存量/源汇/流量)或按键盘 F/S/C/V
-**Then** 设 toolMode(lift 为 React state,见 CS钉死 #4),按钮选中态高亮(边框/bg + 文字,非纯色)
+**Then** 设 toolMode(lift 为 React state,见 CS 决策 #4),按钮选中态高亮(边框/bg + 文字,非纯色)
 **And** 工具栏按钮与键盘快捷键走同一 setToolMode(mode) helper,二者状态一致
 **And** 切工具时 abort flowDragRef + 清选中(沿用 L815-844 既有行为,不回归)
 
@@ -102,7 +102,7 @@ So that 高效操作建模与监控状态.
 
 **Given** 状态栏渲染(AC-8)
 **When** 1a 单人模式
-**Then** 激活:图元计数(elementStore.getElements().length)、FPS(Debug,perfProbe.getMetrics().fpsP95 实值,见 CS钉死 #6)
+**Then** 激活:图元计数(elementStore.getElements().length)、FPS(Debug,perfProbe.getMetrics().fpsP95 实值,见 CS 决策 #6)
 **And** 占位:模拟时间计数器 "0.00s"(frozen 0,无 sim,1b 解锁)、在线用户数 "1"(单人,collab 2.x)、头像堆栈(单人 1 本地头像)、连接状态 "本地"(单人,collab 2.x)、量纲概要 隐藏/"-"(无 sim 无 FR-SIM-7 量纲校验,slot 存在为 1b wiring)
 **And** 量纲概要点击展开不一致流量清单(L2)1a 隐藏(无数据),slot + 展开机制 1b 接入(为后续预留)
 **And** FPS 当 fpsP95<=0(jsdom 无 rAF / 无采样)显 "-" fallback
@@ -111,7 +111,7 @@ So that 高效操作建模与监控状态.
 
 **Given** 工具栏/状态栏(1a.7)
 **When** 键盘操作
-**Then** 全功能键盘可达:Tab 焦点流遍工具栏按钮/控件/状态栏;快捷键(F/S/C/V 切工具,既有 L815-844);Delete/Backspace 删选中(AC-3);方向键移动选中图元(见 CS钉死 #5,1 world unit/press,snapToGrid 对齐,无选中 no-op)
+**Then** 全功能键盘可达:Tab 焦点流遍工具栏按钮/控件/状态栏;快捷键(F/S/C/V 切工具,既有 L815-844);Delete/Backspace 删选中(AC-3);方向键移动选中图元(见 CS 决策 #5,1 world unit/press,snapToGrid 对齐,无选中 no-op)
 **And** 焦点可见(focus ring 非隐藏,:focus-visible 显 ring,非仅 :focus 去除)
 **And** Tab 顺序合逻辑(工具栏从左到右 -> dt -> 缩放 -> 状态栏;非视觉顺序)
 **And** 方向键不 pan 相机(相机平移沿用既有鼠标/滚轮/缩放键,方向键专属图元移动)
@@ -121,7 +121,7 @@ So that 高效操作建模与监控状态.
 **Given** 工具栏/状态栏配色(1a.7,VRAM 色板 1a.2,tokens.css)
 **When** 配色选择
 **Then** 色盲安全:状态(激活/禁用/选中)非仅色编码,辅图标/文字/形状区分(禁用 = disabled attr + 透明度 + "暂未实现" 文字;选中 = 边框 + 文字;非纯色)
-**And** 文字对比度 WCAG AA(>=4.5:1 正文):--ns-fg #c9d1d9 on --ns-bg #0a0e14 ≈ 12.5:1 ✓;--ns-fg-dim #4a5568 on --ns-bg ≈ 2.6:1 ✗ FAIL AA(见 CS钉死 #2,禁用于正文,仅装饰/非必要)
+**And** 文字对比度 WCAG AA(>=4.5:1 正文):--ns-fg #c9d1d9 on --ns-bg #0a0e14 ≈ 12.5:1 ✓;--ns-fg-dim #4a5568 on --ns-bg ≈ 2.6:1 ✗ FAIL AA(见 CS 决策 #2,禁用于正文,仅装饰/非必要)
 **And** 防红绿/红蓝色盲用户丢信息;加色盲安全约束不破 VRAM 等宽网格美学
 
 ### AC-12(无回归 - 全套件口径)
@@ -154,7 +154,7 @@ So that 高效操作建模与监控状态.
 - [x] T2(AC-1, AC-8): 新建 `src/lib/render/StatusBar.tsx`(7 字段骨架)
   - [x] T2.1 模拟时间/图元计数/在线/头像/FPS(Debug)/连接/量纲概要 slot
   - [x] T2.2 aria-live="polite"(图元计数/FPS)
-- [x] T3(AC-1, AC-8): AppShell 布局(详见 CS钉死 #3)
+- [x] T3(AC-1, AC-8): AppShell 布局(详见 CS 决策 #3)
   - [x] T3.1 CanvasView 渲染 AppShell(Toolbar top / canvas flex:1 / StatusBar bottom)
   - [x] T3.2 styles.css:.ns-canvas height:100vh -> height:100%/flex:1;新增 .ns-layout/.ns-toolbar/.ns-statusbar/.ns-btn 类(消费 --ns-* tokens,镜像 .ns-canvas/.ns-root 既有模式)
 - [x] T4(AC-2): 工具栏激活/禁用矩阵
@@ -166,7 +166,7 @@ So that 高效操作建模与监控状态.
 - [x] T6(AC-10): 方向键移动图元 handler
   - [x] T6.1 ArrowUp/Down/Left/Right 移选中图元 1 world unit(snapToGrid 对齐)
   - [x] T6.2 store.updateElement({x,y});clamp 到合理范围;无选中 no-op;不 pan 相机
-- [x] T7(AC-4): toolMode lift 为 React state(详见 CS钉死 #4)
+- [x] T7(AC-4): toolMode lift 为 React state(详见 CS 决策 #4)
   - [x] T7.1 useState(toolMode) + toolModeRef 同步(键盘 closure + render loop)
   - [x] T7.2 setToolMode(mode) helper(按钮 + 键盘 F/S/C/V 共用);切工具 abort flowDragRef + 清选中(不回归)
 - [x] T8(AC-5): dt 选择器 useState(默认 0.1)+ 视觉选中标识(非纯色)
@@ -201,7 +201,7 @@ Key red-phase coverage: AC-1 toolbar rendering, AC-2 disable matrix, AC-3 delete
 
 - **DOM UI chrome**:工具栏/状态栏 = HTML/CSS/React,非 canvas glyph 渲染 -> CAP-11(运行时禁 per-glyph shadowBlur)N/A,但若触 2D ctx 仍禁(守卫 cap11-shadowblur-guard.test.ts 须仍绿,AC-12)。
 - **单例模式**:elementStore/spatialIndex/dirtyTracker/perfProbe/minimapProjector(CanvasView.tsx L175-190 module-level exported)。1a.7 状态栏消费 elementStore + perfProbe(已导出,直接 import)。
-- **命令式 DOM 更新**:既有 HUD(L462-477)经 render loop(drawRef.current)命令式设 textContent,非 React state(避免每帧重渲染 canvas)。1a.7 状态栏频繁字段(图元计数/FPS/缩放%)+ 缩放滑块/指示器沿用此模式(经 ref + render loop 设值)。用户交互态(toolMode/dt)用 React state(不频繁)。详见 CS钉死 #4。
+- **命令式 DOM 更新**:既有 HUD(L462-477)经 render loop(drawRef.current)命令式设 textContent,非 React state(避免每帧重渲染 canvas)。1a.7 状态栏频繁字段(图元计数/FPS/缩放%)+ 缩放滑块/指示器沿用此模式(经 ref + render loop 设值)。用户交互态(toolMode/dt)用 React state(不频繁)。详见 CS 决策 #4。
 - ****e2e** window hook**(dev-only,L194-242):Playwright 经 window.**e2e** 访问 elementStore/createFlow/seedBulk/minimapProjector/jumpToWorld 等。1a.7 e2e 复用(如 seedBulk 建图元 -> 验图元计数/删除)。
 - **camera.ts**:Camera{x,y,zoom} center-based(Float64),zoom [0.05,20],WORLD_CLAMP=1e15。缩放滑块经 zoomAt(cam,vp,cx,cy,factor)(L134)锚视口中心。
 - **L1/L2 可见性**(prd §1.3):工具栏/状态栏 chrome = L1 持久;量纲概要 = L2 渐显(1a 隐藏,1b 渐显)。
@@ -217,13 +217,13 @@ Key red-phase coverage: AC-1 toolbar rendering, AC-2 disable matrix, AC-3 delete
 - @testing-library/react 16.3 + @testing-library/jest-dom 6.9(组件测)
 - @playwright/test 1.61(e2e)
 - vitest 4.1 + jsdom 29(单测,jsdom 无 rAF -> perfProbe.start() 早返,fpsP95=0 -> "-" fallback)
-- tailwindcss 4.2 + @tailwindcss/vite(styles.css L1 `@import "tailwindcss" source(none)` + L2 `@source "../src"` + L7 @theme inline 映射 --color-_->--ns-_;utilities 可用于 layout 但 chrome 视觉样式走自定义类 + tokens,详见 CS钉死 #2)
+- tailwindcss 4.2 + @tailwindcss/vite(styles.css L1 `@import "tailwindcss" source(none)` + L2 `@source "../src"` + L7 @theme inline 映射 --color-_->--ns-_;utilities 可用于 layout 但 chrome 视觉样式走自定义类 + tokens,详见 CS 决策 #2)
 - lucide-react 0.575(可用但零使用,1a.7 不引入,ASCII 美学)
   无 breaking change 风险(纯增量 DOM chrome)。
 
 ### 域模型对账表
 
-| Epic AC(epics.md)                          | 代码符号(源核验)                                                                                                                                                             | CS钉死    |
+| Epic AC(epics.md)                          | 代码符号(源核验)                                                                                                                                                             | CS 决策    |
 | ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- |
 | L473-477 工具栏 6 组                       | 新建 Toolbar.tsx                                                                                                                                                             | AC-1      |
 | L478 sim disabled 1a + B10                 | sim 按钮 disabled(B10 1a 预满足,sim 全禁)                                                                                                                                    | AC-2      |
@@ -233,7 +233,7 @@ Key red-phase coverage: AC-1 toolbar rendering, AC-2 disable matrix, AC-3 delete
 | L477 缩放指示器 + 滑块                     | camRef.zoom(L393);zoomAt(camera.ts L134);clampZoom[0.05,20];HUD L465 zoomPct 口径                                                                                            | AC-6      |
 | L480 文案写死中文                          | i18n.ts(L1-67)死代码不接;1a.9 抽 key                                                                                                                                         | AC-7      |
 | L482-485 状态栏 7 字段                     | 新建 StatusBar.tsx                                                                                                                                                           | AC-8      |
-| L485-487 占位(online/FPS/connection)       | FPS = perfProbe.getMetrics().fpsP95(L79/107,start() L42 自跑 rAF 采样,1a.7 首消费者);online "1"/连接 "本地" 占位;L487 "占位" 仅指 online+connection,FPS 实值(详见 CS钉死 #6) | AC-9      |
+| L485-487 占位(online/FPS/connection)       | FPS = perfProbe.getMetrics().fpsP95(L79/107,start() L42 自跑 rAF 采样,1a.7 首消费者);online "1"/连接 "本地" 占位;L487 "占位" 仅指 online+connection,FPS 实值(详见 CS 决策 #6) | AC-9      |
 | L486 量纲概要点击展开                      | slot 渲染 1a 隐藏,L2 渐显 + 展开 1b(FR-SIM-7)                                                                                                                                | AC-9      |
 | L489-494 键盘 a11y                         | Tab 焦点/focus-visible/快捷键/Delete/方向键移动(grep 证 CanvasView 无 Arrow handler,1a.7 新增)                                                                               | AC-10     |
 | L496-501 色盲 + 对比度                     | --ns-fg #c9d1d9(12.5:1 ✓)/--ns-fg-dim #4a5568(2.6:1 ✗,禁正文)                                                                                                                | AC-11     |
@@ -246,10 +246,10 @@ Key red-phase coverage: AC-1 toolbar rendering, AC-2 disable matrix, AC-3 delete
 
 - 技术子系统数:1(DOM UI chrome;工具栏 + 状态栏同属 HTML/CSS chrome;键盘 Delete/方向键 + a11y 为横切质量属性非独立子系统;缩放滑块/dt 为 chrome 内控件)。
 - AC 数:13 < 20 阈值。
-- findings fold:无(snap-tolerance re-defer 见 CS钉死 #8;reverse-cr A/B/C/D/E 无 1a.7 UI chrome fold 项,见 §4 核查)。
+- findings fold:无(snap-tolerance re-defer 见 CS 决策 #8;reverse-cr A/B/C/D/E 无 1a.7 UI chrome fold 项,见 §4 核查)。
 - 结论:单 PR 走完整 story-cycle。若 DS step4 前发现 scope 过大,回退 sub-PR 须 DS step4 前决策 + 记 story(story-cycle L157)。
 
-### CS钉死决策(§3.1 工具栏矩阵 / §3.2 状态栏矩阵 / §3.3 九项横切)
+### CS 决策(§3.1 工具栏矩阵 / §3.2 状态栏矩阵 / §3.3 九项横切)
 
 #### §3.1 工具栏激活/禁用矩阵
 
@@ -278,7 +278,7 @@ Key red-phase coverage: AC-1 toolbar rendering, AC-2 disable matrix, AC-3 delete
 | 连接状态     | 占位 "本地"  | 单人(collab 2.x)                                |
 | 量纲概要(L2) | 隐藏/"-"     | 无 sim 无 FR-SIM-7;slot 存在为 1b               |
 
-#### §3.3 九项横切 CS钉死
+#### §3.3 九项横切 CS 决策
 
 1. **i18n**:写死中文(epic L480 authority);i18n.ts(L1-67 零 import 死代码)不接 t();1a.9 抽 key。解决 i18n.ts 冲突(epic-over-prototype)。
 2. **样式系统**:沿既有自定义 CSS 类 + tokens.css 模式(.ns-canvas/.ns-root);styles.css L1 已配 Tailwind v4(`@import "tailwindcss" source(none)` + `@source "../src"` + @theme inline 映射 --color-_->--ns-_),utilities 可用于 layout(flex/gap/padding)但 chrome 视觉样式(边框/辉光/等宽/对比度)走自定义类 + --ns-* tokens(ASCII 美学一致性);不引入新样式系统;不用 lucide-react(零使用,死依赖)。**对比度**:`--ns-fg` #c9d1d9 on `--ns-bg` #0a0e14 ≈ 12.5:1 ✓ AA+AAA;`--ns-fg-dim` #4a5568 on `--ns-bg` ≈ 2.6:1 ✗ FAIL AA -> 禁用于正文,仅装饰/非必要;若需 dim 正文,加 `--ns-fg-mid` token >=4.5:1。
@@ -297,7 +297,7 @@ Key red-phase coverage: AC-1 toolbar rendering, AC-2 disable matrix, AC-3 delete
 - **禁脑补/禁 fabrication**:所有代码符号/行号经源核验(本 story 引用均经 Read/grep/`git show` 核实)。
 - **禁 commit/push**(CS = author only,本地工作树):push 在 DS story PR;sprint-status->done 是 CR 合后独立 chore PR。
 - **禁直推 main**:`gh pr create` -> 本地全绿 -> `gh pr merge --squash --delete-branch`;禁 `git add -A`(提交前核暂存区,.claude//package-lock.json/.playwright-mcp/非白名单 PNG 命中 `git restore --staged`);禁 fixup-PR 链(问题折进当前 story PR);sprint-status 与 story PR 分开推(memory newsd-sprint-status-separate-from-story-pr / newsd-one-push-per-story)。
-- **VS 显式记录**:VS 须记 §2.2 gate 4 项(零歧义/零遗漏/可执行/web research 显式)+ CS钉死 9 项 + AC 覆盖 epic L467-501 + §6 单 PR 评估 + 契约真实性核验(memory newsd-story-cycle-bmad-skill-invocation:1a.6+ VS 必须显式记录,禁静默 skip)。
+- **VS 显式记录**:VS 须记 §2.2 gate 4 项(零歧义/零遗漏/可执行/web research 显式)+ CS 决策 9 项 + AC 覆盖 epic L467-501 + §6 单 PR 评估 + 契约真实性核验(memory newsd-story-cycle-bmad-skill-invocation:1a.6+ VS 必须显式记录,禁静默 skip)。
 
 ### 测试标准
 
@@ -313,7 +313,7 @@ Key red-phase coverage: AC-1 toolbar rendering, AC-2 disable matrix, AC-3 delete
 - **新文件**:`src/lib/render/Toolbar.tsx`、`src/lib/render/StatusBar.tsx`(co-locate CanvasView.tsx/minimap.tsx 既有模式;无 src/components/ 目录,glob 核验)。AppShell 可内联 CanvasView 或独立 `src/lib/render/AppShell.tsx`(DS 裁,优先内联减文件)。
 - **UPDATE 文件**:`src/lib/render/CanvasView.tsx`(渲染 AppShell + toolMode lift + Delete/Arrow handler + 状态栏/滑块命令式更新);`src/styles.css`(.ns-canvas height:100vh->100%/flex:1;新增 .ns-layout/.ns-toolbar/.ns-statusbar/.ns-btn 类)。
 - **新测**:`src/lib/render/Toolbar.test.tsx`、`src/lib/render/StatusBar.test.tsx`、CanvasView.test.tsx 增测、`tests/e2e/toolbar-statusbar.spec.ts`(e2e 路径沿 1a.6 既有,DS 核)。
-- **不动**:camera.ts/store.ts/perf-probe.ts/types.ts(消费既有 API,不改);i18n.ts(死代码,1a.9 处理);tokens.css(消费既有 token,必要时加 --ns-fg-mid 见 CS钉死 #2)。
+- **不动**:camera.ts/store.ts/perf-probe.ts/types.ts(消费既有 API,不改);i18n.ts(死代码,1a.9 处理);tokens.css(消费既有 token,必要时加 --ns-fg-mid 见 CS 决策 #2)。
 - **命名**:`ns-` 前缀 CSS 类(.ns-toolbar/.ns-statusbar/.ns-layout/.ns-btn),沿 .ns-canvas/.ns-root 既有。
 
 ### References
@@ -387,7 +387,7 @@ deepseek-v4-pro (DS + CR orchestrator; no subagents per newsd-cr-3-layers-orches
 
 **Step4 web research**:explicit no-op(无新依赖,基座 version 锁见上 web research 段;memory newsd-cs-webresearch-explicit-gate)。无 breaking change。
 
-**Step5 写 story 文件**:本文件,镜像 1a-6-minimap.md 结构(frontmatter baseline_commit:453ab92 -> Status:ready-for-dev -> Story -> AC-1..13 Given/When/Then -> Tasks/Subtasks TDD -> Dev Notes -> Dev Agent Record -> CS 6-step trace -> VS 记录)。3 unresolved 项填充:① 打开/保存 disabled-stub(无文件格式 spec,NFR-SUCCESS-4 仅质量目标);② Delete/方向键新增(grep 证 CanvasView 无既有);③ FPS 实值(perfProbe 自录单例,L485 vs L487 张力经 CS钉死 #6 解决)。
+**Step5 写 story 文件**:本文件,镜像 1a-6-minimap.md 结构(frontmatter baseline_commit:453ab92 -> Status:ready-for-dev -> Story -> AC-1..13 Given/When/Then -> Tasks/Subtasks TDD -> Dev Notes -> Dev Agent Record -> CS 6-step trace -> VS 记录)。3 unresolved 项填充:① 打开/保存 disabled-stub(无文件格式 spec,NFR-SUCCESS-4 仅质量目标);② Delete/方向键新增(grep 证 CanvasView 无既有);③ FPS 实值(perfProbe 自录单例,L485 vs L487 张力经 CS 决策 #6 解决)。
 
 **Step6 验证 + 存档 + 更新 sprint-status**:本文件经 checklist.md 自检(disaster prevention:无 reinvent wheel(消费 elementStore/perfProbe 既有)/无 wrong lib(无新依赖)/无 wrong file location(co-locate src/lib/render/)/无 breaking regression(AC-12 全套件)/无 ignore UX(AR#11 a11y)/无 vague(AC Given/When/Then 零歧义)/无 lying(代码符号均源核验)/无 ignore past(1a.6 perfProbe/**e2e** 复用));存 story 文件;更新 sprint-status.yaml L37 `1a-7-toolbar-statusbar: backlog` -> `ready-for-dev`(L20 last_updated 已 2026-07-09 不改;L7-11 STATUS DEFINITIONS + 全部注释/结构保留);**禁 commit/push**(CS = author only);最终报告。
 
@@ -397,18 +397,18 @@ deepseek-v4-pro (DS + CR orchestrator; no subagents per newsd-cr-3-layers-orches
 
 | 核验项                                 | 结果 | 备注                                                                                                                                                                                                                                                                                                                                            |
 | -------------------------------------- | ---- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| §2.2 gate 零歧义(AC 无多种解读)        | PASS | CS钉死 #6(FPS)epic L487 "FPS…显示占位" 字面含 FPS,但 L485 记 `FPS(Debug)` 暗示实字段;parenthetical 仅释 online+connection;perfProbe 已自跑 L730,实值零成本。解读可辩护。#5(1 world unit/press)明确;#7(disabled-stub)边界清晰。无歧义                                                                                                            |
+| §2.2 gate 零歧义(AC 无多种解读)        | PASS | CS 决策 #6(FPS)epic L487 "FPS…显示占位" 字面含 FPS,但 L485 记 `FPS(Debug)` 暗示实字段;parenthetical 仅释 online+connection;perfProbe 已自跑 L730,实值零成本。解读可辩护。#5(1 world unit/press)明确;#7(disabled-stub)边界清晰。无歧义                                                                                                            |
 | §2.2 gate 零遗漏(epic L467-501 全覆盖) | PASS | AC-1..13 全覆盖 epic L473-501:工具栏 6 组(AC-1)/sim disabled+B10(AC-2)/删除 plain(AC-3)/工具切换(AC-4)/dt(AC-5)/缩放(AC-6)/中文(AC-7)/状态栏 7 字段(AC-8)/占位矩阵(AC-9)/键盘 a11y(AC-10)/色盲+对比度(AC-11)。无遗漏                                                                                                                            |
 | §2.2 gate 可执行(dev 直接做)           | PASS | T0-T13 TDD 粒度,每 Task 标 AC 映射 + 代码位置。无 vague                                                                                                                                                                                                                                                                                         |
 | §2.2 gate web research 显式记录        | PASS | explicit no-op + 基座 version 锁(react 19.2/vitest 4.1/@playwright/test 1.61/tailwindcss 4.2/lucide-react 0.575 死依赖),非静默 skip                                                                                                                                                                                                             |
-| CS钉死 9 项(§3.3)                      | PASS | 逐项核(见下附 CS钉死 9 项明细表)                                                                                                                                                                                                                                                                                                                |
+| CS 决策 9 项(§3.3)                      | PASS | 逐项核(见下附 CS 决策 9 项明细表)                                                                                                                                                                                                                                                                                                                |
 | AC 覆盖 epic L467-501                  | PASS | 域模型对账表逐项核:13 AC↔epic L473-501 全射,无 missing/extra                                                                                                                                                                                                                                                                                    |
 | §6 单 PR 评估                          | PASS | 技术子系统 1(DOM chrome;工具栏+状态栏同属 HTML/CSS;键盘/a11y 横切质量属性非独立子系统)。AC 13<20。snap-tolerance re-defer 非 UI chrome fold。判据全满足                                                                                                                                                                                         |
 | 契约真实性核验                         | PASS | CanvasView(L175-190/194-242/393/414/434/462-477/730/758/815-844/1057/1289-1342)/store(L48/56/119-124)/perf-probe(L18/42-65/79/107)/camera(L19-30/134/155/179)/types(L1/56)/i18n(L1-67)/styles.css(L1-3/7/46/128)/tokens.css(L7-20)/package.json/routes/index.tsx(L9-11)/__root.tsx(lang="zh") 全 Read/grep 核,行号+符号+行为均真,零 fabrication |
 | baseline_commit 453ab92                | PASS | `git rev-parse --short HEAD` = 453ab92 ✓                                                                                                                                                                                                                                                                                                        |
 | VS verdict                             | PASS | 零 blocker;2 advisory notes(见下)                                                                                                                                                                                                                                                                                                               |
 
-### CS钉死 9 项逐项明细
+### CS 决策 9 项逐项明细
 
 | #   | 项                      | 判    | 核验                                                                                                                                                                                                                               |
 | --- | ----------------------- | ----- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -424,14 +424,14 @@ deepseek-v4-pro (DS + CR orchestrator; no subagents per newsd-cr-3-layers-orches
 
 ### Advisory Notes (non-blocking)
 
-1. **CS钉死 #6 FPS 解读张力**:epic L487 字面 "在线用户数/FPS/连接状态在 1a 单人模式下显示占位" 可读作 FPS 亦占位。CS 裁定 FPS 实值(L485 Debug 暗示+perfProbe 已自跑)可辩护但非唯一解读。DS 时如判应占位,fpsP95 fallback "-" 已覆盖(初始无样本即显 "-"),改动成本低。
+1. **CS 决策 #6 FPS 解读张力**:epic L487 字面 "在线用户数/FPS/连接状态在 1a 单人模式下显示占位" 可读作 FPS 亦占位。CS 裁定 FPS 实值(L485 Debug 暗示+perfProbe 已自跑)可辩护但非唯一解读。DS 时如判应占位,fpsP95 fallback "-" 已覆盖(初始无样本即显 "-"),改动成本低。
 2. **--ns-fg-dim 既有债**:styles.css 中 .ns-err-msg/.ns-canvas__hud/.ns-canvas__hint/.ns-canvas__btn 已用 --ns-fg-dim(2.57:1 ✗ AA)。1a.7 不新增 --ns-fg-dim 正文使用即可,既有债不阻塞。AC-11 仅约束 1a.7 新增 chrome 正文对比度 ≥4.5:1。
 
 ### VS Verdict
 
 **Story 1a.7 VS PASS,可进 DS。**
 
-零 blocker finding。2 advisory notes 为 judgment-call 记录,不阻塞 DS。CS 产出质量:AC 零歧义/零遗漏/可执行,web research 显式,CS钉死 9 项全 sound,契约真实性全核通过,单 PR 评估成立。
+零 blocker finding。2 advisory notes 为 judgment-call 记录,不阻塞 DS。CS 产出质量:AC 零歧义/零遗漏/可执行,web research 显式,CS 决策 9 项全 sound,契约真实性全核通过,单 PR 评估成立。
 
 ## CR Run
 
@@ -447,7 +447,7 @@ deepseek-v4-pro (DS + CR orchestrator; no subagents per newsd-cr-3-layers-orches
 | ----------------- | ----- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | F-cs-dep-mismatch | 应修  | CS 声明「无新依赖」但 Toolbar.test.tsx 用 @testing-library/user-event。**合并前 patched**:回退 user-event,测试改 `fireEvent.change(select,{target:{value:"1"}})`(语义等价 selectOptions,onChange `Number("1")=1` 匹配 `setDt(1.0)`);全 src grep 无残留;package.json 移除显式 devDep(package-lock 保留传递依赖,CS 一致) |
 | F-dead-css        | 应修  | `.ns-prompt-panel__expand` 仅 CSS 定义无 TSX 引用。**合并前 patched**:删除;25 个 `ns-prompt-panel*` 类双向核对无悬空                                                                                                                                                                                                   |
-| F-1-4 / CS钉死#7  | 核验  | handleNew 非模态 confirm(`promptStore.confirm` Promise)+ `setElements([])` + 清选中 + 重置相机 `{0,0,16}`。**核验通过**                                                                                                                                                                                                |
+| F-1-4 / CS 决策#7  | 核验  | handleNew 非模态 confirm(`promptStore.confirm` Promise)+ `setElements([])` + 清选中 + 重置相机 `{0,0,16}`。**核验通过**                                                                                                                                                                                                |
 | D1                | defer | COLLAPSED_H(26) vs CSS(1.6rem=25.6px) 0.4px 差。**本次 patched(本地待推送)**:CSS height `1.6rem`->`26px` 对齐常量                                                                                                                                                                                                      |
 | D2                | defer | testid-dup:展开态多未答 confirm 时 `ns-prompt-panel-confirm` 重复。**accept**(多未答 confirm 仅连点新建异常操作触发;正常单 confirm 无冲突;querySelector 取首个功能正确)                                                                                                                                                |
 | D3                | defer | trim-cap:100 条全未答 confirm 时 trim 无法丢。**accept**(决策约束:未答 confirm 不推进业务下一步=清空,confirm 不堆积至 100;trim 跳过未答 confirm 防 awaiter 永挂保护正确)                                                                                                                                               |

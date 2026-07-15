@@ -148,7 +148,7 @@ export function createElementStore(): ElementStore {
 /**
  * Derive flow units from the target element's units and formula time annotation.
  *
- * Rules (AC-3, CS钉死):
+ * Rules (AC-3, CS 决策):
  * - Default time unit = `/dt`
  * - If formula contains `[单位]` annotation (e.g. `[1/year]`), extract the
  *   time-unit portion (the `/…` segment) and use it instead of `/dt`
@@ -169,7 +169,7 @@ export function deriveFlowUnits(
 
   const stockUnits = (toEl as Stock).units;
 
-  // Default time unit (CS钉死)
+  // Default time unit (CS 决策)
   let timeUnit = "/dt";
 
   // Check for [单位] annotation in formula (e.g. "0.05 [1/year]")

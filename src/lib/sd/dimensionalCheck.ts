@@ -3,7 +3,7 @@
 // Stub implementation: always returns deferred. Full dimensional analysis
 // (unit derivation from formula + connected stocks) deferred to Story 1b.
 //
-// Per CS钉死 #3 (§3.3): stub does not derive actual units, does not
+// Per CS 决策 #3 (§3.3): stub does not derive actual units, does not
 // adjudicate mixed-unit soft warnings (prd L351: property panel does not
 // independently decide soft warnings; FR-SIM-7 derivation lives in 1b
 // Wasm kernel per ARCHITECTURE-SPINE L371 capability map).

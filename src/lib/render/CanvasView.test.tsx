@@ -692,7 +692,7 @@ describe("CanvasView — flow creation & port snap (AC-10, AC-11)", () => {
   });
 
   it("F key activates flow toolMode", async () => {
-    // Keyboard shortcut: F → flow tool mode (per VS钉死决策: keyboard-only toolMode).
+    // Keyboard shortcut: F → flow tool mode (per VS 决策: keyboard-only toolMode).
     // Red: toolMode switching via keyboard is not yet implemented.
     const { container } = await renderReady();
     const canvas = container.querySelector("canvas")!;

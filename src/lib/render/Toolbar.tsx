@@ -6,7 +6,7 @@ import type { ToolMode } from "../sd/types";
 // (i18n dead for 1a, keys extracted in 1a.9). Buttons use unicode symbols for
 // sim controls per ASCII美学 (epic ⏸▶⏹⏭).
 //
-// Props follow the CS钉死 #4 split: toolMode/setToolMode are React state lifted
+// Props follow the CS 决策 #4 split: toolMode/setToolMode are React state lifted
 // into CanvasView; zoom slider value is updated imperatively via render loop
 // (mirrors HUD pattern, not React controlled). The slider ref + label ref are
 // passed down so CanvasView's drawRef can write .value / .textContent directly.

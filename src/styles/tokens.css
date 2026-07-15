@@ -12,7 +12,7 @@
   /* ---- glyph palette (semantic) ---- */
   --ns-fg: #c9d1d9; /* default glyph */
   --ns-fg-dim: #4a5568; /* muted glyph (decorative / non-essential only; ~2.5:1 FAIL AA) */
-  --ns-fg-mid: #8b949e; /* muted chrome text - AA on --ns-bg-elev (~6:1) per CS钉死 #2 */
+  --ns-fg-mid: #8b949e; /* muted chrome text - AA on --ns-bg-elev (~6:1) per CS 决策 #2 */
   --ns-stock: #00ffd5; /* stock — cyan phosphor */
   --ns-flow: #ff5577; /* flow — magenta */
   --ns-cloud: #7c3aed; /* cloud / source-sink — violet */

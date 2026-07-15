@@ -30,7 +30,7 @@ Status: review
 
 **AC-2** — **Given** flow 方向语义 **When** 表达 from→to **Then** 方向由 `fromId`→`toId` 表达,**不设极性字段**(无 `polarity`/`direction` 字段);源/汇语义由 cloud 是否在端点涌现(1a.3 AC-12),flow 自身仅记端点 id。
 
-**AC-3** — **Given** flow 的 `units` **When** 创建/读取 flow **Then** `units` 自动派生为目标存量(`toId` 所指 stock)的 `units` / 时间单位(如 `people/year`),**只读**(不由用户直接编辑;派生函数 `deriveFlowUnits(flow, elements)` 运行时计算,不持久化独立 `units` 字段);时间单位默认 = `/dt`(量纲系统基础约定,CS 钉死不推 DS);覆盖规则:若 flow `formula` 含 `[单位]` annotation token,则取 formula 标注的时间单位覆盖 `/dt`(如 `0.05 [1/year]` → 时间单位 `/year`,units = `<toId.units>/year`);`toId` 指 cloud(无限容量无 units)时 units = `""`(空字符串,fallback,不论 formula 是否含 `[单位]`)。
+**AC-3** — **Given** flow 的 `units` **When** 创建/读取 flow **Then** `units` 自动派生为目标存量(`toId` 所指 stock)的 `units` / 时间单位(如 `people/year`),**只读**(不由用户直接编辑;派生函数 `deriveFlowUnits(flow, elements)` 运行时计算,不持久化独立 `units` 字段);时间单位默认 = `/dt`(量纲系统基础约定,CS 决策不推 DS);覆盖规则:若 flow `formula` 含 `[单位]` annotation token,则取 formula 标注的时间单位覆盖 `/dt`(如 `0.05 [1/year]` → 时间单位 `/year`,units = `<toId.units>/year`);`toId` 指 cloud(无限容量无 units)时 units = `""`(空字符串,fallback,不论 formula 是否含 `[单位]`)。
 
 ### 公式与命名不变量子段(epics.md L394)
 
@@ -40,7 +40,7 @@ Status: review
 
 ### 渲染子段(epics.md L395, L398)
 
-**AC-6** — **Given** flow 的 from/to 端口位置 **When** 渲染 flow **Then** 经 **纯正交 Manhattan 路由**(Bresenham 退化为仅水平/垂直步进,允许单转角 L 形:**先沿 x 轴走完再沿 y 轴走完(horizontal-first,轴序钉死)**,**禁止对角步进**——BOX_GLYPHS 路径字符集 `─│` 直线段 + `┌┐└┘` 转角均无对角字符,故路由必须正交)在字符格上寻路(fromId 端口 → toId 端口);路径以 BOX_GLYPHS 字符(`─│` 直线段 + `┌┐└┘` 转角,均已在 CHARSET,无需 re-bake)绘制;端点箭头 `▶`(U+25B6)置于 `toId` 端,经 `a_rotation` per-instance attrib 旋转匹配路径**末端段正交方向**,rotation ∈ {`0`=→(E), `π/2`=↓(S), `π`=←(W), `-π/2`=↑(N)}(4 正交方向,**无对角 ±π/4**——对角方向无对应路径字符,故不产生);Bresenham 为整数网格算法,world 坐标取整后运算,不引入 Float64 精度退化(E7)。
+**AC-6** — **Given** flow 的 from/to 端口位置 **When** 渲染 flow **Then** 经 **纯正交 Manhattan 路由**(Bresenham 退化为仅水平/垂直步进,允许单转角 L 形:**先沿 x 轴走完再沿 y 轴走完(horizontal-first,轴序锁定)**,**禁止对角步进**——BOX_GLYPHS 路径字符集 `─│` 直线段 + `┌┐└┘` 转角均无对角字符,故路由必须正交)在字符格上寻路(fromId 端口 → toId 端口);路径以 BOX_GLYPHS 字符(`─│` 直线段 + `┌┐└┘` 转角,均已在 CHARSET,无需 re-bake)绘制;端点箭头 `▶`(U+25B6)置于 `toId` 端,经 `a_rotation` per-instance attrib 旋转匹配路径**末端段正交方向**,rotation ∈ {`0`=→(E), `π/2`=↓(S), `π`=←(W), `-π/2`=↑(N)}(4 正交方向,**无对角 ±π/4**——对角方向无对应路径字符,故不产生);Bresenham 为整数网格算法,world 坐标取整后运算,不引入 Float64 精度退化(E7)。
 
 **AC-7** — **Given** flow 的 `isVariable` **When** 渲染 **Then** `isVariable: true` 显 `▼`(U+25BC,可变流量标记),`isVariable: false` 显 `○`(U+25CB,常数流量标记),标记置于 `fromId` 端口**沿 flow 方向(指向 toId)向外偏移 1 格处**——即 marker world 坐标 = `fromPort.{x,y} + dir × 1 cell`,`dir` = Bresenham 路径首段单位方向向量(正交,∈ {(1,0),(-1,0),(0,1),(0,-1)};horizontal-first 下首段沿 x 轴——`fromPort.x ≠ toPort.x` 时 dir ∈ {(1,0),(-1,0)},同列时首段退化、dir 沿 y 轴 ∈ {(0,1),(0,-1)});该格为路径首单元,marker 与 path glyph 重叠时 **marker 优先绘制**(zOrder 上层,数组序在 path instance 之后);`▶`/`▼`/`○` 三 glyph 须加入 glowAtlas CHARSET(见 AC-8 re-bake)。
 
@@ -50,7 +50,7 @@ Status: review
 
 **AC-9** — **Given** 每个元素(stock/cloud) **When** 定义连接点 **Then** 元素周边有预定义端口(stock 4 边中点;cloud 4 边中点,镜像 stock 口径),经 `getElementPorts(el): {portId: string, x: number, y: number}[]` 纯函数返回(world 坐标,随元素 `x/y/width/height` 实时算)。端口坐标(world,相对元素左上角):stock `{w,h}` → `N:(x+w/2, y)`、`S:(x+w/2, y+h-1)`、`E:(x+w-1, y+h/2)`、`W:(x, y+h/2)`(取整);cloud 固定 6×3(`CLOUD_SHAPE`,`elements.ts:156/191-192`)→ `N:(x+3, y+0)`、`S:(x+3, y+2)`、`E:(x+5, y+1)`、`W:(x+0, y+1)`;`portId` = `${el.id}#${side}`(side ∈ {N,E,S,W})。flow 元素无端口(`getElementPorts(flow)` 返 `[]`)。
 
-**AC-10** — **Given** 用户创建连线(flow tool 模式) **When** pointerDown 在元素端口附近(屏幕容差 8px,复用 `shouldSnap` 容差口径) **Then** 自动吸附到最近端口(`findNearestPort(wx, wy, elements, tol)`);拖拽预览至目标元素端口附近 → pointerUp 吸附目标端口 → `createFlow({fromId, toId, formula, isVariable})`;需引入 `ToolMode="flow"` 激活(types.ts `ToolMode = "select"|"stock"|"cloud"|"flow"` 已存在,1a.4 落**键盘切换桩**:`F`→flow / `S`→stock / `C`→cloud / `V`→select,**仅键盘**,toolbar UI defer 1a.7——CS 钉死二选一取键盘以保单 PR scope 可控,删去 "或最小 toolbar stub" 未决项)。
+**AC-10** — **Given** 用户创建连线(flow tool 模式) **When** pointerDown 在元素端口附近(屏幕容差 8px,复用 `shouldSnap` 容差口径) **Then** 自动吸附到最近端口(`findNearestPort(wx, wy, elements, tol)`);拖拽预览至目标元素端口附近 → pointerUp 吸附目标端口 → `createFlow({fromId, toId, formula, isVariable})`;需引入 `ToolMode="flow"` 激活(types.ts `ToolMode = "select"|"stock"|"cloud"|"flow"` 已存在,1a.4 落**键盘切换桩**:`F`→flow / `S`→stock / `C`→cloud / `V`→select,**仅键盘**,toolbar UI defer 1a.7——CS 决策二选一取键盘以保单 PR scope 可控,删去 "或最小 toolbar stub" 未决项)。
 
 **AC-11** — **Given** flow 已附着两端元素 **When** 拖拽任一端元素(stock/cloud) **Then** 端口位置随元素移动更新,flow 路径自动重算(`flowToInstances` 读 live element 位置;`elementStore.subscribe` → `buildInstancesFromStore` rebuild → `render()`,1a.3 已布的 store 订阅链自动驱动,1a.4 验证即可)。
 
@@ -70,7 +70,7 @@ Status: review
 
 ### 空态子段 — AR#12(epics.md L411-414)
 
-**AC-16**(AR#12 空画板空态)— **Given** 新建/打开空画板(无图元) **When** `elementStore.getElements().length === 0` **Then** 显空态引导(占位文案/图示引导用户建首个图元,非空白画布无提示);**And** 空态不阻塞操作(用户可立即开始建图元);与 B10 空模型禁仿真一致(空可建图元但不可跑仿真,sim defer 1b)。空态文案(CS 钉死精确字符串,非示例):中文 = `按 S 放置存量 · 按 C 放置源汇 · 按 F 连流量`;英文(未来 i18n story 录用,1a.4 无 i18n 基建先落中文硬编码)= `Press S to place stock · C for source/sink · F to connect flow`。
+**AC-16**(AR#12 空画板空态)— **Given** 新建/打开空画板(无图元) **When** `elementStore.getElements().length === 0` **Then** 显空态引导(占位文案/图示引导用户建首个图元,非空白画布无提示);**And** 空态不阻塞操作(用户可立即开始建图元);与 B10 空模型禁仿真一致(空可建图元但不可跑仿真,sim defer 1b)。空态文案(CS 决策精确字符串,非示例):中文 = `按 S 放置存量 · 按 C 放置源汇 · 按 F 连流量`;英文(未来 i18n story 录用,1a.4 无 i18n 基建先落中文硬编码)= `Press S to place stock · C for source/sink · F to connect flow`。
 
 ### 视觉 gate 子段
 
@@ -83,9 +83,9 @@ Status: review
 > 单 PR 走完整 story-cycle。§6 判据评估见 Dev Notes(DS step4 复核并记录决策)。
 
 - [x] **Task 1: Flow 域模型 + units 派生 + 端点 guard**(AC: 1, 2, 3, 12b)
-  - [x] 1.1 `src/lib/sd/types.ts` `Flow` 接口增 `units: string` 字段(只读派生——CS 钉死:`deriveFlowUnits(flow, elements): string` 纯函数为单一真相源,`Flow.units` 为 `createFlow` 构造时调用该函数填充的 readonly 字段,**不持久化独立 `units`**——4.x persist 层排除,reload 时 `createFlow` 重算;不存为 getter/不存两份,防双源不一致);确认 `lastValue` 为运行时字段(不持久化);对齐 epic AC-1/2/3。
+  - [x] 1.1 `src/lib/sd/types.ts` `Flow` 接口增 `units: string` 字段(只读派生——CS 决策:`deriveFlowUnits(flow, elements): string` 纯函数为单一真相源,`Flow.units` 为 `createFlow` 构造时调用该函数填充的 readonly 字段,**不持久化独立 `units`**——4.x persist 层排除,reload 时 `createFlow` 重算;不存为 getter/不存两份,防双源不一致);确认 `lastValue` 为运行时字段(不持久化);对齐 epic AC-1/2/3。
   - [x] 1.2 `src/lib/sd/store.ts` 增 `createFlow({fromId, toId, formula, isVariable, name?}): Flow`——生成 UUIDv4 id(`crypto.randomUUID()`);**入口校验序列**(AC-12/12b 同族,throw 形式保返回类型 Flow):① 端点有效性——`fromId`/`toId` 各自指向存在的 Stock 或 Cloud(拒绝不存在 id 或 `kind === "flow"` 目标,`throw new Error("Invalid flow endpoint")`)→ ② E3 self-loop guard(`fromId === toId` → `throw new Error("Self-loop not allowed")`);E11 parallel-flow 检测(同 fromId/toId 已存在 → allow + 记 warn 标志,AC-14);重名 allow(AC-15);返回完整 Flow(`units` 经 `deriveFlowUnits` 填充)。
-  - [x] 1.3 `src/lib/sd/store.ts`(或 elements 模块)增 `deriveFlowUnits(flow, elements): string`——目标存量(`toId` 所指 stock)的 `units` + "/时间单位";时间单位解析(CS 钉死,AC-3):默认 `/dt`;若 `flow.formula` 含 `[单位]` annotation token 则取该标注覆盖 `/dt`;`toId` 指 cloud 或不存在 → 返 `""`(空字符串 fallback)。
+  - [x] 1.3 `src/lib/sd/store.ts`(或 elements 模块)增 `deriveFlowUnits(flow, elements): string`——目标存量(`toId` 所指 stock)的 `units` + "/时间单位";时间单位解析(CS 决策,AC-3):默认 `/dt`;若 `flow.formula` 含 `[单位]` annotation token 则取该标注覆盖 `/dt`;`toId` 指 cloud 或不存在 → 返 `""`(空字符串 fallback)。
   - [x] 1.4 `src/lib/sd/types.test.ts` Flow fixture 增 `units` 断言;`src/lib/sd/store.test.ts` 增 `createFlow` 契约 + **AC-12b 端点有效性 reject**(不存在 id / Flow 目标)+ E3 reject + E11 warn + 重名 allow + `deriveFlowUnits` 时间单位解析(默认 `/dt` / `[单位]` 覆盖 / cloud fallback `""`)测试(镜像现有 `createStock`/`createCloud` 测试风格)。
 
 - [x] **Task 2: 公式 @uuid + [单位] 产生式 + 命名不变量**(AC: 4, 5)
@@ -96,14 +96,14 @@ Status: review
 
 - [x] **Task 3: glowAtlas re-bake + rotation 激活**(AC: 8)
   - [x] 3.1 `src/lib/render/vram/glowAtlas.ts` 增 `export const FLOW_GLYPHS = "▶▼○";`(U+25B6/U+25BC/U+25CB);`CHARSET` 并入 `FLOW_GLYPHS`(ASCII 32-126 + BOX_GLYPHS + FLOW_GLYPHS);`bakeGlowAtlasCanvas` 自动 re-bake(off-screen one-time,AD-9 唯一合法 shadowBlur 站点);**严禁**改 `GLOW_PAD=16`/`LUMA_BLUR_PX=[0,4,8,14]`/`GLOW_PASSES=3`(`glowAtlas.test.ts:61-65` 锁定)。
-  - [x] 3.2 `src/lib/render/elements.ts` `pushChar` 激活 `rotation`——增 `rotation: number` 参数(CS 钉死:扩现有 `pushChar` 签名,不新增 `pushCharRot` 变体,避免 API 重复;`pushString` 透传 `rotation: 0`),兑现 TODO "await 1a.4"(现 hardcoded `rotation: 0`);stock/cloud 透传 `rotation: 0`(不旋转),flow 箭头透传末端段方向角。
+  - [x] 3.2 `src/lib/render/elements.ts` `pushChar` 激活 `rotation`——增 `rotation: number` 参数(CS 决策:扩现有 `pushChar` 签名,不新增 `pushCharRot` 变体,避免 API 重复;`pushString` 透传 `rotation: 0`),兑现 TODO "await 1a.4"(现 hardcoded `rotation: 0`);stock/cloud 透传 `rotation: 0`(不旋转),flow 箭头透传末端段方向角。
   - [x] 3.3 `src/lib/render/vram/glowAtlas.test.ts` 增 `▶▼○ ∈ CHARSET` 断言 + `charToGlyphIdx("▶"/"▼"/"○")` 返回有效 idx(≥0)断言;locked 常量不变断言保持;`src/lib/render/elements.test.ts` 增 `pushChar` rotation 透传断言(flow 箭头 rotation ≠ 0,stock/cloud rotation === 0)。
 
 - [x] **Task 4: flow 渲染 — 正交 Manhattan 路由 + 箭头 + 标记 + 悬空降级**(AC: 6, 7, 12c)
-  - [x] 4.1 `src/lib/render/elements.ts` 增 `flowToInstances(flow: Flow, elements: SDElement[], selected: boolean): RenderInstance[]`——**先 AC-12c 悬空检查**:查 `elements` 中 `fromId`/`toId` 存在且 `kind ∈ {stock,cloud}`,任一悬空 → 返 `[]` + `console.warn("flow <id> has dangling endpoint")`(不抛);**纯正交 Manhattan 寻路**(Bresenham 退化仅 H/V 步进 + 单转角 L 形,禁对角,**horizontal-first:先走 x 再走 y**):fromId 端口 → toId 端口,端口经 `getElementPorts` 取最近端(AC-9 坐标);路径字符 `─│` 直线 + `┌┐└┘` 转角(BOX_GLYPHS 已含);端点箭头 `▶` 置 toId 端,`rotation` = 末端段正交方向映射(见 4.4 表);`isVariable` → `▼`/`○` 标记置 `fromPort + dir×1 cell`(AC-7,marker 数组序在 path 之后以优先绘);colorIdx=1(flow magenta,palette 单源 index 1 `#ff5577`;CS 钉死,与 stock 0/cloud 2 区分)[CR修订:原误记 colorIdx=3,index 3=fg `#c9d1d9` 会与前景文字撞色];`selected` 透传(vertex shader `effectiveLuma = a_lumaIdx + a_selected` 提档,M1)。
+  - [x] 4.1 `src/lib/render/elements.ts` 增 `flowToInstances(flow: Flow, elements: SDElement[], selected: boolean): RenderInstance[]`——**先 AC-12c 悬空检查**:查 `elements` 中 `fromId`/`toId` 存在且 `kind ∈ {stock,cloud}`,任一悬空 → 返 `[]` + `console.warn("flow <id> has dangling endpoint")`(不抛);**纯正交 Manhattan 寻路**(Bresenham 退化仅 H/V 步进 + 单转角 L 形,禁对角,**horizontal-first:先走 x 再走 y**):fromId 端口 → toId 端口,端口经 `getElementPorts` 取最近端(AC-9 坐标);路径字符 `─│` 直线 + `┌┐└┘` 转角(BOX_GLYPHS 已含);端点箭头 `▶` 置 toId 端,`rotation` = 末端段正交方向映射(见 4.4 表);`isVariable` → `▼`/`○` 标记置 `fromPort + dir×1 cell`(AC-7,marker 数组序在 path 之后以优先绘);colorIdx=1(flow magenta,palette 单源 index 1 `#ff5577`;CS 决策,与 stock 0/cloud 2 区分)[CR修订:原误记 colorIdx=3,index 3=fg `#c9d1d9` 会与前景文字撞色];`selected` 透传(vertex shader `effectiveLuma = a_lumaIdx + a_selected` 提档,M1)。
   - [x] 4.2 `getElementBounds(el)` flow 分支返路径 bbox(现返 `{0,0,0,0}`,1a.3 占位)——遍历 flowToInstances 取 min/max worldX/worldY;为 1a.5 视口剔除/`findElementAt` 提供 bbox。
-  - [x] 4.3 `src/lib/render/CanvasView.tsx` `buildInstancesFromStore` 增 flow 分支(现 TODO `// flow rendering added in 1a.4 (edges)` line 217 兑现);z-order(CS 钉死):flow instances 在 array 中**先于** stock/cloud instances(先绘,被 nodes 覆盖在下层,即 edges 在 nodes 之下——常规图编辑器惯例,避免路径压住图元文字);render 按 array order 绘,后续无重排。
-  - [x] 4.4 `src/lib/render/elements.test.ts` 增 `flowToInstances` 测试——正交路径单元数 > 0、箭头 `▶` instance 存在且 `rotation` 匹配末端段方向、`▼`/`○` 标记随 `isVariable` 切换且位于 `fromPort+dir×1`、`selected` 透传、**AC-12c 悬空 flow 返 `[]` + warn**;`getElementBounds(flow)` 返非零 bbox。rotation→方向映射表(CS 钉死,测试直接对照断言,均为正交无对角):
+  - [x] 4.3 `src/lib/render/CanvasView.tsx` `buildInstancesFromStore` 增 flow 分支(现 TODO `// flow rendering added in 1a.4 (edges)` line 217 兑现);z-order(CS 决策):flow instances 在 array 中**先于** stock/cloud instances(先绘,被 nodes 覆盖在下层,即 edges 在 nodes 之下——常规图编辑器惯例,避免路径压住图元文字);render 按 array order 绘,后续无重排。
+  - [x] 4.4 `src/lib/render/elements.test.ts` 增 `flowToInstances` 测试——正交路径单元数 > 0、箭头 `▶` instance 存在且 `rotation` 匹配末端段方向、`▼`/`○` 标记随 `isVariable` 切换且位于 `fromPort+dir×1`、`selected` 透传、**AC-12c 悬空 flow 返 `[]` + warn**;`getElementBounds(flow)` 返非零 bbox。rotation→方向映射表(CS 决策,测试直接对照断言,均为正交无对角):
 
     | rotation | 方向 | 末端段走向 | 测试构造(toId 在 fromId 的) |
     | -------- | ---- | ---------- | --------------------------- |
@@ -116,17 +116,17 @@ Status: review
   - [x] 5.1 `src/lib/render/elements.ts` 增 `getElementPorts(el: SDElement): {portId: string, x: number, y: number}[]`——stock 4 边中点(N/E/S/W,坐标公式见 AC-9);cloud 4 边中点(6×3 固定,`N:(x+3,y+0)`/`S:(x+3,y+2)`/`E:(x+5,y+1)`/`W:(x+0,y+1)`,AC-9);flow 返 `[]`;`findNearestPort(wx, wy, elements, tolWorld): {elId, portId, x, y} | null`——遍历所有元素端口取最近(≤ tolWorld,复用 `shouldSnap` 8px/zoom 口径)。
   - [x] 5.2 `src/lib/render/CanvasView.tsx` flow 创建交互:引入 `toolMode: ToolMode` 状态(Ref 或 state;`ToolMode = "select"|"stock"|"cloud"|"flow"` 已存在于 types.ts,1a.4 落**键盘切换桩**——`F`→flow/`S`→stock/`C`→cloud/`V`→select,仅键盘,toolbar defer 1a.7);`toolMode === "flow"` 时 pointerDown 经 `findNearestPort` 吸附 fromId 端口 → 拖拽预览临时 flow → pointerUp `findNearestPort` 吸附 toId 端口 → `elementStore.createFlow(...)`(端点有效性/E3/E11 guard 在 store 侧,Task 1.2);校验失败(端点无效/E3 self-loop)显提示。
   - [x] 5.3 拖拽元素时端口随更新:验证 `flowToInstances` 读 live element 位置(`elementStore.subscribe` → rebuild 链已布 1a.3),拖拽 stock/cloud 时 flow 路径自动重算;无额外代码,补测试验证。
-  - [x] 5.4 `src/lib/render/CanvasView.test.tsx` 增 flow 创建交互测试(镜像现有 `fireEvent.pointerDown/Move/Up` 模式)。jsdom 间接观测方案(CS 钉死,绕过无真视口/getBoundingClientRect 不可用):测试注入 camera mock 使 `screenToWorld` = identity(pointer 坐标直接当 world 坐标),断言 ① `elementStore.createFlow` spy 捕获的 `{fromId,toId}` 为预期端口所属元素(吸附生效);② 拖拽预览期临时 flow DOM 节点带 `data-port-snapped="from"`/`"to"` attribute(吸附态标记);③ pointerUp 后 store 含新 flow。拖拽 stock → flow 路径重算:断言 `flowToInstances` 输出实例 worldX/worldY 随 stock 新位置变化(纯函数直接调,不经 DOM)。像素级吸附视觉验证归 AC-17 Playwright,不入 vitest scope。
+  - [x] 5.4 `src/lib/render/CanvasView.test.tsx` 增 flow 创建交互测试(镜像现有 `fireEvent.pointerDown/Move/Up` 模式)。jsdom 间接观测方案(CS 决策,绕过无真视口/getBoundingClientRect 不可用):测试注入 camera mock 使 `screenToWorld` = identity(pointer 坐标直接当 world 坐标),断言 ① `elementStore.createFlow` spy 捕获的 `{fromId,toId}` 为预期端口所属元素(吸附生效);② 拖拽预览期临时 flow DOM 节点带 `data-port-snapped="from"`/`"to"` attribute(吸附态标记);③ pointerUp 后 store 含新 flow。拖拽 stock → flow 路径重算:断言 `flowToInstances` 输出实例 worldX/worldY 随 stock 新位置变化(纯函数直接调,不经 DOM)。像素级吸附视觉验证归 AC-17 Playwright,不入 vitest scope。
 
 - [x] **Task 6: 边界 guard — E3/E10/E11/重名/端点有效性/悬空降级**(AC: 12, 12b, 12c, 13, 14, 15)
-  - [x] 6.1 E3 self-loop + AC-12b 端点有效性 reject(CS 钉死 throw 形式,保 `createFlow` 返回类型为 Flow,与 `createStock`/`createCloud` 返回元素类型一致;UI 侧 try/catch):`createFlow` 入口序列 ① 端点无效(不存在 id / Flow 目标)→ `throw new Error("Invalid flow endpoint")` ② `fromId === toId` → `throw new Error("Self-loop not allowed")`;UI 捕获显校验失败提示。
+  - [x] 6.1 E3 self-loop + AC-12b 端点有效性 reject(CS 决策 throw 形式,保 `createFlow` 返回类型为 Flow,与 `createStock`/`createCloud` 返回元素类型一致;UI 侧 try/catch):`createFlow` 入口序列 ① 端点无效(不存在 id / Flow 目标)→ `throw new Error("Invalid flow endpoint")` ② `fromId === toId` → `throw new Error("Self-loop not allowed")`;UI 捕获显校验失败提示。
   - [x] 6.2 E10 orphan cloud allow:确认 cloud 无 flow 附着仍合法(`createCloud` 不要求 flow;`getElements()` 含 orphan cloud 不报错);persist warn 状态栏 defer 4.x(1a.4 仅 allow,状态栏 warn 机制可随 6.3 一并占位或 defer)。
   - [x] 6.3 E11 parallel flows allow + warn:`createFlow` 检测同 fromId/toId 已存在 → allow + 记 warn 标志(状态栏软警告,非阻断);状态栏 warn UI(AC-14/15 共用)——最小实现:HUD 或 `.ns-canvas__warn` 区域显 warn 文案。
   - [x] 6.4 重名 allow + warn:flow/stock 重名 allow + 状态栏 warn(量纲/引用以 id 解析,AC-5/AC-15)。
   - [x] 6.5 `src/lib/sd/store.test.ts` 增 E3 reject / E11 allow+warn / 重名 allow+warn 测试;`CanvasView.test.tsx` 增状态栏 warn UI 测试(若 6.3 落状态栏)。
 
 - [x] **Task 7: 空态引导 AR#12**(AC: 16)
-  - [x] 7.1 `src/lib/render/CanvasView.tsx` 空态:`elementStore.getElements().length === 0` 时显空态引导(精确文案见 AC-16:中文 `按 S 放置存量 · 按 C 放置源汇 · 按 F 连流量`,1a.4 硬编码无 i18n);不阻塞操作(用户可立即建图元);与 B10 空模型禁仿真一致(空可建图元不可跑仿真,sim defer 1b)。注意:1a.3 `seedSampleStocks()` 默认 seed 3 stock——CS 钉死:seed 行为保留不改(DEV harness 默认有图元),空态测试用独立空 store(`createElementStore()` 新实例,不复用 module singleton)验证,生产空画板入口 defer 后续 story。
+  - [x] 7.1 `src/lib/render/CanvasView.tsx` 空态:`elementStore.getElements().length === 0` 时显空态引导(精确文案见 AC-16:中文 `按 S 放置存量 · 按 C 放置源汇 · 按 F 连流量`,1a.4 硬编码无 i18n);不阻塞操作(用户可立即建图元);与 B10 空模型禁仿真一致(空可建图元不可跑仿真,sim defer 1b)。注意:1a.3 `seedSampleStocks()` 默认 seed 3 stock——CS 决策:seed 行为保留不改(DEV harness 默认有图元),空态测试用独立空 store(`createElementStore()` 新实例,不复用 module singleton)验证,生产空画板入口 defer 后续 story。
   - [x] 7.2 `src/lib/render/CanvasView.test.tsx` 增空态引导测试(空 store 显引导;非空不显);AR#12 与 B10 一致性备注(空可建图元,禁仿真 defer 1b)。
 
 - [x] **Task 8: Playwright flow 视觉 gate**(AC: 17)
@@ -174,7 +174,7 @@ Status: review
 | `src/lib/sd/types.ts` `Flow`       | `id/kind:"flow"/name/fromId/toId/formula/isVariable/lastValue/formulaError?`                                                                                                                                                         | 缺 `units`——增(只读派生,`deriveFlowUnits` 函数,不持久化独立字段,AC-3);`lastValue` 运行时不持久化                                                                                                                                                                |
 | `src/lib/sd/formula.ts`            | 递归下降 `evalFormula(src, env)`,tokenizer 仅 `num`/`id`(`/[A-Za-z_一-鿿]/`)/`op`/`lp`/`rp`                                                                                                                                          | 缺 `@<uuid>` ref token + `[单位]` annotation token——扩 tokenizer + parser 产生式(AC-4/5);CJK `一-鿿` 范围须保持(1a.3 carry,回归测试)                                                                                                                            |
 | `src/lib/sd/store.ts`              | `createElementStore()` → `getElements`/`createStock`/`createCloud`/`updateElement`/`deleteElement`/`setElements`/`subscribe`/`getSnapshot`;`validateStockSize`(E9);`deleteElement` 纯移除无级联(L119-124)                            | 缺 `createFlow`——增(UUIDv4 id + **AC-12b 端点有效性 guard** + E3 self-loop guard + E11 parallel warn + 重名 allow,AC-1/12/12b/14/15);`deleteElement` 不改(级联由渲染侧 AC-12c Option B 处理);为 AD-10 Y.Doc 替换点预留(1a.3 设计)                               |
-| `src/lib/render/elements.ts`       | `EntityType={STOCK:0,CLOUD:1,FLOW:2}`;`pushChar`/`pushString`(`rotation` hardcoded 0,TODO "await 1a.4");`stockToInstances`/`cloudToInstances`;`getElementBounds`(flow 返 `{0,0,0,0}`);`findElementAt`;`resizeStock`;`RESIZE_HANDLES` | 缺 `flowToInstances`(**纯正交 Manhattan 路由** + ▶ + ▼/○ + **AC-12c 悬空检查**,AC-6/7/12c)/`getElementPorts`(AC-9,cloud 4 端口坐标钉死)/`findNearestPort`(AC-10);`pushChar` 激活 `rotation`(AC-8);`getElementBounds(flow)` 返路径 bbox(AC-6,T4.2)               |
+| `src/lib/render/elements.ts`       | `EntityType={STOCK:0,CLOUD:1,FLOW:2}`;`pushChar`/`pushString`(`rotation` hardcoded 0,TODO "await 1a.4");`stockToInstances`/`cloudToInstances`;`getElementBounds`(flow 返 `{0,0,0,0}`);`findElementAt`;`resizeStock`;`RESIZE_HANDLES` | 缺 `flowToInstances`(**纯正交 Manhattan 路由** + ▶ + ▼/○ + **AC-12c 悬空检查**,AC-6/7/12c)/`getElementPorts`(AC-9,cloud 4 端口坐标锁定)/`findNearestPort`(AC-10);`pushChar` 激活 `rotation`(AC-8);`getElementBounds(flow)` 返路径 bbox(AC-6,T4.2)               |
 | `src/lib/render/vram/glowAtlas.ts` | `BOX_GLYPHS="─│┌┐└┘├┤┬┴┼═║╔╗╚╝╠╣╦╩╬"`;`CHARSET`=ASCII 32-126 + BOX_GLYPHS(117 chars);`charToGlyphIdx` 缺返 -1;locked `GLOW_PAD=16`/`LUMA_BLUR_PX=[0,4,8,14]`/`GLOW_PASSES=3`                                                         | 缺 `▶`(U+25B6)/`▼`(U+25BC)/`○`(U+25CB)——**re-bake 必需**(AC-8);增 `FLOW_GLYPHS="▶▼○"` const 并入 CHARSET;**不动 locked 常量**                                                                                                                                   |
 | `src/lib/render/vram/renderer.ts`  | `RenderInstance` 9 字段;`render(camera, viewport, instances)` 按 array order 绘(zOrder 不应用于 draw);`setInstance(index, partial)` per-instance `bufferSubData`                                                                     | **无 GAP**(1a.3 基座就绪);flow instance 经 `flowToInstances` 产,`rotation` 字段已 shader-live(`a_rotation`),直接透传即可                                                                                                                                        |
 | `src/lib/render/vram/shaders.ts`   | `a_rotation`/`a_selected` per-instance attrib;`effectiveLuma = a_lumaIdx + a_selected`;`PALETTE_SIZE` 单源                                                                                                                           | **无 GAP**;flow 箭头旋转经 `a_rotation` 落地(已 live)                                                                                                                                                                                                           |
@@ -192,9 +192,9 @@ story-cycle §6 判据回退 sub-PR:**≥3 独立技术子系统 OR AC > 20**。
 - **独立性**:formula 产生式(2)/glowAtlas re-bake(3)/Playwright gate(6)可独立 land;但 flow 渲染(4)强依赖 glowAtlas re-bake(3,▶▼○)+ pushChar rotation(3);端口吸附(5)强依赖 flow 渲染(4)+ store createFlow(1);共享 `Flow`/`RenderInstance`/`elementStore` 契约。
 - **CS 推荐**:**单 PR**(裁定 #2 默认)。理由:AC 数 19 < 20;子系统虽 6 个但共享 `Flow`/`RenderInstance`/`elementStore` 契约,拆分 sub-PR 会产生跨 PR 契约 churn(尤其 `Flow.units` + `flowToInstances` + `formatFormulaForEditor` 三者共指 `Flow` 接口,若分片则中间片破坏数据层一致性)。**DS step4 若发现 scope 超单 PR 合理体量,可回退 sub-PR,但须于 Dev Agent Record 记录决策 + 理由 + 拆分范围后再推进**(story-cycle §6)。默认无回退。
 
-### VS 修订钉死决策(G1/G2/G3 闭环,回 CS 修订点 1-12)
+### VS 修订决策(G1/G2/G3 闭环,回 CS 修订点 1-12)
 
-首轮 VS FAIL(7 歧义 + 4 遗漏 + 5 不可执行)。CS 修订钉死以下决策,不再推 DS:
+首轮 VS FAIL(7 歧义 + 4 遗漏 + 5 不可执行)。CS 修订敲定以下决策,不再推 DS:
 
 1. **路由 = 纯正交 Manhattan**(G1-1/G3-3 + G1-NEW-1):Bresenham 退化仅 H/V 步进 + 单转角 L 形,禁对角(BOX_GLYPHS 路径字符集无对角字符);**轴序 = horizontal-first(先 x 后 y)**——off-axis 端口对先沿 x 轴走完再沿 y 轴,确定转角位置与末端段方向(同行/同列时退化为单段无转角);箭头 rotation ∈ {0, π/2, π, -π/2},删去对角 ±π/4。
 2. **时间单位默认 = `/dt`**(G1-2/G3-1):formula 含 `[单位]` 则覆盖;cloud 目标 fallback `""`。
@@ -293,7 +293,7 @@ Claude Fable 5 (DeepSeek v4 Pro backend); Playwright e2e executed via Playwright
 
 **§6 单 PR 决策复核**: 裁定 #2 单 PR 维持。理由: 9 任务全绿[CR修订 DS-R2: vitest 301 pass + Playwright 15 pass + tsc clean;Run 1 记 291/14 为旧值],无阻塞项,无跨团队依赖;变化量可控(~2100 insertions across 14 files),单 PR review 可消化。
 
-**CS 钉死决策落地核验**:
+**CS 决策落地核验**:
 
 - `units` = `deriveFlowUnits` 纯函数: 确认。`src/lib/sd/store.ts` `createFlow` 中 `units: deriveFlowUnits(formula, toId, elements)`[CR修订:原误记 `(target, formula)` 签名,实际三参 `(formula, toId, elements)`],默认 `/dt`, `[单位]` 注解覆盖,cloud fallback `""`,全部测试通过。
 - toolMode 仅键盘: 确认。`CanvasView.tsx` 中 `F`/`S`/`C`/`V` 键盘切换 `toolMode` Ref,toolbar defer 1a.7,HUD 显示当前 mode 标签。
@@ -362,7 +362,7 @@ Claude Fable 5 (DeepSeek v4 Pro backend); Playwright e2e executed via Playwright
 
 CS 6 步执行轨迹:① 目标 story = 1a-4(epics.md L382,1a.3 后首片 backlog)✅;② 加载分析 artifacts(epics AC + AD-9/AD-6/AD-15/Naming 不变量 + IR + 1a.3 story 模板 + reverse-cr 无 1a.4 直接 fold)✅;③ 架构分析(READ 待修改文件防回归:types/formula/store/elements/camera/renderer/glowAtlas/shaders/CanvasView + e2e specs + 单测)✅;④ web research(Bresenham/端口吸附——教科级算法,搜索无新增可引源,Dev Notes 依领域知识撰写)✅;⑤ 生成 story 文件(本文件,镜像 1a.3 结构,AC-1..17 覆盖 epic + AR#12/E3/E10/E11 fold)✅;⑥ 更新 sprint-status.yaml(`1a-4` → `ready-for-dev`,`last_updated` → 2026-07-06)✅。
 
-**VS 修订轨迹(2026-07-06)**:首轮 VS FAIL(G1 歧义 7 + G2 遗漏 4 + G3 不可执行 5,§7 红线 PASS)→ 回 CS 修订 12 点(见 Dev Notes「VS 修订钉死决策」);增 AC-12b(端点有效性)/AC-12c(删除悬空引用降级),AC 计数 17 → 19;所有 "DS 定" 未决项已钉死或显式 defer 并陈述理由。修订后重新提交 VS review gate。**Round-2(2026-07-06)**:12 findings 全闭合 + §7 红线 PASS + epic L382-414 全覆盖 + G3 无新项;新增 1 G1 歧义(G1-NEW-1:Manhattan 路由轴序 horizontal-first vs vertical-first 未指定)→ 回 CS 修订 1 行(AC-6 钉 horizontal-first,传播 AC-7 dir 推导 / Task 4.1 正文 / Dev Notes 决策 #1);reviewer 裁定此 finding 闭合即 PASS,无需 round-3 re-review。
+**VS 修订轨迹(2026-07-06)**:首轮 VS FAIL(G1 歧义 7 + G2 遗漏 4 + G3 不可执行 5,§7 红线 PASS)→ 回 CS 修订 12 点(见 Dev Notes「VS 修订决策」);增 AC-12b(端点有效性)/AC-12c(删除悬空引用降级),AC 计数 17 → 19;所有 "DS 定" 未决项已敲定或显式 defer 并陈述理由。修订后重新提交 VS review gate。**Round-2(2026-07-06)**:12 findings 全闭合 + §7 红线 PASS + epic L382-414 全覆盖 + G3 无新项;新增 1 G1 歧义(G1-NEW-1:Manhattan 路由轴序 horizontal-first vs vertical-first 未指定)→ 回 CS 修订 1 行(AC-6 钉 horizontal-first,传播 AC-7 dir 推导 / Task 4.1 正文 / Dev Notes 决策 #1);reviewer 裁定此 finding 闭合即 PASS,无需 round-3 re-review。
 
 ---
 

@@ -168,7 +168,7 @@ Recording (CLI/MCP) requires a live app to capture selectors from. Since the too
 | #    | Scenario                                                                                                                                                        | Level     | Priority | Red-Phase Rationale                      |
 | ---- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- | -------- | ---------------------------------------- |
 | S7.1 | All toolbar labels are hardcoded Chinese matching the CS matrix (新建/打开/保存/撤销/重做/复制/粘贴/删除/选择/存量/源汇/流量/暂停/播放/重置/单步/时间步长/缩放) | Component | P0       | Fails until Chinese labels written       |
-| S7.2 | No `i18n.ts` or `useTranslation()` imports in toolbar/statusbar source files                                                                                    | Component | P2       | Fails if i18n imported (CS钉死: no i18n) |
+| S7.2 | No `i18n.ts` or `useTranslation()` imports in toolbar/statusbar source files                                                                                    | Component | P2       | Fails if i18n imported (CS 决策: no i18n) |
 | S7.3 | Sim controls use Unicode symbols (⏸▶⏹⏭) + Chinese text                                                                                                          | Component | P1       | Fails until Unicode + text rendered      |
 
 ### AC-8 — StatusBar Rendering
@@ -189,7 +189,7 @@ Recording (CLI/MCP) requires a live app to capture selectors from. Since the too
 | S9.2 | FPS = `perfProbe.getMetrics().fpsP95` (live value, updates each render frame)            | E2E       | P0       | Fails until perfProbe subscription wired |
 | S9.3 | FPS displays "-" (placeholder) when `fpsP95 <= 0` (jsdom/no rAF samples / headless CI)   | Component | P1       | Fails until fallback implemented         |
 | S9.4 | Placeholder values: 模拟时间 = "0.00s", 在线 = "1", 连接 = "本地"                        | Component | P1       | Fails until placeholder values rendered  |
-| S9.5 | 量纲概要 slot hidden (CS钉死: hidden in 1a.7, will be wired later)                       | Component | P1       | Fails if 量纲 renders visible content    |
+| S9.5 | 量纲概要 slot hidden (CS 决策: hidden in 1a.7, will be wired later)                       | Component | P1       | Fails if 量纲 renders visible content    |
 | S9.6 | 头像堆栈 renders placeholder (single avatar icon, "1")                                   | Component | P1       | Fails until placeholder rendered         |
 
 ### AC-10 — Keyboard Accessibility

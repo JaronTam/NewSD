@@ -299,7 +299,7 @@ function seedSampleStocks() {
 
 /**
  * Detect whether the camera or viewport changed since the previous frame
- * (Story 1a.5 AC-3, CS钉死 #5 Branch-1 trigger). A viewport resize counts as
+ * (Story 1a.5 AC-3, CS 决策 #5 Branch-1 trigger). A viewport resize counts as
  * a change: the gl backing-store must resize in lockstep with the 2D surface,
  * otherwise the stale gl canvas is CSS-stretched over the fresh grid (CR H1).
  *
@@ -359,7 +359,7 @@ function buildInstancesFromStore(
     (window as any).__e2e__.cullStats = cullStats;
   }
 
-  // 1. Flow instances first (edges below nodes — CS钉死 z-order).
+  // 1. Flow instances first (edges below nodes — CS 决策 z-order).
   // When culling, pass the FULL element set to flowToInstances so it can find
   // source/target stocks even if they're outside the viewport.
   const allElements = elementStore.getElements();
@@ -552,7 +552,7 @@ export function CanvasView() {
       if (msg) warn.textContent = msg;
     }
 
-    // 6. 3-branch render decision (Story 1a.5 AC-3, CS钉死 #5):
+    // 6. 3-branch render decision (Story 1a.5 AC-3, CS 决策 #5):
     //    Branch 1 — camera changed or first frame: clear dirty, full rebuild, full WebGL redraw.
     //    Branch 2 — !camera && hasDirty: rebuild visible set, full WebGL redraw of visible.
     //    Branch 3 — !camera && !hasDirty: skip WebGL entirely (static scene, zero GPU).
@@ -633,7 +633,7 @@ export function CanvasView() {
       }
     }
 
-    // 6. 3-branch render decision (Story 1a.5 AC-3, CS钉死 #5):
+    // 6. 3-branch render decision (Story 1a.5 AC-3, CS 决策 #5):
     if (cameraChanged) {
       dirtyTracker.clear();
     }
@@ -799,7 +799,7 @@ export function CanvasView() {
 
     // Story 1a.6: instantiate minimap projector (AC-1). Uses the minimap canvas
     // overlay for 2D projection of all elements + highlight box. Own
-    // DirtyRectTracker runs parallel to the main tracker (CS钉死 #4).
+    // DirtyRectTracker runs parallel to the main tracker (CS 决策 #4).
     let minimapRO: ResizeObserver | null = null;
     const minimapCanvas = minimapCanvasRef.current;
     if (minimapCanvas) {
@@ -816,7 +816,7 @@ export function CanvasView() {
         drawRef.current();
       };
       sizeMinimap();
-      // ResizeObserver for the minimap canvas (CS钉死 #10).
+      // ResizeObserver for the minimap canvas (CS 决策 #10).
       minimapRO = typeof ResizeObserver !== "undefined" ? new ResizeObserver(sizeMinimap) : null;
       minimapRO?.observe(minimapCanvas);
     }
