@@ -38,7 +38,7 @@ development_status:
   1a-8-property-panel-formula-editor: done # PR#46 squash @ee63b1d (CR 3-layer orchestrator-direct PASS: F-1 deriveFlowUnits 声明↔代码不一致 + F-2 key remount 跨图元泄漏 patched, A1/A2 accept non-blocking; 4 defer D1/D2/D3 scope + D4 e2e canvas-click 基础设施 epic gap 归 1b; vitest 566/566 + tsc 0 + 1 skip(design: uncontrolled input 不反应外部 store 更新); DS 右侧属性面板 stock/cloud/flow + 公式编辑器 validateFormulaSyntax additive + 语法红高亮 + dimensionalCheck stub 待 1b + formatFormulaForEditor 接 UI + F8/F10 fold + 选区态 lift 镜像 1a.7 toolMode + 容器右侧列 1a.12 演进不推翻 + Q1 名称化编辑 defer 1a.12; Story 1a.8 闭合, 2026-07-13)
   1a-9-i18n: backlog
   1a-10-model-settings: backlog
-  1a-11-entity-naming-mechanism: in-progress # CC Step 5 (2026-07-12): FR-ELEM-5 图元命名机制(全局唯一+序号递增,推翻原"允许同名+软警告")独立小 story;1a.8+ 重构前置;编号 1a.11(1a.9/1a.10 不重编号,执行后移);CS 已完成 2026-07-15 (Q1=A2 定案: in-memory 计数器+setElements deriveSeq 载入承接,17 AC+T1-T9+13 SDR,VS PASS 2026-07-16);DS started 2026-07-16 baseline=4de373d
+  1a-11-entity-naming-mechanism: review # CC Step 5 (2026-07-12): FR-ELEM-5 图元命名机制(全局唯一+序号递增,推翻原"允许同名+软警告")独立小 story;1a.8+ 重构前置;编号 1a.11(1a.9/1a.10 不重编号,执行后移);CS 2026-07-15;VS PASS 2026-07-16;DS 2026-07-16 done (orchestrator-direct, vitest 589/589 + tsc 0, +23 ATDD activated, 零回归)
   1a-12-prompt-panel-restructure: backlog # CC Step 5 (2026-07-12): 1a.8+ PromptPanel 四 tab(!"/里程碑/源汇/存量)+收起态胶囊+错误二分归宿+关联跳转重构;依赖 1a-11 命名机制;执行顺序 1a.8->1a.11->1a.12->1a-13->1a.9->1a.10
   1a-13-session-autosave-restore: backlog # 1a.11 Q1 讨论 (2026-07-15) 拆出: F2 beforeunload prompt+F3 autosave localStorage 承担 F5 刷新保护;A2 hydrate 天然兼容 (setElements 载入 deriveSeq 承接快照);依赖 1a-12 PromptPanel 重构;执行顺序 1a.8->1a.11->1a.12->1a-13->1a.9->1a.10
   epic-1a-retrospective: optional
