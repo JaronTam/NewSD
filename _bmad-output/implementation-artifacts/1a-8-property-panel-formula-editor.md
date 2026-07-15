@@ -113,7 +113,7 @@ Status: done
 
 ### 域模型对账表
 
-| Epic AC                      | 代码符号                                                                        | CS钉死           |
+| Epic AC                      | 代码符号                                                                        | SDR       |
 | ---------------------------- | ------------------------------------------------------------------------------- | ---------------- |
 | 选中图元显示属性(epic L516)  | CanvasView selectedIdRef L431 / PropertyPanel(selectedId prop)                  | §3.5 选区态 lift |
 | 存量字段(epic L517)          | types.ts Stock{name,initialValue,units,allowNegative} / store.ts updateElement  | §3.1 最简容器    |
@@ -134,7 +134,7 @@ Status: done
 - **单 PR**(per [[newsd-one-push-per-story]]: 一个 story 一次推送,禁 fixup-PR 链). 不拆 sub-PR.
 - sprint-status 更新与 story 代码 PR 分开推([[newsd-sprint-status-separate-from-story-pr]]).
 
-### CS钉死决策
+### CSSDR
 
 **§3.1 scope 边界**: 交付功能逻辑层(公式编辑/校验/量纲 stub) + 最简 UI 容器(右侧固定宽列,字段表单). **容器层 tab 化 / 新 tab / 错误二分归宿 defer 至 1a.12 重构**(epic L523 scope 明示). 1a.8 容器为可复用基座,1a.12 演进不推翻.
 
@@ -169,7 +169,7 @@ Status: done
 - 文档语言: **中文**.
 - 读图前先 ⚠ 切多模态: 1a.8 无 PNG/截图/设计稿读取需求(纯代码+规格),N/A.
 - 规格基准是 **epic 不是 prototype**(冲突以 epic 为准). [memory newsd-epic-over-prototype-authority]
-- task↔CS钉死 一致性: VS 门控查 task 不偏离 §3.1-§3.7 钉死. [memory newsd-ds-follows-task-not-cspin]
+- task↔SDR 一致性: VS 门控查 task 不偏离 §3.1-§3.7 pin. [memory newsd-ds-follows-task-not-cspin]
 - AC-no-regression 全套件口径(499 基线,非 story 子集). [memory newsd-e2e-attestation-full-suite-not-subset]
 
 ### 测试标准
@@ -254,7 +254,7 @@ Status: done
 - **Step2 加载/分析 artifacts**: 读 epics.md L514-538(权威) + prd FR-UI-2/FR-SIM-7 + ARCHITECTURE-SPINE L190/L371/AD-6/AD-9 + deferred-work F8/F10/isVariable-e2e + 1a.7 story(格式参考) + story-cycle-formalization §2.1.
 - **Step3 架构分析 + READ 待改文件(防回归)**: 全读 types.ts / store.ts / formula.ts(+test) / elements.ts(+test) / CanvasView.tsx(FULL 1558 行,定位 selectedIdRef L431 / 6 处 set 站点 / F8 root L1294 / AppShell L1433) / PromptPanel.tsx(+promptStore+test) / styles.css(.ns-layout flex COLUMN,定位右侧列放置). 确认 isVariable 渲染已就绪(elements.ts L539-549),formulaError 字段已存在(types.ts Flow),updateElement 浅合并就绪(store.ts). [[memory newsd-bmad-skill-strict-invocation-and-prompt]] 防回归基线锁定.
 - **Step4 web research**: 显式记录 no-op,无新依赖,复用 1a.4 formula.ts + 1a.7 elementStore/useSyncExternalStore + React 19,栈 version 锁不变(见 web research 节). [[memory newsd-cs-webresearch-explicit-gate]]
-- **Step5 创建 story 文件**: 本文件,Status set `ready-for-dev`,结构对齐 1a.7 enriched(AC Given/When/Then + epic L 引用 + TDD red-green task + CS钉死 §3.1-§3.7 + 域模型对账表 + §6/§7 + 测试标准 + Project Structure Notes + References). 中文 + 半角标点.
+- **Step5 创建 story 文件**: 本文件,Status set `ready-for-dev`,结构对齐 1a.7 enriched(AC Given/When/Then + epic L 引用 + TDD red-green task + SDR §3.1-§3.7 + 域模型对账表 + §6/§7 + 测试标准 + Project Structure Notes + References). 中文 + 半角标点.
 - **Step6 验证 + sprint-status 更新**: 对照 checklist.md 验证;更新 sprint-status.yaml `1a-8-property-panel-formula-editor: backlog -> ready-for-dev` + `last_updated -> 2026-07-13`(保留注释/结构);报告完成. **CS 不推 PR**.
 
 ## VS 验证记录
@@ -269,7 +269,7 @@ Status: done
 | §2.2 gate 零遗漏(epic L514-538 全覆盖) | PASS | AC-1..AC-15 全覆盖 epic L516-525: 选中显示(AC-1)/存量字段(AC-3/4)/流量字段(AC-6/7/8/9)/语法高亮(AC-10)/量纲入口+触发(AC-11)/stub 待 1b(AC-12)/scope defer 1a.12(§3.1)/a11y(AC-14). cloud 字段(AC-5)为 epic 隐含"图元属性"补全. 空态(AC-2)防御性 UX. 域模型对账表 12 行逐项核 AC↔epic L 全射, 无 missing/extra                                                                                                                                                                                                                                                                                            |
 | §2.2 gate 可执行(dev 能直接做)         | PASS | T0-T10 TDD red-green-refactor, 每 Task 标 AC# + 代码位置. 粒度 dev 可直接执行. 无 vague                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | §2.2 gate web research 显式记录        | PASS | explicit no-op + 基座 version 锁(React ^19.2/TanStack Start ^1.168.26/Vite ^8.0.16/Tailwind v4/TS ^5.8.3/bun), 非静默 skip. VS 门控拦截 CS step4 缺失: 无缺失, no-op 合规                                                                                                                                                                                                                                                                                                                                                                                                                                |
-| §2.2 gate task↔CS钉死 一致性           | PASS | T0-T10 实现方向 vs §3.1-§3.7 逐条一致(见下附 CS钉死 7 项明细表). 无 1a.7 式偏离(DS 按 T11 偏离 CS钉死#7 致 F-1-4 漏到 CR). 矛盾拦在 VS                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| §2.2 gate task↔SDR 一致性           | PASS | T0-T10 实现方向 vs §3.1-§3.7 逐条一致(见下附 SDR 7 项明细表). 无 1a.7 式偏离(DS 按 T11 偏离 SDR#7 致 F-1-4 漏到 CR). 矛盾拦在 VS                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | AC 覆盖 epic L514-538                  | PASS | 域模型对账表 12 行逐项核: 全射, 无 missing/extra. epic L522 "1a 验收只验入口+触发逻辑" -> AC-11/AC-12 stub 策略覆盖; L523 scope defer -> §3.1 明示                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | §6 单 PR 评估                          | PASS | 技术子系统 1(PropertyPanel 单组件 + formula 逻辑层 + CanvasView 接入). AC 15 ≤ 20. ~7 文件(2 新组件+test / 1 新 dimensionalCheck+test / formula.ts additive / CanvasView 接入 / styles.css). 判据全满足                                                                                                                                                                                                                                                                                                                                                                                                  |
 | 契约真实性核验                         | PASS | types.ts(Stock/Cloud/Flow 字段+formulaError 确认存在)/store.ts(updateElement 浅合并 L111-117/deriveFlowUnits L160-186/createFlow guard L247-275)/formula.ts(tokenize L13-75/evalFormula L77-133 确认 conflate 语法+语义/formatFormulaForEditor L153-167/validateFormulaSyntax 确认不存在)/elements.ts(▼/○ L539-549)/CanvasView.tsx(selectedIdRef L431/toolModeRef L453 sync L455/6 站点全核/styles.css(.ns-layout flex COLUMN L123-129/.ns-canvas flex:1 L138/无 .ns-workspace+.ns-property-panel)/dimensionalCheck.ts+PropertyPanel.tsx 确认不存在. 全 Read/grep 核, 行号+符号+行为均真, 零 fabrication |
@@ -277,7 +277,7 @@ Status: done
 | baseline_tests 499 passed (19 files)   | PASS | `vitest run` = 19 passed (19 files), 499 passed (499) ✓                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | VS verdict                             | PASS | 零 blocker; 1 advisory note(见下)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 
-### CS钉死 7 项逐项明细
+### SDR 7 项逐项明细
 
 | #   | 项                         | 判    | 核验                                                                                                                                                                                                                                                                                              |
 | --- | -------------------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -308,7 +308,7 @@ Status: done
 
 **Story 1a.8 VS PASS, 可进 DS.**
 
-零 blocker finding. 1 advisory note(non-blocking, prd L544 行号不精确). CS 产出质量: AC 零歧义/零遗漏/可执行, web research 显式, CS钉死 7 项全 sound, 契约真实性全核通过(零 fabrication), task↔CS钉死 一致性 gate 通过(无 1a.7 式偏离), 单 PR 评估成立, Q1 defer 裁定 sound. baseline 830cd92 + 499/499 实测确认.
+零 blocker finding. 1 advisory note(non-blocking, prd L544 行号不精确). CS 产出质量: AC 零歧义/零遗漏/可执行, web research 显式, SDR 7 项全 sound, 契约真实性全核通过(零 fabrication), task↔SDR 一致性 gate 通过(无 1a.7 式偏离), 单 PR 评估成立, Q1 defer 裁定 sound. baseline 830cd92 + 499/499 实测确认.
 
 下一步: DS `bmad-dev-story`(TEA `/bmad-testarch-atdd` 红脚手架 -> T0 -> T1-T10 TDD red-green-refactor).
 
@@ -321,7 +321,7 @@ Status: done
 | Layer                     | 范围                                                                                           | findings                                                                                                                                                                                                                 | 处理                                                                                                         |
 | ------------------------- | ---------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------ |
 | Layer1 Code Quality       | PropertyPanel.tsx / CanvasView.tsx / formula.ts / dimensionalCheck.ts 代码质量 + 声明↔实现一致 | **F-1**: Dev Log T4(L222)声明 "Implemented with `deriveFlowUnits` read-only display" vs 代码 L203 实读 `selectedElement.units`(声明↔代码不一致, DS 虚假声明存活到 CR)                                                    | patched: L203 改 `deriveFlowUnits(selectedElement.formula, selectedElement.toId, elements)`(对齐声明 + AC-9) |
-| Layer2 Spec Conformance   | DS 实现 vs epic L514-538 + prd FR-UI-2/FR-SIM-7 + CS钉死 §3.1-§3.7                             | 无 blocker; advisory A1(`checkDimensions(_formula: string)` 1 参数 vs T7.1 `checkDimensions(formula, flow, elements)` 3 参数, stub 恒返回 deferred 参数无关, 简化合理非偏离)                                             | A1 accept                                                                                                    |
+| Layer2 Spec Conformance   | DS 实现 vs epic L514-538 + prd FR-UI-2/FR-SIM-7 + SDR §3.1-§3.7                             | 无 blocker; advisory A1(`checkDimensions(_formula: string)` 1 参数 vs T7.1 `checkDimensions(formula, flow, elements)` 3 参数, stub 恒返回 deferred 参数无关, 简化合理非偏离)                                             | A1 accept                                                                                                    |
 | Layer3 Acceptance Auditor | AC-1..AC-15 覆盖 + 测试质量(reactive 三元组 / 跨图元 / hollow)                                 | **F-2**: (a) L878 hollow(空断言名义测切换更新字段); (b) 无跨图元切换测试(字段泄漏无覆盖); advisory A2(AC-11 测试 L705-723 仅存在性 `dimStatus not.toBeNull` 缺 before(null) 三元组, 间接证 checkDimensions 调用有效但弱) | F-2 patched; A2 accept(存在性间接证触发, AC-11 入口+触发 L149 满足, 非阻断 L725 覆盖)                        |
 
 ### patch 记录

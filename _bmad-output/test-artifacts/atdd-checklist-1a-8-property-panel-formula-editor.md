@@ -51,7 +51,7 @@ inputDocuments:
 - **Title**: Property Panel + Formula Editor
 - **ACs**: 15 (AC-1 through AC-15)
 - **Tasks**: 10 (T0-T10)
-- **CS钉死**: §3.1-§3.7 with domain model reconciliation
+- **SDR**: §3.1-§3.7 with domain model reconciliation
 - **Key rulings**: Dual model (storage form @uuid + display form name preview), name-ified editing deferred to 1a.12
 - **New dependencies**: None (explicit no-op web research)
 

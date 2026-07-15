@@ -42,14 +42,14 @@
 - 依赖 (前置 story/AD) 标注
 - ZERO USER INTERVENTION (除初始选择)
 - IR 前置轻量核 (step1 前: AD/CAP 引用存在 + 依赖 story 存在, 防 epic↔story drift - #8 落地)
-- e2e AC 门槛实现路径 (AC 含 e2e 测试时): CS 须钉实现路径非留 defer - 1a.8 教训: e2e canvas-click 基础设施 (CanvasView WebGL canvas 无 DOM overlay/testid) 应在 CS 识别并归属 story (实现 testid/DOM overlay 或明确 defer 归 1b epic 规划), 禁 defer 到 DS 才发现 selector mismatch
+- e2e AC 门槛实现路径 (AC 含 e2e 测试时): CS 须 pin 实现路径非留 defer - 1a.8 教训: e2e canvas-click 基础设施 (CanvasView WebGL canvas 无 DOM overlay/testid) 应在 CS 识别并归属 story (实现 testid/DOM overlay 或明确 defer 归 1b epic 规划), 禁 defer 到 DS 才发现 selector mismatch
 
 ### 2.2 VS (Validate Story)
 
 **流程**:
 
 - reviewer 检查 story 文件质量
-- gate: 零歧义 (AC 无多种解读) + 零遗漏 (epic AC 全覆盖) + 可执行 (dev 能直接做) + web research 显式记录 (step4 no-op 也算, 禁静默 skip — VS 门控拦截 CS step4 缺失, 不留到事后审计) + task↔CS钉死 一致性 (Tasks/Subtasks 行实现方向须与 CS 钉死项逐条一致, 矛盾拦在 VS 不漏到 CR, 1a.7 教训: DS 按 T11 偏离 CS钉死#7 致 F-1-4 漏到 CR) + e2e spec 可跑性 gate (AC 含 e2e 时): VS 须核 e2e selector 可跑 - 1a.8 教训: CanvasView 纯 WebGL canvas 无 DOM overlay, property-panel.spec.ts selector mismatch 致 green-phase 不可行 7 test .skip() defer D4 归 1b; AC 含 e2e 时核渲染架构 (DOM 可断言 vs canvas-only), 拦 selector mismatch 不留 DS
+- gate: 零歧义 (AC 无多种解读) + 零遗漏 (epic AC 全覆盖) + 可执行 (dev 能直接做) + web research 显式记录 (step4 no-op 也算, 禁静默 skip — VS 门控拦截 CS step4 缺失, 不留到事后审计) + task↔SDR 一致性 (Tasks/Subtasks 行实现方向须与 SDR 逐条一致, 矛盾拦在 VS 不漏到 CR, 1a.7 教训: DS 按 T11 偏离 SDR#7 致 F-1-4 漏到 CR) + e2e spec 可跑性 gate (AC 含 e2e 时): VS 须核 e2e selector 可跑 - 1a.8 教训: CanvasView 纯 WebGL canvas 无 DOM overlay, property-panel.spec.ts selector mismatch 致 green-phase 不可行 7 test .skip() defer D4 归 1b; AC 含 e2e 时核渲染架构 (DOM 可断言 vs canvas-only), 拦 selector mismatch 不留 DS
 - pass → 进入 DS; fail → 回 CS 修订
 
 **artifacts**:
@@ -93,7 +93,7 @@
 - 测试质量 gate (DS step6 author tests 时遵守):
   - reactive AC (AC 含 "实时/响应/刷新/更新/同步" 迁移语义) 测试须断言状态迁移三元组: before 值 + 触发动作 + after 值, 且 `after !== before` + after 语义正确; 禁以 `toBeTruthy()`/`toBeDefined()`/`not.toBeNull()` 作唯一断言收尾 (存在性 AC 用存在性断言 OK; 1a.8 F-1 教训: AC-9 test 3 原仅 truthy, 派生单位不刷新 bug 下字段仍存在测试仍绿)
   - 组件含 "选中实体切换" 交互 (props/state 含 selectedId/selection) 时, 须有跨图元切换测试: 切换后字段显示新图元值 (不泄漏旧图元值) + 切换前未提交编辑 (blur 前) 不污染新图元; 要点骨架 `render A -> change A field (no blur) -> rerender B -> assert B field = B value, ≠ A edit, ≠ A value` (1a.8 F-2 教训: 跨图元字段泄漏无覆盖)
-- step8 mark complete 前 baseline diff review: `git diff <baseline_commit>..HEAD` 逐文件核, **须产出可审计逐文件核验表** (防 DS 虚假声明 - 1a.4 F9 抓 12+ false claims / 1a.7 偏离 CS钉死#7; #1 落地):
+- step8 mark complete 前 baseline diff review: `git diff <baseline_commit>..HEAD` 逐文件核, **须产出可审计逐文件核验表** (防 DS 虚假声明 - 1a.4 F9 抓 12+ false claims / 1a.7 偏离 SDR#7; #1 落地):
   - 落 story `## Dev Agent Record` (Dev Log 后) `### step8 baseline diff review`, 表列 `文件 | Dev Log 声明 | diff 实际 | 一致?`, 每个 `git diff baseline..HEAD` 改动文件一行
   - 行号辅助定位: "Dev Log 声明" 列注声明编号(如 T4), "diff 实际" 列注行号 + 内容锚(如 `L203 read selectedElement.units`); 行号会 drift, 以内容锚为准, 行号仅辅助定位
   - 声明↔diff 不一致 = 矛盾, 当场修 (修声明或修代码), 禁过 step8
@@ -170,12 +170,12 @@ VS 在 `.claude/skills/` 无独立 skill, 引用 dev-story step1 的 `*validate-
 - **选项 B**: 手动检查清单:
   - AC 完备 (Given/When/Then, 覆盖 epic 全 AC)
   - 任务可执行 (子任务粒度 dev 能直接做)
-  - task↔CS钉死 一致性 (Tasks/Subtasks 行实现方向须与 CS 钉死项逐条一致, 矛盾拦在 VS 不漏到 CR, 1a.7 教训)
+  - task↔SDR 一致性 (Tasks/Subtasks 行实现方向须与 SDR 逐条一致, 矛盾拦在 VS 不漏到 CR, 1a.7 教训)
   - 约束引用 (AD/CAP 显式)
   - 测试标准 (TDD red-green)
   - web research 显式记录 (step4: 有新依赖记 version+why+breaking; 无新依赖记 no-op 引用基座 version 锁; 禁静默 skip)
   - 依赖标注 (前置 story/AD)
-- **gate**: 零歧义 + 零遗漏 + 可执行 + web research 显式记录 + task↔CS钉死 一致性 (Tasks/Subtasks 须与 CS 钉死项逐条一致, 矛盾拦在 VS)
+- **gate**: 零歧义 + 零遗漏 + 可执行 + web research 显式记录 + task↔SDR 一致性 (Tasks/Subtasks 须与 SDR 逐条一致, 矛盾拦在 VS)
 
 ## 6. 单 PR vs sub-PR 决策
 

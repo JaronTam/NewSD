@@ -70,7 +70,7 @@ Status: done
 - [x] Task 3: CanvasView 集成 + 高亮框 + E8 placeholder(AC-1, AC-2, AC-5, AC-6)
   - [x] 3.1 `CanvasView.tsx` 增独立 2D minimap `<canvas>` overlay(角落,自有 pointer events,非 gl overlay)+ sizing/ResizeObserver
   - [x] 3.2 MinimapProjector 接线:订阅 elementStore + 自有 DirtyRectTracker(并行主 tracker,同 diff markDirty)+ drawRef minimap 3 分支
-  - [x] 3.3 高亮框:`viewportToWorldRect(cam, vp)` 投影 minimap + 矩形描边;camera 变化全量重绘 minimap(刷新高亮框,见 AC-2/CS钉死#5)
+  - [x] 3.3 高亮框:`viewportToWorldRect(cam, vp)` 投影 minimap + 矩形描边;camera 变化全量重绘 minimap(刷新高亮框,见 AC-2/SDR#5)
   - [x] 3.4 E8 placeholder:zero 图元显居中占位/空框(AC-5);0->1 切正常投影(AC-6)
   - [x] 3.5 `__e2e__` hook 增 minimap 暴露(`minimapProjector`/`minimapDirtyTracker`/`getHighlightBox()`/`jumpToWorld(px,py)`)
   - [x] 3.6 `CanvasView.test.tsx` 增 minimap 集成 / E8 placeholder / 高亮框 测试(TDD)
@@ -118,7 +118,7 @@ Status: done
 ### web research(step4 显式记录,CS webresearch gate)
 
 - **explicit no-op**:1a.6 消费 1a.5 已落地基座(`SpatialIndex.search` / `DirtyRectTracker.queryLowPrecision` / `viewportToWorldRect` / `ElementStore.getElements` / `getElementBounds` / `computeCameraChanged`),纯 TS 2D canvas 渲染,**无新依赖**。minimap 投影/逆变换/脏 rect 增量均为已有契约的组合消费,无新 npm 包、无新 Web API(crypto.randomUUID/WebGL2/Bresenham 均非 1a.6 引入)。
-- **基座版本锁引用**(per CS webresearch gate 显式记录,no-op 仍须引用基座 version 锁):`rbush ^4.0.1`(1a.5 web research 段钉死,npm latest=4.0.1,ESM,dep quickselect ^3.0.0,Context7 `/mourner/rbush` High reputation);1a.6 复用不改 `package.json`。
+- **基座版本锁引用**(per CS webresearch gate 显式记录,no-op 仍须引用基座 version 锁):`rbush ^4.0.1`(1a.5 web research 段pin,npm latest=4.0.1,ESM,dep quickselect ^3.0.0,Context7 `/mourner/rbush` High reputation);1a.6 复用不改 `package.json`。
 - **rejected(防 DS scope-creep)**:不引入 minimap 专用库(如 `react-minimap`/`pixi-viewport`--overkill,minimap 逻辑薄,2D canvas + 已有契约足矣);不在 minimap 用 WebGL(AD-9 VRAM 路径专供主画布,minimap 2D 定位投影无需 GPU instanced);不引 OffscreenCanvas Worker(增量 dirty 轻量,主线程 2D draw 足够,Worker 通信开销 > 收益)。
 - **版本锁**:`package.json` 不变(无新依赖)。
 
@@ -148,13 +148,13 @@ story-cycle §6 判据回退 sub-PR:**≥3 独立技术子系统 OR AC > 20**。
 - **独立性**:**非独立**--7 子系统共享 `camera`/`spatialIndex`/`dirtyTracker`/`elementStore`(1a.5 基座);MinimapProjector(1)被高亮框(3)、跳转(4)、集成(6)消费;H8/E2 硬化(2)是 consume(1)前置(prerequisite,T1 先于 T2);E8(5)嵌集成(6);e2e(7)依赖全部。拆 sub-PR 会致 `MinimapProjector` API + CanvasView 集成跨 PR churn,且 H8/E2 前置依赖难拆。
 - **CS 推荐**:**单 PR**(裁定 #2 默认)。理由:AC 9 < 20;子系统虽 7 但共享 1a.5 基座 + MinimapProjector(非独立),拆分生跨 PR 契约 churn + H8/E2 前置依赖难切。**DS step4 若发现 scope 超单 PR 合理体量,可回退 sub-PR,但须于 Dev Agent Record 记录决策 + 理由 + 拆分范围后再推进**(story-cycle §6)。默认无回退。
 
-### CS 钉死决策(preempt VS,零歧义)
+### CS SDR(preempt VS,零歧义)
 
-> FR-CANVAS-5(epics.md L43)明示「采样粒度与更新频率架构期定」;F1 #8(.memlog.md L14)明示「复用图集降采样率 + 独立脏矩形」。以下钉死该 5 项 open 决策(a-e)+ H8/E2 + E8 + 投影精度 + canvas 挂载 + `__e2e__`,preempt VS 歧义。
+> FR-CANVAS-5(epics.md L43)明示「采样粒度与更新频率架构期定」;F1 #8(.memlog.md L14)明示「复用图集降采样率 + 独立脏矩形」。以下pin该 5 项 open 决策(a-e)+ H8/E2 + E8 + 投影精度 + canvas 挂载 + `__e2e__`,preempt VS 歧义。
 
 1. **(a) 采样粒度 - 投影精度**:minimap 每图元按 `getElementBounds` world bbox 投影为**定位点/块**(低精度),**不绘 ASCII glyph**(非 VRAM 路径,CAP-11/AD-9 无 glyph 即无 shadowBlur 风险);图元类型(stock/cloud/flow)以颜色/形状区分(如 stock 方块/cloud 圆点/flow 线段),不渲染文字。
 2. **(a) 采样粒度 - queryLowPrecision step**:动态 `step = Math.max(1, Math.round(MINIMAP_DIRTY_CELL_PX / minimapScale))`,默认 `MINIMAP_DIRTY_CELL_PX = 4`(每脏 cell ≈ 4 minimap px,可见,防亚像素 churn);minimapScale = minimapCanvasSize / worldBoundsSize。DS 可调 `MINIMAP_DIRTY_CELL_PX` 常量,但须 > 0。
-3. **(b) 更新频率 - 3 分支**:Branch 1(camera 变化/首帧/挂载/bulk)-> 挂载/bulk/camera 变化均全量投影(camera 变化时图元世界位置未变,全量重绘仅为刷新高亮框,见 CS钉死#5);Branch 2(!camera && `minimapTracker.hasDirty()`)-> `queryLowPrecision(step)` -> `spatialIndex.search(rect)` 增量重投 + drain;Branch 3(!camera && !hasDirty)-> skip。**非每帧轮询**(事件驱动,同主 drawRef cadence 但 minimap 自有 canvas)。
+3. **(b) 更新频率 - 3 分支**:Branch 1(camera 变化/首帧/挂载/bulk)-> 挂载/bulk/camera 变化均全量投影(camera 变化时图元世界位置未变,全量重绘仅为刷新高亮框,见 SDR#5);Branch 2(!camera && `minimapTracker.hasDirty()`)-> `queryLowPrecision(step)` -> `spatialIndex.search(rect)` 增量重投 + drain;Branch 3(!camera && !hasDirty)-> skip。**非每帧轮询**(事件驱动,同主 drawRef cadence 但 minimap 自有 canvas)。
 4. **(c) 独立脏矩形**:minimap 自有 `DirtyRectTracker`(`minimapDirtyTracker`,per F1 #8),并行订阅 elementStore 与主 `dirtyTracker`(同 diff markDirty,无 drain 顺序耦合--主 tracker 由主 Branch 2 `consume()` drain,minimap tracker 由 minimap Branch 2 drain)。minimap 消费**自己的** `minimapDirtyTracker.queryLowPrecision(step)`(epic L455「调用 1a.5 脏矩形低精度采样 API」= 调用该 API,实例独立)。
 5. **(d) 高亮框**:highlight box = `viewportToWorldRect(cam, vp)` 投影到 minimap 空间(world->minimap 变换),2D canvas 矩形描边;camera 变化(pan/zoom/resize,`computeCameraChanged` 真)时全量重绘 minimap(clear+background+图元+高亮框;图元世界位置未变,全量重绘仅为正确刷新高亮框避免旧痕迹,简化实现;代价:10000 图元连续 pan O(n)/帧,2D draw 轻量可接受,见 AC-4 备注);样式取 design tokens(color/strokeWidth,DS 对齐现有 HUD token);绘于图元投影之上。
 6. **(e) 跳转交互**:minimap px -> world 逆变换 -> 设 `cam.x`/`cam.y`(center-based,保留 `cam.zoom`)-> 触发 cameraChanged(主 render Branch 1 recenter,`computeCameraChanged` 检测 cam 变化);拖拽连续(pointerdown->pointermove 更新 cam center->pointerup);minimap canvas 捕获 pointer events(自有元素);用现有 `Camera`/`clampCamera` 契约(签名不改)。
@@ -255,9 +255,9 @@ package.json           # 不改(无新依赖,rbush ^4.0.1 沿用 1a.5)
 
 本文件由 [CS] bmad-create-story 生成(sprint-status.yaml L36: `backlog` -> `ready-for-dev`)。下一步 **[VS] `*validate-create-story`**--选项 A:用 code-review skill on 本 story 文件;选项 B:手动检查清单(story-cycle §2.2 gate:零歧义 + 零遗漏 + 可执行 + web research 显式记录)。**VS pass 后 -> [DS] bmad-dev-story**(TDD red-green-refactor + TEA ATDD red 脚手架 `/bmad-testarch-atdd`,story-cycle §2.3 10 步,DS step1 更新 `baseline_commit` 为实际 dev 起点 commit、step4 复核 §6 单 PR 决策)。
 
-**VS 显式记录要求**(per memory `newsd-story-cycle-bmad-skill-invocation`:1a.5 VS 实测无持久化产物,1a.6+ VS 必须在 story 留显式记录):VS 须于本文件(或 Dev Agent Record)显式记录--(1) §2.2 gate 4 项逐条核验结果(零歧义/零遗漏/可执行/web research 显式);(2) CS 钉死决策 11 条是否有歧义或缺漏;(3) AC-1..AC-9 是否覆盖 epic L451-465 全 AC(main 4 + E8 2)+ H8/E2 fold;(4) §6 单 PR 评估是否认可。VS 结论(pass/fail + findings)须落盘,禁静默 skip。
+**VS 显式记录要求**(per memory `newsd-story-cycle-bmad-skill-invocation`:1a.5 VS 实测无持久化产物,1a.6+ VS 必须在 story 留显式记录):VS 须于本文件(或 Dev Agent Record)显式记录--(1) §2.2 gate 4 项逐条核验结果(零歧义/零遗漏/可执行/web research 显式);(2) CS SDR 11 条是否有歧义或缺漏;(3) AC-1..AC-9 是否覆盖 epic L451-465 全 AC(main 4 + E8 2)+ H8/E2 fold;(4) §6 单 PR 评估是否认可。VS 结论(pass/fail + findings)须落盘,禁静默 skip。
 
-CS 6 步执行轨迹:① 目标 story = 1a-6(epics.md L445,sprint-status L36 backlog)✅;② 加载分析 artifacts(epics AC L445-465 + FR-CANVAS-5 L43 + E8 L1627 + AD-9/AD-2/F1#8/F1-quality + NFR + 1a.5 story 模板 + deferred-work H8/E2 target 1a.6)✅;③ 架构分析(orchestrator 直跑,非 subagent--本会话后端 ark-code/DeepSeek 非 Claude 级,per memory `newsd-cr-3-layers-orchestrator-direct-not-subagents`;READ 待修改文件防回归:camera/dirty-rect/spatial-index/store/elements/CanvasView + vram/* + e2e specs)✅;④ web research(explicit no-op--1a.6 消费 1a.5 基座,纯 TS 2D canvas,无新依赖;基座版本锁 rbush ^4.0.1 引用 1a.5;rejected minimap 专用库/WebGL minimap/OffscreenCanvas Worker,显式记录见 Dev Notes web research 段)✅;⑤ 生成 story 文件(本文件,镜像 1a.5 结构,AC-1..9 覆盖 epic FR-CANVAS-5 main 4 + E8 2 + H8/E2 fold + 无回归 + Playwright gate;CS 钉死 11 条 preempt VS 歧义)✅;⑥ 更新 sprint-status.yaml(`1a-6` -> `ready-for-dev`,`last_updated` -> 2026-07-09)✅(本地工作树,**未 commit/push**--CS = 仅 author,push 在 DS story PR;sprint-status -> done 是 CR 合后独立 chore PR)。
+CS 6 步执行轨迹:① 目标 story = 1a-6(epics.md L445,sprint-status L36 backlog)✅;② 加载分析 artifacts(epics AC L445-465 + FR-CANVAS-5 L43 + E8 L1627 + AD-9/AD-2/F1#8/F1-quality + NFR + 1a.5 story 模板 + deferred-work H8/E2 target 1a.6)✅;③ 架构分析(orchestrator 直跑,非 subagent--本会话后端 ark-code/DeepSeek 非 Claude 级,per memory `newsd-cr-3-layers-orchestrator-direct-not-subagents`;READ 待修改文件防回归:camera/dirty-rect/spatial-index/store/elements/CanvasView + vram/* + e2e specs)✅;④ web research(explicit no-op--1a.6 消费 1a.5 基座,纯 TS 2D canvas,无新依赖;基座版本锁 rbush ^4.0.1 引用 1a.5;rejected minimap 专用库/WebGL minimap/OffscreenCanvas Worker,显式记录见 Dev Notes web research 段)✅;⑤ 生成 story 文件(本文件,镜像 1a.5 结构,AC-1..9 覆盖 epic FR-CANVAS-5 main 4 + E8 2 + H8/E2 fold + 无回归 + Playwright gate;SDR#11 条 preempt VS 歧义)✅;⑥ 更新 sprint-status.yaml(`1a-6` -> `ready-for-dev`,`last_updated` -> 2026-07-09)✅(本地工作树,**未 commit/push**--CS = 仅 author,push 在 DS story PR;sprint-status -> done 是 CR 合后独立 chore PR)。
 
 ## VS 验证记录 (validate-create-story)
 
@@ -270,11 +270,11 @@ CS 6 步执行轨迹:① 目标 story = 1a-6(epics.md L445,sprint-status L36 bac
 | 项                | PASS/FAIL | 证据(行号)                                                                                                                                                                                                                                                                                                    |
 | ----------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 零遗漏            | PASS      | epic L451-458 主 4 AC → AC-1/2/3/4; epic L460-465 E8 2 AC → AC-5/6; deferred-work L50(H8)+L53(E2) → AC-7; 无回归 → AC-8; Playwright e2e → AC-9。FR-CANVAS-5 L43 全子句(缩略图/低精度采样/高亮框/跳转/增量联动)均有 AC 对位。                                                                                  |
-| 零歧义            | PASS      | CS钉死 11 条全可执行(逐条核验见下);minimapScale 定义明确(CS钉死#2: minimapCanvasSize/worldBoundsSize);3-branch 与主 drawRef 并行无冲突(camera 变化全量重绘 minimap,见 CS钉死#5;图元世界位置未变,全量重绘仅为刷新高亮框);queryLowPrecision 非 drain 经源码核实(见契约真实性);逆变换+clampCamera 跳转路径完整。 |
+| 零歧义            | PASS      | SDR#11 条全可执行(逐条核验见下);minimapScale 定义明确(SDR#2: minimapCanvasSize/worldBoundsSize);3-branch 与主 drawRef 并行无冲突(camera 变化全量重绘 minimap,见 SDR#5;图元世界位置未变,全量重绘仅为刷新高亮框);queryLowPrecision 非 drain 经源码核实(见契约真实性);逆变换+clampCamera 跳转路径完整。 |
 | 可执行            | PASS      | T1-T6 AC→Task 映射完整;每 task 子任务到具体文件/函数级;TDD red-green 标注;TEA ATDD(`/bmad-testarch-atdd`)在测试标准段声明(DS step1 前跑);T1(H8/E2)前置依赖标注"先于 T2"。微小 gap:TEA ATDD 未作独立子任务但测试标准段显式声明,DS step1 执行,不影响可执行性。                                                  |
 | web research 显式 | PASS      | Dev Notes L105-110 显式 web research 段:explicit no-op(无新依赖)+ 基座版本锁 `rbush ^4.0.1`(引自 1a.5)+ rejected 3 项(minimap 专用库/WebGL minimap/OffscreenCanvas Worker)+ `package.json` 不变。符合 memory `newsd-cs-webresearch-explicit-gate` 要求。                                                      |
 
-### CS钉死 11 条逐条核验
+### SDR#11 条逐条核验
 
 | #   | 主题                                | 核验结论    | 源码/规格证据                                                                                                                                                                                                                                      |
 | --- | ----------------------------------- | ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -343,12 +343,12 @@ CS 6 步执行轨迹:① 目标 story = 1a-6(epics.md L445,sprint-status L36 bac
 
 ### Findings
 
-**无 FAIL findings。** 全部 4 项 gate PASS,11 条 CS钉死 无歧义,19 项契约签名核验全一致,AC 覆盖完整,web research 显式记录。
+**无 FAIL findings。** 全部 4 项 gate PASS,11 条 SDR 无歧义,19 项契约签名核验全一致,AC 覆盖完整,web research 显式记录。
 
 **微小注意项(非 blocking,DS 可自行处理)**:
 
 - TEA ATDD(`/bmad-testarch-atdd`)在测试标准段声明但未作独立子任务—DS step1 执行即可,不影响可执行性。
-- Branch 1 标签含"camera 变化"—camera 变化现已全量重绘 minimap(见 AC-2/CS钉死#5),与 mount/bulk 行为一致,本注意项 moot(CR Run 1 F-A 裁定后)。
+- Branch 1 标签含"camera 变化"—camera 变化现已全量重绘 minimap(见 AC-2/SDR#5),与 mount/bulk 行为一致,本注意项 moot(CR Run 1 F-A 裁定后)。
 - minimap canvas 自身 resize(ResizeObserver)触发全量投影未在 Branch 1 显式列出—视为 mount-like 事件,DS 自行归类。
 
 ### 下一步
@@ -369,7 +369,7 @@ CS 6 步执行轨迹:① 目标 story = 1a-6(epics.md L445,sprint-status L36 bac
 | AC   | Verdict                    | Evidence                                                                                                                                                                                                                                                                                |
 | ---- | -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | AC-1 | **RESOLVED**(F-B patched)  | minimap.ts:156-194 投影全部图元;但 add-to-non-empty-bounds-expansion 走 Branch2 增量不 recomputeWorldBounds(minimap.ts:297 `needsFullProject=false`)->新图元投影到 stale bounds->off-canvas 不可见(违「全部图元」)。见 F-B。                                                            |
-| AC-2 | **RESOLVED**(spec amended) | minimap.ts:405-415 camera-only Branch1 做 `clearCanvas+drawBackground+fullProject`(全量重投图元);spec(AC-2 L31 / CS钉死#3 L157 / CS钉死#5 L159)三处明示「camera 变化仅高亮框,不重投图元」。代码注释 L409 自认 deviation;test L489-495 仅断言 strokeRect 被调,未强制「不重投」。见 F-A。 |
+| AC-2 | **RESOLVED**(spec amended) | minimap.ts:405-415 camera-only Branch1 做 `clearCanvas+drawBackground+fullProject`(全量重投图元);spec(AC-2 L31 / SDR#3 L157 / SDR#5 L159)三处明示「camera 变化仅高亮框,不重投图元」。代码注释 L409 自认 deviation;test L489-495 仅断言 strokeRect 被调,未强制「不重投」。见 F-A。 |
 | AC-3 | **RESOLVED**(F-D patched)  | 逆变换+jumpToWorld+clampCamera 接线正确(CanvasView.tsx:1258-1260);但无测试断言 pointerdown 后 camRef 实际移动(CanvasView.test.tsx:1330/1347 仅 no-throw;1379 仅 finite {x,y})。见 F-D。                                                                                                 |
 | AC-4 | **PASS**                   | 增量机制正确(spatialIndex.search 返回全相交图元,clearRect+重投脏区;spatialIndex.sync 处理 move 已验 remove-old+insert-new);Branch3 skip。perf test 已改 10000(F-E patched);camera-pan 全量重投(F-A)经 spec amend 接受(见 AC-2/AC-4 备注),Branch2 图元变更路径仍增量。                   |
 | AC-5 | **PASS**                   | minimap.ts:399-400 drawPlaceholder;isEmpty guard L425。                                                                                                                                                                                                                                 |
@@ -382,7 +382,7 @@ CS 6 步执行轨迹:① 目标 story = 1a-6(epics.md L445,sprint-status L36 bac
 
 | ID  | Severity | Bucket          | Title                                                                                                                                          | Evidence                                                       |
 | --- | -------- | --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
-| F-A | MEDIUM   | decision_needed | AC-2 camera-only 走 fullProject 全量重投,违 spec 三处明示「仅高亮框不重投」                                                                    | minimap.ts:405-415;AC-2 L31 / CS钉死#3 L157 / CS钉死#5 L159    |
+| F-A | MEDIUM   | decision_needed | AC-2 camera-only 走 fullProject 全量重投,违 spec 三处明示「仅高亮框不重投」                                                                    | minimap.ts:405-415;AC-2 L31 / SDR#3 L157 / SDR#5 L159    |
 | F-B | MEDIUM   | patch           | add-to-non-empty 不设 needsFullProject->bounds stale->新图元 off-canvas 不可见(违 AC-1「全部图元」)                                            | minimap.ts:93-98(仅 markDirty)/ 297(recompute skip)            |
 | F-C | LOW      | patch           | queryLowPrecision 空 early-return(L304)在 consume()(L334)前->latent 永不 drain->Branch2 每帧重投                                               | minimap.ts:304 / 334                                           |
 | F-D | LOW-MED  | patch           | AC-3 跳转 recenter 端到端未断言(仅 no-throw + finite)                                                                                          | CanvasView.test.tsx:1330/1347/1379;e2e minimap.spec.ts:160-177 |
@@ -413,7 +413,7 @@ CS 6 步执行轨迹:① 目标 story = 1a-6(epics.md L445,sprint-status L36 bac
 
 - **Defer items** -> `deferred-work.md`(新 `## From Story 1a.6 CR` 段:F-G flow stale 残线 / F-H clamp 非对称)。
 - **Patch items**(F-B/F-C/F-D/F-E/F-F)-> **已应用**(Run 1 Resolution:5 patch 全部落地,见 Resolution 段)。
-- **F-A -> resolved(spec amended)**:用户裁定 = 采纳「修 AC-2/CS钉死#5 措辞接受 full repaint」选项。camera 变化(pan/zoom/resize)全量重绘 minimap(刷新高亮框,图元世界位置未变),承认 10000-pan O(n)/帧 成本(2D draw 轻量,见 AC-4 备注);Branch2 图元变更路径仍增量,AC-4 增量约束未违。spec amend 已传播至:AC-2 L31 / AC-4 L35 备注 / CS钉死#3 L157 / CS钉死#5 L159 / Task 3.3 L73 / VS 表 L273·L283·L285 / L351 note / CR 段 L363·L371·L372·L374·L385·L410·L412·L415 全部措辞。
+- **F-A -> resolved(spec amended)**:用户裁定 = 采纳「修 AC-2/SDR#5 措辞接受 full repaint」选项。camera 变化(pan/zoom/resize)全量重绘 minimap(刷新高亮框,图元世界位置未变),承认 10000-pan O(n)/帧 成本(2D draw 轻量,见 AC-4 备注);Branch2 图元变更路径仍增量,AC-4 增量约束未违。spec amend 已传播至:AC-2 L31 / AC-4 L35 备注 / SDR#3 L157 / SDR#5 L159 / Task 3.3 L73 / VS 表 L273·L283·L285 / L351 note / CR 段 L363·L371·L372·L374·L385·L410·L412·L415 全部措辞。
 
 ## CR Run 1 Resolution (2026-07-09, post-patch re-verify)
 
@@ -425,7 +425,7 @@ CS 6 步执行轨迹:① 目标 story = 1a-6(epics.md L445,sprint-status L36 bac
 - **F-E**(LOW):AC-4 perf test 改 10000 元素(minimap.test.ts:506),count-invariant 断言保留。
 - **F-F**(LOW-MED):`drawElementDot` flow 路径用 caller-built id `Map` 替 per-flow `elements.find()` x2(minimap.ts:345-351),fullProject O(F*n)->O(F)。
 
-**F-A -> spec amended**(用户裁定):AC-2/CS钉死#5 措辞接受 camera 变化全量重绘(见上 L416);代码本就全量重绘,注释已同步;Branch2 图元变更路径仍增量,AC-4 增量约束未违。
+**F-A -> spec amended**(用户裁定):AC-2/SDR#5 措辞接受 camera 变化全量重绘(见上 L416);代码本就全量重绘,注释已同步;Branch2 图元变更路径仍增量,AC-4 增量约束未违。
 
 **Re-verify(VERIFIED,非自评;per memory `newsd-ds-self-attestation-vs-cr-verdict`)**:
 
