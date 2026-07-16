@@ -587,4 +587,101 @@
   .ns-prompt-panel__empty {
     color: var(--ns-fg-dim);
   }
+
+  /* ── Story 1a.12: PromptPanel 4-tab bar ── */
+  .ns-prompt-panel__tabs {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    padding: 0;
+    border-bottom: 1px solid var(--ns-border);
+    background-color: var(--ns-bg-elev);
+    flex-shrink: 0;
+  }
+
+  .ns-prompt-panel__tab {
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: var(--ns-fg-mid);
+    font-family: var(--ns-font-mono);
+    font-size: 0.7rem;
+    padding: 0.2rem 0.6rem;
+    cursor: pointer;
+    white-space: nowrap;
+    line-height: 1.4;
+    transition:
+      color 0.15s,
+      border-color 0.15s;
+  }
+
+  .ns-prompt-panel__tab:hover {
+    color: var(--ns-fg);
+  }
+
+  .ns-prompt-panel__tab--active {
+    color: var(--ns-stock);
+    text-shadow: 0 0 4px var(--ns-stock);
+    border-bottom-color: var(--ns-stock);
+  }
+
+  /* AC-8: flash badge on collapsed "!" tab when unanswered confirm exists. */
+  .ns-prompt-panel__tab--flash {
+    animation: ns-tab-flash 1s ease-in-out infinite;
+  }
+
+  /* AC-13: unread alert count badge on "!" tab. */
+  .ns-prompt-panel__tab-badge {
+    display: inline-block;
+    margin-left: 4px;
+    min-width: 1.2em;
+    padding: 0 5px;
+    background: var(--ns-err);
+    color: #fff;
+    border-radius: 8px;
+    font-size: 0.7em;
+    font-weight: 600;
+    line-height: 1.4;
+    text-align: center;
+    vertical-align: middle;
+  }
+
+  @keyframes ns-tab-flash {
+    0%,
+    100% {
+      color: var(--ns-err);
+      text-shadow: 0 0 4px var(--ns-err);
+    }
+    50% {
+      color: var(--ns-fg-mid);
+      text-shadow: none;
+    }
+  }
+
+  /* ── Story 1a.12: Collapsed capsule tab buttons ── */
+  .ns-prompt-panel__capsule-tab {
+    background: transparent;
+    border: none;
+    color: var(--ns-fg-mid);
+    font-family: var(--ns-font-mono);
+    font-size: 0.7rem;
+    padding: 0 0.2rem;
+    cursor: pointer;
+    line-height: 1.4;
+    white-space: nowrap;
+  }
+
+  .ns-prompt-panel__capsule-tab:hover {
+    color: var(--ns-fg);
+  }
+
+  /* ── Story 1a.12: Alert message styling (AC-2) ── */
+  .ns-prompt-panel__msg--alert .ns-prompt-panel__text {
+    color: var(--ns-warn, #ffaa00);
+  }
+
+  .ns-prompt-panel__tag--alert {
+    color: var(--ns-warn, #ffaa00);
+    text-shadow: 0 0 4px var(--ns-warn, #ffaa00);
+  }
 }

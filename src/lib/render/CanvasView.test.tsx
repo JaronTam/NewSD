@@ -1997,7 +1997,9 @@ describe("CanvasView – 新建 clears canvas (Story 1a.7 AC-3, CS-pinned #7)", 
 
     fireEvent.click(container.querySelector("[data-testid='ns-toolbar-btn-新建']")!);
 
-    // F-1-4: confirm is non-modal - it lands in the PromptPanel, not window.confirm.
+    // 1a.12: confirm lands in the expanded PromptPanel "!" tab.
+    // Expand the panel first, then click confirm.
+    fireEvent.click(container.querySelector("[data-testid='ns-prompt-panel-toggle']")!);
     await waitFor(() =>
       expect(container.querySelector("[data-testid='ns-prompt-panel-confirm']")).not.toBeNull(),
     );
@@ -2023,6 +2025,8 @@ describe("CanvasView – 新建 clears canvas (Story 1a.7 AC-3, CS-pinned #7)", 
 
     fireEvent.click(container.querySelector("[data-testid='ns-toolbar-btn-新建']")!);
 
+    // 1a.12: confirm lands in the expanded PromptPanel "!" tab.
+    fireEvent.click(container.querySelector("[data-testid='ns-prompt-panel-toggle']")!);
     await waitFor(() =>
       expect(container.querySelector("[data-testid='ns-prompt-panel-cancel']")).not.toBeNull(),
     );
@@ -2063,5 +2067,108 @@ describe("CanvasView - AC-9 statusbar FPS fallback (jsdom no rAF samples)", () =
     } finally {
       spy.mockRestore();
     }
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Story 1a.12 RED - CanvasView 跳转接线集成 (AC-6 / AC-16 / AC-17)
+//
+// gov: SDR#3 (capsule+expand routing) / SDR#10 (click wiring) / SDR#16 (pulse) /
+//      SDR#17 (ghost) / AC-6 (row click -> select + center) /
+//      AC-16 (statusbar popover item -> center + pulse) /
+//      AC-17 (error badge click -> ghost if subject deleted).
+//
+// Red: CanvasView 的 PromptPanel 仍为 1a.8 消息形态 (无 4-tab), StatusBar 无 ⚠N
+//      popover, 无 pulse/ghost DOM overlay -> tab/badge/popover/overlay DOM 均
+//      不存在 -> 断言 fail.
+//
+// 边界 (memory 1a.8 F-1 + AD-8): camera 无 center(id) 方法; Camera 是纯数据.
+//      跳转可观测缝 = (a) selectedId 经 PropertyPanel 显示, (b) HUD 世界坐标变化,
+//      (c) pulse-highlight / ghost-shadow DOM overlay class. DS 若不加 overlay ->
+//      AC jsdom 不可测, defer 1b (1a.8 D4 模式); red 锚点两种结局均有效.
+//      组件级 onRowClick/onErrorClick callback 已在 SourceSinkTab/StockTab/StatusBar
+//      单测覆盖; 此处只测 CanvasView 级 wiring (selection + camera + overlay).
+//
+// 注: pulse/ghost 3s 自移除需 fakeTimers, 与 renderReady 的 waitFor (实时器) 冲突;
+//     此处仅断言 overlay 出现 (DOM 缝), 3s 生命周期留 DS 实现后补测或 defer.
+// ══════════════════════════════════════════════════════════════════════════════
+
+describe("CanvasView - 1a.12 RED 跳转接线 (AC-6/16/17)", () => {
+  afterEach(() => {
+    cleanup();
+    elementStore.setElements([]);
+  });
+
+  it("AC-6: stock tab row click selects the stock (PropertyPanel shows it)", async () => {
+    const { container } = await renderReady();
+    elementStore.setElements([
+      {
+        id: "stk-alpha",
+        kind: "stock",
+        name: "Alpha",
+        x: 0,
+        y: 0,
+        width: 10,
+        height: 5,
+        initialValue: 1,
+        currentValue: 1,
+        units: "",
+        allowNegative: false,
+        history: [1],
+      },
+    ]);
+
+    // 1a.12: PromptPanel renders a 4-tab container; the 存量 tab lists stocks.
+    const stockTab = container.querySelector("[data-testid='ns-prompt-panel-tab-stock']");
+    expect(stockTab).not.toBeNull();
+    fireEvent.click(stockTab!);
+
+    const row = container.querySelector("[data-testid='ns-prompt-stock-row']");
+    expect(row).not.toBeNull();
+    fireEvent.click(row!);
+
+    // Wiring: row click -> setSelectedId -> PropertyPanel shows the clicked stock.
+    const nameField = container.querySelector(
+      "[data-testid='ns-property-field-name']",
+    ) as HTMLInputElement;
+    expect(nameField?.value).toBe("Alpha");
+  });
+
+  it("AC-16: statusbar ⚠N popover item click centers camera (HUD world coords change)", async () => {
+    const { container } = await renderReady();
+    // Seed an error-bearing state: orphan cloud triggers detectOrphanCloud.
+    elementStore.setElements([
+      { id: "warn-cloud", kind: "cloud", name: "WarnedCloud", x: 100, y: 50 },
+    ]);
+
+    const warn = container.querySelector("[data-testid='ns-statusbar-warnings']");
+    expect(warn).not.toBeNull();
+    fireEvent.click(warn!);
+
+    const item = container.querySelector("[data-testid='ns-statusbar-warning-item']");
+    expect(item).not.toBeNull();
+
+    const before = hudText(container);
+    fireEvent.click(item!);
+    // Camera jump: HUD world coords should change to center on the error subject.
+    expect(hudText(container)).not.toBe(before);
+  });
+
+  it("AC-17: sourcesink error badge click shows pulse-highlight overlay", async () => {
+    const { container } = await renderReady();
+    // Orphan cloud (no flows) -> 孤立 error badge in the 源汇 tab.
+    elementStore.setElements([{ id: "orphan-cloud", kind: "cloud", name: "Orphan", x: 0, y: 0 }]);
+
+    const ssTab = container.querySelector("[data-testid='ns-prompt-panel-tab-sourcesink']");
+    expect(ssTab).not.toBeNull();
+    fireEvent.click(ssTab!);
+
+    const badge = container.querySelector("[data-testid='ns-prompt-error-badge']");
+    expect(badge).not.toBeNull();
+    fireEvent.click(badge!);
+
+    // Pulse overlay appears on the canvas (DOM seam; WebGL canvas has no DOM
+    // nodes, so DS must add an overlay element for this to be observable).
+    expect(container.querySelector(".ns-canvas__pulse-highlight")).not.toBeNull();
   });
 });

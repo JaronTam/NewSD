@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useMemo, useSyncExternalStore } from "react";
 
 import {
   clampCamera,
@@ -38,6 +38,7 @@ import { StatusBar } from "./StatusBar";
 import { PromptPanel } from "./PromptPanel";
 import { PropertyPanel } from "./PropertyPanel";
 import { promptStore } from "./promptStore";
+import { detectSetupErrors, type ErrorFinding } from "../sd/errorDetection";
 
 // Story 1a.1 sub-PR #3 — FR-CANVAS-1: infinite canvas navigation.
 //
@@ -434,6 +435,14 @@ export function CanvasView() {
   const selectedIdRef = useRef<string | null>(null);
   // Keep ref in sync for render-loop closures.
   selectedIdRef.current = selectedId;
+
+  // 1a.12 T8: pulse-highlight overlay for error badge click (AC-17).
+  const [pulseHighlightId, setPulseHighlightId] = useState<string | null>(null);
+  const pulseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // 1a.12 T8: reactive warnings from error detection (SDR#9).
+  const elements = useSyncExternalStore(elementStore.subscribe, elementStore.getSnapshot);
+  const warnings = useMemo(() => detectSetupErrors(elements), [elements]);
   // Drag state: when active, tracks the world-offset from pointer to element origin.
   const dragRef = useRef<{
     active: boolean;
@@ -1449,6 +1458,40 @@ export function CanvasView() {
     drawRef.current();
   };
 
+  // 1a.12 T8: center camera on an element by id (AC-6, AC-16).
+  const centerOnElement = (id: string) => {
+    const el = elementStore.getElements().find((e) => e.id === id);
+    if (!el) return;
+    const b = getElementBounds(el, elementStore.getElements());
+    camRef.current = clampCamera({
+      x: b.x + b.width / 2,
+      y: b.y + b.height / 2,
+      zoom: camRef.current.zoom,
+    });
+    drawRef.current();
+  };
+
+  // 1a.12 T8: row click → select + center (AC-6).
+  const handleRowClick = (id: string) => {
+    setSelectedId(id);
+    centerOnElement(id);
+  };
+
+  // 1a.12 T8: error click → center + pulse highlight (AC-16, AC-17).
+  const handleErrorClick = (subjectId: string) => {
+    centerOnElement(subjectId);
+    setPulseHighlightId(subjectId);
+    if (pulseTimerRef.current) clearTimeout(pulseTimerRef.current);
+    pulseTimerRef.current = setTimeout(() => setPulseHighlightId(null), 3000);
+  };
+
+  // Cleanup pulse timer on unmount.
+  useEffect(() => {
+    return () => {
+      if (pulseTimerRef.current) clearTimeout(pulseTimerRef.current);
+    };
+  }, []);
+
   return (
     <div className="ns-layout">
       {/* Story 1a.7 AC-1: top toolbar (6 control groups, Chinese labels, semantic roles). */}
@@ -1501,6 +1544,10 @@ export function CanvasView() {
             role="status"
             style={{ display: "none" }}
           />
+          {/* 1a.12 T8: pulse-highlight overlay for error badge click (AC-17). */}
+          {pulseHighlightId && (
+            <div className="ns-canvas__pulse-highlight" data-testid="ns-pulse-highlight" />
+          )}
           <div className="ns-canvas__ctrl" role="group" aria-label="zoom controls">
             <button
               type="button"
@@ -1536,10 +1583,19 @@ export function CanvasView() {
       {/* Story 1a.7: prompt center (online-game style message log) - collapsed
           single row above the statusbar; expands to a resizable log. Hosts the
           新建 confirm (F-1-4) and future info/toast/game messages. */}
-      <PromptPanel />
+      <PromptPanel
+        elements={elements}
+        onRowClick={handleRowClick}
+        onErrorClick={handleErrorClick}
+      />
 
       {/* Story 1a.7 AC-8: bottom statusbar (7 fields, aria-live). */}
-      <StatusBar elementCountRef={elementCountRef} fpsRef={fpsRef} />
+      <StatusBar
+        elementCountRef={elementCountRef}
+        fpsRef={fpsRef}
+        warnings={warnings}
+        onErrorClick={handleErrorClick}
+      />
     </div>
   );
 }

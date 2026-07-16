@@ -42,6 +42,10 @@ export interface PromptStore {
   clearResolved(): void;
   /** Current message snapshot. */
   getMessages(): readonly PromptMessage[];
+  /** AC-13: unread alert count for the "!" tab badge. */
+  getUnreadAlertCount(): number;
+  /** AC-13: mark all alerts as read (reset unread count to 0). */
+  markAlertRead(): void;
   /** useSyncExternalStore subscription. */
   subscribe(cb: () => void): () => void;
   getSnapshot(): readonly PromptMessage[];
@@ -49,13 +53,18 @@ export interface PromptStore {
   reset(): void;
 }
 
+/** Tab key set for PromptPanel 4-tab container (SDR#1). */
+export type TabKey = "alert" | "milestone" | "sourcesink" | "stock";
+
 /** Max retained messages; oldest non-confirm is dropped beyond this. */
-export const MAX_MESSAGES = 100;
+export const MAX_MESSAGES = 1000;
 /** Toast auto-dismiss delay (ms). */
 export const TOAST_MS = 4000;
 
 export function createPromptStore(): PromptStore {
   let messages: PromptMessage[] = [];
+  // AC-13: unread alert count for the "!" tab badge.
+  let unreadAlertCount = 0;
   const listeners = new Set<() => void>();
 
   const notify = () => {
@@ -117,7 +126,13 @@ export function createPromptStore(): PromptStore {
       setTimeout(() => dismiss(id), TOAST_MS);
     },
     alert(text) {
+      // SDR#4: push alert (persistent) + toast copy (4s auto-remove).
+      // AC-13: bump unread count for the "!" tab badge.
+      unreadAlertCount += 1;
       push({ id: crypto.randomUUID(), type: "alert", text, ts: Date.now() });
+      const toastId = crypto.randomUUID();
+      push({ id: toastId, type: "toast", text, ts: Date.now() });
+      setTimeout(() => dismiss(toastId), TOAST_MS);
     },
     dismiss,
     clearResolved() {
@@ -127,6 +142,14 @@ export function createPromptStore(): PromptStore {
     },
     getMessages() {
       return messages;
+    },
+    getUnreadAlertCount() {
+      return unreadAlertCount;
+    },
+    markAlertRead() {
+      if (unreadAlertCount === 0) return;
+      unreadAlertCount = 0;
+      notify();
     },
     subscribe(cb) {
       listeners.add(cb);
@@ -139,6 +162,7 @@ export function createPromptStore(): PromptStore {
     },
     reset() {
       messages = [];
+      unreadAlertCount = 0;
       notify();
     },
   };
@@ -146,3 +170,24 @@ export function createPromptStore(): PromptStore {
 
 /** Shared singleton (imported by PromptPanel + CanvasView's handleNew). */
 export const promptStore = createPromptStore();
+
+// ---------------------------------------------------------------------------
+// Story 1a.12 T2 - Tab message routing (SDR#2)
+// ---------------------------------------------------------------------------
+
+/**
+ * SDR#2: route a message to the correct tab.
+ * - "!" tab (alert): only confirm + alert types
+ * - milestone/sourcesink/stock tabs: no messages (element-based content)
+ * - info/toast never appear in any tab (they're transient, shown elsewhere)
+ */
+export function filterByTab(msg: PromptMessage, tab: TabKey): boolean {
+  switch (tab) {
+    case "alert":
+      return msg.type === "confirm" || msg.type === "alert";
+    case "milestone":
+    case "sourcesink":
+    case "stock":
+      return false;
+  }
+}

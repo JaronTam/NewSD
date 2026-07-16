@@ -10,6 +10,7 @@ import { useSyncExternalStore, useRef, useState } from "react";
 import { type ElementStore, deriveFlowUnits } from "../sd/store";
 import { validateFormulaSyntax, formatFormulaForEditor } from "../sd/formula";
 import { checkDimensions, type DimensionalCheckResult } from "../sd/dimensionalCheck";
+import { AtMentionAutocomplete, type ElementRef } from "./AtMentionAutocomplete";
 
 export interface PropertyPanelProps {
   elementStore: ElementStore;
@@ -72,6 +73,13 @@ export function PropertyPanel({ elementStore, selectedId }: PropertyPanelProps) 
   for (const el of elements) {
     if (el.name) nameMap[el.id] = el.name;
   }
+
+  // Build ElementRef list for AtMentionAutocomplete (AC-19).
+  const elementRefs: ElementRef[] = elements.map((el) => ({
+    id: el.id,
+    kind: el.kind,
+    name: el.name,
+  }));
 
   // Panel with selection — dispatch field rendering by element kind.
   const fields: React.ReactNode[] = [];
@@ -164,22 +172,24 @@ export function PropertyPanel({ elementStore, selectedId }: PropertyPanelProps) 
     fields.push(
       <label key="formula" className="ns-property-panel__field">
         <span className="ns-property-panel__label">公式</span>
-        <textarea
-          data-testid="ns-property-field-formula"
+        <AtMentionAutocomplete
+          value={selectedElement.formula}
+          elements={elementRefs}
+          inputTestId="ns-property-field-formula"
           className={`ns-property-panel__input ns-property-panel__textarea${formulaError ? " ns-property-panel__input--error" : ""}`}
-          aria-label="公式"
-          defaultValue={selectedElement.formula}
-          onBlur={(e) => {
-            const raw = e.target.value;
+          ariaLabel="公式"
+          onChange={() => {
+            // Display-only callback — no store persistence on typing.
+          }}
+          onBlur={(storedForm: string) => {
             elementStore.updateElement(selectedElement.id, {
-              formula: raw,
+              formula: storedForm,
             } as Partial<typeof selectedElement>);
-            const result = validateFormulaSyntax(raw);
+            const result = validateFormulaSyntax(storedForm);
             setFormulaError(result.ok ? null : (result.error ?? "语法错误"));
             // AC-11: trigger dimensional check on every edit (non-blocking stub).
-            setDimStatus(checkDimensions(raw));
+            setDimStatus(checkDimensions(storedForm));
           }}
-          rows={3}
         />
         {formulaError && (
           <div

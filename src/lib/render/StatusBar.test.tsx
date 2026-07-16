@@ -1,5 +1,6 @@
-import { render, cleanup } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { render, fireEvent, cleanup } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import type { ErrorFinding, ErrorType } from "../sd/errorDetection";
 import { StatusBar, type StatusBarProps } from "./StatusBar";
 
 // Story 1a.7 T2 — StatusBar unit tests (TDD green phase).
@@ -129,5 +130,70 @@ describe("StatusBar — live field refs", () => {
     render(<StatusBar {...props({ fpsRef: ref })} />);
     expect(ref.current).not.toBeNull();
     expect(ref.current!.tagName).toBe("SPAN");
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Story 1a.12 StatusBar ⚠N warnings slot + popover - RED scaffolds
+// gov: SDR#9 (error findings) / SDR#10 (popover click) / SDR#21 (display:none) /
+//      AC-12 (⚠N hidden when 0, shown with count) / AC-16 (popover listbox + item click).
+// Red: StatusBar.tsx 未增 ⚠N 字段 -> ns-statusbar-warnings 不存在 -> 断言 fail.
+// 契约: props 增 warnings?: ErrorFinding[] + onErrorClick?: (subjectId)=>void.
+//   ⚠N testid ns-statusbar-warnings (N=0 display:none / N>0 显 ⚠N);
+//   popover role=listbox, 项 testid ns-statusbar-warning-item; click -> onErrorClick(subjectId).
+// ═══════════════════════════════════════════════════════════════════════════
+
+const wf = (
+  subjectId: string,
+  type: ErrorType = "orphan-cloud",
+  subjectName = subjectId,
+): ErrorFinding => ({
+  id: `e-${subjectId}`,
+  type,
+  subjectId,
+  subjectName,
+  message: "问题描述",
+});
+
+describe("StatusBar - 1a.12 RED ⚠N warnings + popover (AC-12/AC-16)", () => {
+  afterEach(() => cleanup());
+
+  it("AC-12: ⚠N field hidden (display:none) when no warnings", () => {
+    const { container } = render(<StatusBar {...props()} {...({ warnings: [] } as any)} />);
+    const w = container.querySelector("[data-testid='ns-statusbar-warnings']") as HTMLElement;
+    expect(w).not.toBeNull();
+    expect(w.style.display).toBe("none");
+  });
+
+  it("AC-12: ⚠N field visible with count when warnings>0", () => {
+    const ws = [wf("c1"), wf("c2")];
+    const { container } = render(<StatusBar {...props()} {...({ warnings: ws } as any)} />);
+    const w = container.querySelector("[data-testid='ns-statusbar-warnings']") as HTMLElement;
+    expect(w).not.toBeNull();
+    expect(w.style.display).not.toBe("none");
+    expect(w.textContent).toContain("2");
+  });
+
+  it("AC-16: click ⚠N opens popover (role=listbox) listing warnings", () => {
+    const ws = [wf("c1", "orphan-cloud", "云1"), wf("f1", "dangling-flow-endpoint", "流1")];
+    const { container } = render(<StatusBar {...props()} {...({ warnings: ws } as any)} />);
+    fireEvent.click(container.querySelector("[data-testid='ns-statusbar-warnings']")!);
+    const listbox = container.querySelector("[role='listbox']");
+    expect(listbox).not.toBeNull();
+    const items = container.querySelectorAll("[data-testid='ns-statusbar-warning-item']");
+    expect(items).toHaveLength(2);
+    expect(listbox!.textContent).toContain("云1");
+    expect(listbox!.textContent).toContain("流1");
+  });
+
+  it("AC-16: click popover item -> onErrorClick(subjectId)", () => {
+    const ws = [wf("c1", "orphan-cloud", "云1")];
+    const onErrorClick = vi.fn();
+    const { container } = render(
+      <StatusBar {...props()} {...({ warnings: ws, onErrorClick } as any)} />,
+    );
+    fireEvent.click(container.querySelector("[data-testid='ns-statusbar-warnings']")!);
+    fireEvent.click(container.querySelector("[data-testid='ns-statusbar-warning-item']")!);
+    expect(onErrorClick).toHaveBeenCalledWith("c1");
   });
 });
