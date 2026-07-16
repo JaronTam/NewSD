@@ -1067,3 +1067,97 @@ describe("PropertyPanel — AC-7(a) rename collision surfacing (1a.11 RED)", () 
     expect(inputB.value).not.toBe("in-flight-A-edit");
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Story 1a.12 D1 - PropertyPanel formula controlled + AtMentionAutocomplete 集成
+// gov: SDR#11 (controlled 双路径, 避免 1a.8 F-2 hollow) / SDR#23 (name<->id 反向映射) /
+//      AC-19 (id->name 显示 / @ 下拉 / 选项插入 / blur persist id-form / controlled).
+// Red: PropertyPanel formula 仍为 1a.8 uncontrolled (defaultValue+onBlur), 无 autocomplete
+//      -> name-form 显示/外部更新同步/@ 下拉 均未实现 -> 断言 fail.
+// 1a.8 L461 (unknown @uuid preserved) 保留绿: 未知 uuid 不解析仍含 @, 与 D1 不冲突.
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe("PropertyPanel - 1a.12 D1 controlled formula + autocomplete (AC-19 RED)", () => {
+  afterEach(() => cleanup());
+
+  it("AC-19(a): flow formula @<stockId> displays as stock name (D1 name-form, not @uuid)", () => {
+    const store = setupStore(["stock", "stock", "flow"]);
+    const stock = firstOf(store, "stock") as Stock;
+    const flow = firstOf(store, "flow") as Flow;
+    act(() => {
+      store.updateElement(stock.id, { name: "库存" } as Partial<Stock>);
+      store.updateElement(flow.id, { formula: `@${stock.id} * 2` } as Partial<Flow>);
+    });
+    const { container } = renderPanel(store, flow.id);
+    const ta = container.querySelector(
+      "[data-testid='ns-property-field-formula']",
+    ) as HTMLTextAreaElement;
+    // D1: display = name form "库存 * 2", NOT raw "@<uuid> * 2".
+    expect(ta.value).toContain("库存");
+    expect(ta.value).not.toContain(stock.id);
+  });
+
+  it("AC-19(b): typing @ in formula opens AtMentionAutocomplete listbox", () => {
+    const store = setupStore(["stock", "stock", "flow"]);
+    const flow = firstOf(store, "flow") as Flow;
+    const { container } = renderPanel(store, flow.id);
+    const ta = container.querySelector(
+      "[data-testid='ns-property-field-formula']",
+    ) as HTMLTextAreaElement;
+    fireEvent.focus(ta);
+    fireEvent.change(ta, { target: { value: "@" } });
+    expect(container.querySelector("[data-testid='ns-at-mention-listbox']")).not.toBeNull();
+  });
+
+  it("AC-19(e): formula textarea is controlled (external store update reflects, not uncontrolled)", () => {
+    // 1a.8 uncontrolled (defaultValue) does NOT reflect external store updates (see
+    // L970 skipped test for name). D1 controlled MUST reflect. Red until D1 wires value.
+    const store = setupStore(["stock", "stock", "flow"]);
+    const flow = firstOf(store, "flow") as Flow;
+    const { container } = renderPanel(store, flow.id);
+    const before = container.querySelector(
+      "[data-testid='ns-property-field-formula']",
+    ) as HTMLTextAreaElement;
+    expect(before.value).toBe("1"); // default formula
+    act(() => {
+      store.updateElement(flow.id, { formula: "2 + 2" } as Partial<Flow>);
+    });
+    const after = container.querySelector(
+      "[data-testid='ns-property-field-formula']",
+    ) as HTMLTextAreaElement;
+    // controlled: reflects new store value. uncontrolled: stays "1" -> red.
+    expect(after.value).toBe("2 + 2");
+  });
+
+  it("AC-19 F-2 regression: switch flow selection resets uncommitted formula edit (SDR#11)", () => {
+    // 守卫: D1 controlled 转换不得重新引入 1a.8 F-2 (draft 跨选择泄漏).
+    const store = setupStore(["stock", "stock", "flow"]);
+    const stocks = store.getElements().filter((e) => e.kind === "stock") as Stock[];
+    const f2: Flow = {
+      id: crypto.randomUUID(),
+      kind: "flow",
+      name: "F2",
+      fromId: stocks[0].id,
+      toId: stocks[1].id,
+      formula: "2",
+      isVariable: false,
+      lastValue: 0,
+      units: "people/dt",
+    };
+    store.setElements([...store.getElements(), f2]);
+    const flow1 = firstOf(store, "flow") as Flow;
+
+    const { container, rerender } = renderPanel(store, flow1.id);
+    const ta1 = container.querySelector(
+      "[data-testid='ns-property-field-formula']",
+    ) as HTMLTextAreaElement;
+    fireEvent.change(ta1, { target: { value: "uncommitted-edit" } });
+
+    rerender(<PropertyPanel elementStore={store} selectedId={f2.id} />);
+    const ta2 = container.querySelector(
+      "[data-testid='ns-property-field-formula']",
+    ) as HTMLTextAreaElement;
+    expect(ta2.value).toBe("2"); // f2's formula, not flow1's uncommitted edit
+    expect(ta2.value).not.toBe("uncommitted-edit");
+  });
+});

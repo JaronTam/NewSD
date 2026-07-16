@@ -1,20 +1,22 @@
-// Story 1a.7 - Prompt center panel (online-game style message log).
+// Story 1a.12 - PromptPanel 重构为四 tab 容器 (prompt center).
+// gov: SDR#1 (4 tabs) / SDR#3 (activeTab priority) / SDR#8 (sessionStorage).
 //
-// Sits above the StatusBar as its own row. Two states:
-//  - Collapsed (default): one row showing the latest message. An unanswered
-//    confirm is pinned here + highlighted (--ns-err border pulse) so it can't
-//    scroll out of view and the user must settle it before the awaiter (e.g.
-//    handleNew) proceeds.
-//  - Expanded: ~150px (minimap-height) scrollable log; the top edge is a drag
-//    handle to resize [single-row, 40vh]; [清空] clears resolved messages only
-//    (unanswered confirms are kept).
+// Collapsed: PromptCapsule (4 tab names + ⏏️).
+// Expanded: drag handle + header + PromptTabs + tabpanel content area.
+// Tab content dispatched by activeTab: alert → message list, others → stubs (T3-T5).
 //
-// confirm rows are black-bg/red-text (--ns-err + glow, ns-ascii--err); [确认] /
-// [取消] settle the promise. ASCII box style: + - | frame, [] components, <>
-// text (cyberpunk shell) - the same mono vocabulary as the boot skeleton.
+// 1a.7 baseline retained: confirm resolve, toast auto-remove, clearResolved,
+// resize drag, COLLAPSED_H/EXPANDED_DEFAULT_H.
 
-import { useRef, useState, useSyncExternalStore } from "react";
-import { promptStore, type PromptMessage } from "./promptStore";
+import { useRef, useState, useSyncExternalStore, useEffect, useMemo } from "react";
+import { promptStore, type PromptMessage, type TabKey } from "./promptStore";
+import { PromptTabs } from "./PromptTabs";
+import { PromptCapsule } from "./PromptCapsule";
+import { MilestoneTab } from "./tabs/MilestoneTab";
+import { SourceSinkTab, type CloudItem, type TabElement } from "./tabs/SourceSinkTab";
+import { StockTab, type StockItem } from "./tabs/StockTab";
+import { AlertTab } from "./tabs/AlertTab";
+import type { SDElement, Stock } from "../sd/types";
 
 /** Expanded default height = minimap height (styles.css .ns-canvas__minimap). */
 const EXPANDED_DEFAULT_H = 150;
@@ -23,60 +25,111 @@ const COLLAPSED_H = 26;
 /** Drag ceiling as % of viewport. */
 const MAX_H_VH = 40;
 
-function tagOf(msg: PromptMessage): string {
-  return `[${msg.type}]`;
+/** SDR#8: sessionStorage key for lastActiveTab persistence. */
+const LAST_TAB_KEY = "ns-prompt-panel-last-tab";
+
+export interface PromptPanelProps {
+  elements?: readonly SDElement[];
+  onRowClick?: (id: string) => void;
+  onErrorClick?: (subjectId: string) => void;
 }
 
-function MessageRow({ msg }: { msg: PromptMessage }) {
-  if (msg.type === "confirm") {
-    return (
-      <div
-        className={`ns-prompt-panel__msg${
-          msg.resolved ? " ns-prompt-panel__msg--resolved" : " ns-prompt-panel__msg--confirm"
-        }`}
-      >
-        <span className="ns-prompt-panel__tag ns-prompt-panel__tag--confirm">{tagOf(msg)}</span>
-        <span className="ns-prompt-panel__text">{msg.text}</span>
-        {msg.resolved ? (
-          <span className="ns-prompt-panel__result">{msg.result ? "[已确认]" : "[已取消]"}</span>
-        ) : (
-          <span className="ns-prompt-panel__actions">
-            <button
-              type="button"
-              data-testid="ns-prompt-panel-confirm"
-              onClick={() => msg.resolve?.(true)}
-            >
-              [确认]
-            </button>
-            <button
-              type="button"
-              data-testid="ns-prompt-panel-cancel"
-              onClick={() => msg.resolve?.(false)}
-            >
-              [取消]
-            </button>
-          </span>
-        )}
-      </div>
-    );
+function readLastTab(): TabKey {
+  try {
+    const v = sessionStorage.getItem(LAST_TAB_KEY);
+    if (v === "alert" || v === "milestone" || v === "sourcesink" || v === "stock") return v;
+  } catch {
+    // sessionStorage unavailable (e.g. SSR/test) → fall through
   }
-  return (
-    <div className="ns-prompt-panel__msg">
-      <span className="ns-prompt-panel__tag">{tagOf(msg)}</span>
-      <span className="ns-prompt-panel__text">{msg.text}</span>
-    </div>
-  );
+  return "alert";
 }
 
-export function PromptPanel() {
+function persistLastTab(tab: TabKey) {
+  try {
+    sessionStorage.setItem(LAST_TAB_KEY, tab);
+  } catch {
+    // noop
+  }
+}
+
+export function PromptPanel({ elements = [], onRowClick, onErrorClick }: PromptPanelProps) {
   const messages = useSyncExternalStore(promptStore.subscribe, promptStore.getSnapshot);
+  const unreadAlertCount = useSyncExternalStore(
+    promptStore.subscribe,
+    promptStore.getUnreadAlertCount,
+  );
   const [expanded, setExpanded] = useState(false);
   const [height, setHeight] = useState(EXPANDED_DEFAULT_H);
   const dragRef = useRef<{ startY: number; startH: number } | null>(null);
 
-  // Unanswered confirm (if any) is pinned to the collapsed row.
-  const pinnedConfirm = messages.find((m) => m.type === "confirm" && !m.resolved);
-  const latest = messages.length > 0 ? messages[messages.length - 1] : null;
+  // SDR#3: activeTab with sessionStorage-backed lastActiveTab (SDR#8).
+  const [activeTab, setActiveTab] = useState<TabKey>(() => readLastTab());
+  const [lastActiveTab, setLastActiveTab] = useState<TabKey>(() => readLastTab());
+
+  const hasUnansweredConfirm = messages.some((m) => m.type === "confirm" && !m.resolved);
+
+  // Compute clouds, stocks, and errors for data tabs (T8).
+  const clouds = useMemo<CloudItem[]>(
+    () =>
+      elements
+        .filter((e): e is SDElement & { kind: "cloud" } => e.kind === "cloud")
+        .map((c) => ({ id: c.id, kind: "cloud" as const, name: c.name })),
+    [elements],
+  );
+  const stocks = useMemo<StockItem[]>(
+    () =>
+      elements
+        .filter((e): e is SDElement & { kind: "stock" } => e.kind === "stock")
+        .map((s) => ({
+          id: s.id,
+          kind: "stock" as const,
+          name: s.name,
+          currentValue: s.currentValue,
+          history: s.history,
+        })),
+    [elements],
+  );
+  const tabElements = useMemo<TabElement[]>(
+    () =>
+      elements.map((e) => {
+        if (e.kind === "cloud") return { id: e.id, kind: "cloud" as const, name: e.name };
+        if (e.kind === "flow")
+          return { id: e.id, kind: "flow" as const, name: e.name, fromId: e.fromId, toId: e.toId };
+        return { id: e.id, kind: "stock" as const, name: e.name };
+      }),
+    [elements],
+  );
+
+  // Persist lastActiveTab changes (SDR#8).
+  useEffect(() => {
+    persistLastTab(lastActiveTab);
+  }, [lastActiveTab]);
+
+  // AC-13: while viewing the alert tab, clear the unread badge as new alerts arrive.
+  useEffect(() => {
+    if (expanded && activeTab === "alert") promptStore.markAlertRead();
+  }, [expanded, activeTab, unreadAlertCount]);
+
+  const handleSelectTab = (key: TabKey) => {
+    setActiveTab(key);
+    setLastActiveTab(key);
+    // AC-13: selecting the alert tab marks alerts as read (clears "!" badge).
+    if (key === "alert") promptStore.markAlertRead();
+  };
+
+  const handleExpand = (targetTab: TabKey) => {
+    setActiveTab(targetTab);
+    setLastActiveTab(targetTab);
+    setExpanded(true);
+    // AC-13: expanding to the alert tab marks alerts as read (clears "!" badge).
+    if (targetTab === "alert") promptStore.markAlertRead();
+  };
+
+  const handleCollapse = () => {
+    setExpanded(false);
+    // persist lastActiveTab before collapsing (SDR#8).
+    persistLastTab(activeTab);
+  };
 
   const beginResize = (e: React.PointerEvent) => {
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
@@ -94,59 +147,27 @@ export function PromptPanel() {
     dragRef.current = null;
   };
 
+  // ── Collapsed: capsule row ──
   if (!expanded) {
     return (
       <div
         data-testid="ns-prompt-panel"
         className={`ns-prompt-panel ns-prompt-panel--collapsed${
-          pinnedConfirm ? " ns-prompt-panel--pin" : ""
+          hasUnansweredConfirm ? " ns-prompt-panel--pin" : ""
         }`}
         role="status"
         aria-live="polite"
       >
-        {pinnedConfirm ? (
-          <>
-            <span className="ns-prompt-panel__tag ns-prompt-panel__tag--confirm">[confirm]</span>
-            <span className="ns-prompt-panel__text ns-prompt-panel__text--confirm">
-              {pinnedConfirm.text}
-            </span>
-            <span className="ns-prompt-panel__actions">
-              <button
-                type="button"
-                data-testid="ns-prompt-panel-confirm"
-                onClick={() => pinnedConfirm.resolve?.(true)}
-              >
-                [确认]
-              </button>
-              <button
-                type="button"
-                data-testid="ns-prompt-panel-cancel"
-                onClick={() => pinnedConfirm.resolve?.(false)}
-              >
-                [取消]
-              </button>
-            </span>
-          </>
-        ) : latest ? (
-          <>
-            <span className="ns-prompt-panel__tag">{tagOf(latest)}</span>
-            <span className="ns-prompt-panel__text">{latest.text}</span>
-          </>
-        ) : (
-          <span className="ns-prompt-panel__empty">+ no messages +</span>
-        )}
-        <button
-          type="button"
-          data-testid="ns-prompt-panel-toggle"
-          className="ns-prompt-panel__btn"
-          aria-label="展开提示中心"
-          onClick={() => setExpanded(true)}
-        >
-          [⏏]
-        </button>
+        <PromptCapsule
+          hasUnanswered={hasUnansweredConfirm}
+          lastActiveTab={lastActiveTab}
+          onExpand={handleExpand}
+        />
       </div>
     );
   }
+
+  // ── Expanded: tab bar + content ──
 
   return (
     <div
@@ -183,18 +204,44 @@ export function PromptPanel() {
           data-testid="ns-prompt-panel-toggle"
           className="ns-prompt-panel__btn"
           aria-label="收起提示中心"
-          onClick={() => setExpanded(false)}
+          onClick={handleCollapse}
         >
           [⏏]
         </button>
       </div>
-      <div className="ns-prompt-panel__list">
-        {messages.length === 0 ? (
-          <div className="ns-prompt-panel__empty">+ no messages +</div>
+      <PromptTabs
+        messages={messages}
+        activeTab={activeTab}
+        onTabChange={handleSelectTab}
+        hasUnanswered={hasUnansweredConfirm}
+        unreadAlertCount={unreadAlertCount}
+      >
+        {activeTab === "alert" ? (
+          <AlertTab
+            messages={messages}
+            onResolve={(id, confirmed) => {
+              const msg = messages.find((m) => m.id === id);
+              msg?.resolve?.(confirmed);
+            }}
+          />
+        ) : activeTab === "milestone" ? (
+          <MilestoneTab />
+        ) : activeTab === "sourcesink" ? (
+          <SourceSinkTab
+            clouds={clouds}
+            elements={tabElements}
+            onRowClick={onRowClick}
+            onErrorClick={onErrorClick}
+          />
         ) : (
-          messages.map((m) => <MessageRow key={m.id} msg={m} />)
+          <StockTab
+            stocks={stocks}
+            errors={[]}
+            onRowClick={onRowClick}
+            onErrorClick={onErrorClick}
+          />
         )}
-      </div>
+      </PromptTabs>
     </div>
   );
 }
