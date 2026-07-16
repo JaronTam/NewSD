@@ -17,7 +17,7 @@
 # - retrospective appends action_items
 
 generated: 2026-07-05
-last_updated: 2026-07-15
+last_updated: 2026-07-17
 project: NewSD
 project_key: NOKEY
 tracking_system: file-system
@@ -39,7 +39,7 @@ development_status:
   1a-9-i18n: backlog
   1a-10-model-settings: backlog
   1a-11-entity-naming-mechanism: done # CC Step 5 (2026-07-12): FR-ELEM-5 图元命名机制(全局唯一+序号递增,推翻原"允许同名+软警告")独立小 story;1a.8+ 重构前置;编号 1a.11(1a.9/1a.10 不重编号,执行后移);CS 2026-07-15;VS PASS 2026-07-16;DS 2026-07-16 done;CR 2026-07-16 Run 1 PASS (orchestrator-direct, 3-layer 12→7 root cause, 4 patch F-1..F-4 + 1 dropped F-7 + 7 defer, vitest 594/594 + tsc 0);PR#52 @1bb3598
-  1a-12-prompt-panel-restructure: backlog # CC Step 5 (2026-07-12): 1a.8+ PromptPanel 四 tab(!"/里程碑/源汇/存量)+收起态胶囊+错误二分归宿+关联跳转重构;依赖 1a-11 命名机制;执行顺序 1a.8->1a.11->1a.12->1a-13->1a.9->1a.10
+  1a-12-prompt-panel-restructure: done # PR#54 squash @21f2fd9 (CR 2026-07-16 Run 1 PASS: 3-layer orchestrator-direct, 10 findings 全裁定 5 patched F-1/F-3/F-8/F-9/F-10 + F-5 补填 + F-4 close + 3 defer F-2/F-6 归 4.2/F-7 归 1b/F-10 a11y, failed_layers=[]; vitest 706+1skip/30files + tsc 0 + e2e 29 passed|21 skipped); DS 2026-07-16 (bmad-dev-story): T0-T10 green, AtMentionAutocomplete D1 合流 + PropertyPanel uncontrolled→controlled; StatusBar ⚠N; errorDetection.ts 三检测器; 四 tab shell + 收起态胶囊; CS 2026-07-16 (bmad-create-story): 全读 epic L565-615 + ARCHITECTURE-SPINE + PromptPanel/PropertyPanel/promptStore/StatusBar/store/types baseline; 产 AC 22 + SDR 22 (12契约+5不变量+5meta) + Tasks T0-T10 + SAVE QUESTIONS 6; 依赖 1a.8/1a.11 done + D1 合流; e2e canvas-click defer 1b (复用 1a.8 D4); 里程碑内容 defer 5.4; 量纲/钳制 defer 1b; 公式悬空 defer 4.2; baseline_commit e6b9cea + baseline_tests 594/1skip/21files; Story 1a.12 闭合 2026-07-16
   1a-13-session-autosave-restore: backlog # 1a.11 Q1 讨论 (2026-07-15) 拆出: F2 beforeunload prompt+F3 autosave localStorage 承担 F5 刷新保护;A2 hydrate 天然兼容 (setElements 载入 deriveSeq 承接快照);依赖 1a-12 PromptPanel 重构;执行顺序 1a.8->1a.11->1a.12->1a-13->1a.9->1a.10
   epic-1a-retrospective: optional
 
