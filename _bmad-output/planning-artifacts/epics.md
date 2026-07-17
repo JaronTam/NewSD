@@ -560,7 +560,7 @@ So that 重命名/粘贴不产生歧义,公式引用稳定不断。
 **When** 执行
 **Then** 依赖 1a.8 属性面板(改名入口)
 **And** 1a.12 重构依赖本 story(重名源消失,错误源收敛)
-**And** 执行顺序:1a.8 -> 1a.11(命名机制)-> 1a.12(重构)-> 1a.9(i18n)-> 1a.10
+**And** 执行顺序:1a.8 -> 1a.11(命名机制)-> 1a.12(重构)-> 1a-13(会话存盘恢复)-> 1a.9(i18n)-> 1a.10
 
 #### Story 1a.12: PromptPanel 重构为四 tab 容器
 
@@ -611,8 +611,50 @@ So that 建模与提示/状态监视分离不互相干扰。
 **Given** 1a.12 重构 story
 **When** 执行
 **Then** 依赖 1a.8 属性面板(字段聚焦)+ FR-ELEM-5 命名机制(重名源消失)+ FR-ELEM-6 flow 端点完整性(检测源)+ FR-UI-3 修订(状态栏 ⚠N)
-**And** 执行顺序:1a.8 -> 1a.11(命名机制)-> 1a.12(重构)-> 1a.9(i18n)-> 1a.10(1a.9/1a.10 编号不变,执行后移;i18n 对最终 tab 结构抽 key 避免返工)
+**And** 执行顺序:1a.8 -> 1a.11(命名机制)-> 1a.12(重构)-> 1a-13(会话存盘恢复)-> 1a.9(i18n)-> 1a.10(1a.9/1a.10 编号不变,执行后移;i18n 对最终 tab 结构抽 key 避免返工)
 **And** defer 项:里程碑 tab 内容 -> 游戏化中心 story(Epic 5);量纲类(含混合)-> 1b;钳制通知 -> 1b;公式悬空 -> 4.2
+
+#### Story 1a-13: 会话级自动存盘与恢复 (session-autosave-restore)
+
+As a 单人建模者,
+I want 画布模型在会话内自动存盘到 localStorage 并在刷新/重开时自动恢复,且有 beforeunload 兜底,
+So that F5 刷新或意外关页不清空建模成果,1a 阶段(无主动存盘)即获会话韧性。
+
+**Acceptance Criteria(自动存盘 F3):**
+
+**Given** elementStore 单例 + 用户编辑图元/关系
+**When** 任意变更(create/update/delete/setElements)
+**Then** 标记 dirty + debounce(1000ms)后写 localStorage key `ns-board-autosave`,envelope `{version:1, elements:[...]}`
+**And** 持久化子集 = 静态字段白名单,剥离运行时/派生字段(Stock currentValue/history;Flow lastValue/units/formulaError)
+**And** 写失败(QuotaExceeded/Security)容错不崩,console.warn + 后续重试
+
+**Acceptance Criteria(刷新保护 F2):**
+
+**Given** dirty(未 flush 变更)
+**When** window beforeunload
+**Then** 同步 flush(立即写)+ flush 成功不弹原生提示(数据已安全)
+**And** flush 失败且仍 dirty -> 设 returnValue 触发原生离开提示(兜底)
+**And** 无 dirty 不弹(干净退出)
+**And** SSR/无 window 环境不注册不抛
+
+**Acceptance Criteria(会话恢复 A2 hydrate):**
+
+**Given** localStorage 含合法 envelope
+**When** CanvasView mount
+**Then** 读 -> 校验 -> elementStore.setElements(复用 1a.11 deriveSeq 承接计数器,A2 兼容)
+**And** 空/缺 key -> 空画布不报错
+**And** 损坏/版本不符/结构非法 -> 丢弃 + console.warn + 空画布(不崩不注入坏数据)
+**And** 运行时字段恢复时重初始化(currentValue=initialValue, history=[], 派生 units 重算)
+**And** deriveSeq 跨会话命名连续(skip-forward,不回退不碰撞)
+
+**Acceptance Criteria(边界 guard 段 - 依赖与时序):**
+
+**Given** 1a-13 session-autosave story
+**When** 执行
+**Then** 依赖 1a.11 deriveSeq/A2(setElements->deriveSeq 承接)+ 1a.12 SDR#8 storage 边界(sessionStorage vs localStorage 不竞态)
+**And** 执行顺序:1a.8 -> 1a.11(命名机制)-> 1a.12(重构)-> 1a-13(会话存盘恢复)-> 1a.9(i18n)-> 1a.10(1a.9/1a.10 编号不变,执行后移)
+**And** storage 边界:localStorage `ns-board-autosave`(本 story)≠ sessionStorage `ns-prompt-panel-last-tab`(1a.12),不互相覆盖
+**And** defer 项:e2e canvas-click 基础设施 -> 1b(本 story e2e restore 用既有 `__e2e__` 钩子不依赖 canvas-click)
 
 #### Story 1a.9: 界面语言切换
 
