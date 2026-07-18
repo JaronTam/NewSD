@@ -1,0 +1,785 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>NewSD 故事依赖 · 泳道图</title>
+    <style>
+      :root {
+        --bg: #0a0e1a;
+        --panel: #111827;
+        --border: #1f2a44;
+        --txt: #e6edf3;
+        --dim: #8b9bb4;
+        --green: #00ff9d;
+        --cyan: #00d4ff;
+        --purple: #bd00ff;
+        --orange: #ff9500;
+        --pink: #ff006e;
+        --yellow: #ffd60a;
+        --mint: #06ffa5;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        padding: 24px;
+        background: var(--bg);
+        color: var(--txt);
+        font-family:
+          "Segoe UI",
+          -apple-system,
+          "Microsoft YaHei",
+          sans-serif;
+        line-height: 1.5;
+      }
+      h1 {
+        font-size: 22px;
+        margin: 0 0 4px;
+        border-left: 4px solid var(--cyan);
+        padding-left: 12px;
+      }
+      h2 {
+        font-size: 15px;
+        color: var(--cyan);
+        margin: 28px 0 10px;
+        border-bottom: 1px solid var(--border);
+        padding-bottom: 6px;
+      }
+      .meta {
+        color: var(--dim);
+        font-size: 13px;
+        margin: 0 0 0 16px;
+      }
+      .legend {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin: 14px 0;
+        font-size: 12px;
+      }
+      .chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 10px;
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        background: var(--panel);
+      }
+      .dot {
+        width: 13px;
+        height: 13px;
+        border-radius: 3px;
+        display: inline-block;
+        border: 2px solid;
+      }
+      .scroll-wrap {
+        overflow: auto;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        background: var(--panel);
+        max-height: 80vh;
+      }
+      .lane-grid {
+        display: grid;
+        grid-template-columns: 118px repeat(17, 116px);
+        grid-template-rows: 46px repeat(6, 150px);
+        position: relative;
+        min-width: max-content;
+      }
+      .corner {
+        grid-column: 1;
+        grid-row: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 12px;
+        color: var(--dim);
+        position: sticky;
+        left: 0;
+        background: var(--panel);
+        z-index: 3;
+        border-right: 1px solid var(--border);
+        border-bottom: 1px solid var(--border);
+      }
+      .lhdr {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 600;
+        color: var(--yellow);
+        font-size: 13px;
+        border-bottom: 1px solid var(--border);
+        border-right: 1px solid #142038;
+      }
+      .lhdr.hot {
+        background: #1a1530;
+        color: var(--mint);
+      }
+      .lanelabel {
+        grid-column: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        font-size: 12px;
+        text-align: center;
+        border-right: 2px solid var(--ec);
+        border-bottom: 1px solid var(--border);
+        position: sticky;
+        left: 0;
+        background: var(--panel);
+        z-index: 3;
+      }
+      .lanelabel b {
+        color: var(--ec);
+      }
+      .lanelabel span {
+        color: var(--dim);
+        font-size: 11px;
+      }
+      .cell {
+        border-right: 1px dashed #142038;
+        border-bottom: 1px solid #0f1729;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        gap: 5px;
+        padding: 4px;
+        background: rgba(255, 255, 255, 0.012);
+      }
+      .cell[data-epic="1a"] {
+        background: rgba(0, 212, 255, 0.035);
+      }
+      .cell[data-epic="1b"] {
+        background: rgba(189, 0, 255, 0.035);
+      }
+      .cell[data-epic="2"] {
+        background: rgba(255, 149, 0, 0.035);
+      }
+      .cell[data-epic="3"] {
+        background: rgba(255, 0, 110, 0.035);
+      }
+      .cell[data-epic="4"] {
+        background: rgba(255, 214, 10, 0.035);
+      }
+      .cell[data-epic="5"] {
+        background: rgba(6, 255, 165, 0.035);
+      }
+      .card {
+        width: 104px;
+        padding: 5px 6px;
+        border-radius: 5px;
+        font-size: 11px;
+        cursor: pointer;
+        border: 2px solid var(--ec);
+        background: #0d1322;
+        color: var(--txt);
+        text-align: center;
+        transition:
+          transform 0.12s,
+          box-shadow 0.12s;
+        z-index: 2;
+        position: relative;
+      }
+      .card:hover {
+        transform: scale(1.06);
+        box-shadow: 0 0 0 2px var(--ec);
+        z-index: 5;
+      }
+      .card .num {
+        display: block;
+        font-weight: 700;
+        font-size: 12px;
+      }
+      .card .nm {
+        display: block;
+        color: var(--dim);
+        font-size: 10px;
+        margin-top: 1px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .card.done {
+        background: #006d5b;
+        border-color: #00ff9d;
+        color: #fff;
+      }
+      .card.done .nm {
+        color: #bff5e2;
+      }
+      .card.blocked {
+        border-style: dashed;
+        border-color: #ff6b00;
+        border-width: 2px;
+        background: #3a1f0d;
+      }
+      .card.blocked .nm {
+        color: #ffcb91;
+      }
+      .card.hl {
+        box-shadow:
+          0 0 0 3px #fff,
+          0 0 14px var(--green);
+        z-index: 6;
+      }
+      svg.links {
+        position: absolute;
+        top: 0;
+        left: 0;
+        pointer-events: none;
+        z-index: 1;
+        overflow: visible;
+      }
+      .link.hard {
+        stroke: #6b7a99;
+        stroke-width: 1.4;
+        fill: none;
+        opacity: 0.5;
+      }
+      .link.seq {
+        stroke: #ffd60a;
+        stroke-width: 2;
+        fill: none;
+        stroke-dasharray: 5 4;
+        opacity: 0.85;
+      }
+      .link.hl {
+        opacity: 1;
+        stroke-width: 2.8;
+        stroke: #00ff9d;
+      }
+      .link.dim {
+        opacity: 0.1;
+      }
+      table {
+        border-collapse: collapse;
+        width: 100%;
+        font-size: 13px;
+        margin-top: 8px;
+      }
+      th,
+      td {
+        border: 1px solid var(--border);
+        padding: 7px 9px;
+        text-align: left;
+        vertical-align: top;
+      }
+      th {
+        background: #0f1729;
+        color: var(--cyan);
+        font-weight: 600;
+      }
+      tr:nth-child(even) {
+        background: #0d1322;
+      }
+      td.l {
+        color: var(--yellow);
+        font-weight: bold;
+        text-align: center;
+        white-space: nowrap;
+      }
+      td.n {
+        text-align: center;
+        font-weight: bold;
+        color: var(--mint);
+      }
+      .hot-row {
+        background: #1a1530 !important;
+      }
+      .note {
+        background: #0f1729;
+        border-left: 3px solid var(--purple);
+        padding: 10px 14px;
+        margin: 10px 0;
+        font-size: 13px;
+        color: var(--dim);
+        border-radius: 0 4px 4px 0;
+      }
+      .keypath {
+        background: #1a0d2d;
+        border-left: 3px solid var(--pink);
+        padding: 10px 14px;
+        margin: 10px 0;
+        font-size: 13px;
+        border-radius: 0 4px 4px 0;
+      }
+      code {
+        background: #0f1729;
+        padding: 1px 5px;
+        border-radius: 3px;
+        color: var(--mint);
+        font-size: 12px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>NewSD 故事依赖 · 泳道图</h1>
+    <p class="meta">
+      纵向 6 Epic 泳道 · 横向 L0–L16 拓扑层(时间轴)· 同列节点无依赖可并行 · hover 卡片高亮直连边 ·
+      数据源 <code>epics.md</code>
+    </p>
+
+    <div class="legend">
+      <span class="chip"
+        ><span class="dot" style="background: #006d5b; border-color: #00ff9d"></span>已合并</span
+      >
+      <span class="chip"
+        ><span class="dot" style="background: #0d1322; border-color: #00d4ff"></span>1a</span
+      >
+      <span class="chip"
+        ><span class="dot" style="background: #0d1322; border-color: #bd00ff"></span>1b</span
+      >
+      <span class="chip"
+        ><span class="dot" style="background: #0d1322; border-color: #ff9500"></span>Epic 2</span
+      >
+      <span class="chip"
+        ><span class="dot" style="background: #0d1322; border-color: #ff006e"></span>Epic 3</span
+      >
+      <span class="chip"
+        ><span class="dot" style="background: #0d1322; border-color: #ffd60a"></span>Epic 4</span
+      >
+      <span class="chip"
+        ><span class="dot" style="background: #0d1322; border-color: #06ffa5"></span>Epic 5</span
+      >
+      <span class="chip"
+        ><span
+          class="dot"
+          style="background: #3a1f0d; border-color: #ff6b00; border-style: dashed"
+        ></span
+        >依赖1b</span
+      >
+      <span class="chip">── 硬依赖 &nbsp; ╌╌ 执行序</span>
+    </div>
+
+    <h2>泳道图</h2>
+    <div class="scroll-wrap">
+      <div class="lane-grid" id="grid">
+        <svg class="links" id="links" xmlns="http://www.w3.org/2000/svg"></svg>
+      </div>
+    </div>
+
+    <h2>拓扑分层 · 并行开发表</h2>
+    <p class="meta">同列 = 同 Layer = 可并行。高亮 = 并行热点。</p>
+    <table>
+      <thead>
+        <tr>
+          <th>Layer</th>
+          <th>可并行 Story</th>
+          <th>数</th>
+          <th>备注</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="l">L0</td>
+          <td>1a.1</td>
+          <td class="n">1</td>
+          <td>起点</td>
+        </tr>
+        <tr>
+          <td class="l">L1</td>
+          <td>1a.2, 2.1</td>
+          <td class="n">2</td>
+          <td>Epic 2 认证早启动(仅依赖 1a.1)</td>
+        </tr>
+        <tr>
+          <td class="l">L2</td>
+          <td>1a.3, 2.2, 2.4</td>
+          <td class="n">3</td>
+          <td></td>
+        </tr>
+        <tr>
+          <td class="l">L3</td>
+          <td>1a.4, 2.3</td>
+          <td class="n">2</td>
+          <td>1a.4 建模图元 AST = 后续解锁点</td>
+        </tr>
+        <tr class="hot-row">
+          <td class="l">L4</td>
+          <td>1a.5, 1a.7, 1a.8, 3.1</td>
+          <td class="n">4</td>
+          <td>🔥热点①: 3.1 协作基座可启动</td>
+        </tr>
+        <tr class="hot-row">
+          <td class="l">L5</td>
+          <td>1a.6, 1a.11, 3.2, 3.3, 3.6, 4.1, 4.2, 5.1</td>
+          <td class="n">8</td>
+          <td>🔥最大并行层</td>
+        </tr>
+        <tr>
+          <td class="l">L6</td>
+          <td>1a.12, 4.3, 5.2</td>
+          <td class="n">3</td>
+          <td></td>
+        </tr>
+        <tr>
+          <td class="l">L7</td>
+          <td>1a-13, 4.4</td>
+          <td class="n">2</td>
+          <td>4.4 不依赖 1b</td>
+        </tr>
+        <tr>
+          <td class="l">L8</td>
+          <td>1a.9</td>
+          <td class="n">1</td>
+          <td>执行序后移(i18n 抽 key 避返工)</td>
+        </tr>
+        <tr>
+          <td class="l">L9</td>
+          <td>1a.10</td>
+          <td class="n">1</td>
+          <td>含量纲 stub(供 1b.6)</td>
+        </tr>
+        <tr>
+          <td class="l">L10</td>
+          <td>1b.1</td>
+          <td class="n">1</td>
+          <td>Wasm 启动</td>
+        </tr>
+        <tr>
+          <td class="l">L11</td>
+          <td>1b.2, 1b.6</td>
+          <td class="n">2</td>
+          <td>1b.6 仅依赖 1b.1 parser</td>
+        </tr>
+        <tr>
+          <td class="l">L12</td>
+          <td>1b.3</td>
+          <td class="n">1</td>
+          <td>求解器核心·1b 瓶颈</td>
+        </tr>
+        <tr class="hot-row">
+          <td class="l">L13</td>
+          <td>1b.4, 1b.5, 1b.7</td>
+          <td class="n">3</td>
+          <td>🔥热点②: 三机制仅依赖 1b.3</td>
+        </tr>
+        <tr>
+          <td class="l">L14</td>
+          <td>1b.8</td>
+          <td class="n">1</td>
+          <td>仿真闭环·汇聚 1b.3-7</td>
+        </tr>
+        <tr>
+          <td class="l">L15</td>
+          <td>3.4, 5.3</td>
+          <td class="n">2</td>
+          <td>依赖1b解锁</td>
+        </tr>
+        <tr>
+          <td class="l">L16</td>
+          <td>3.5, 5.4</td>
+          <td class="n">2</td>
+          <td>收尾层</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h2>关键路径</h2>
+    <div class="keypath">
+      <strong>17 层最长链:</strong><br />
+      1a.1 → 1a.2 → 1a.3 → 1a.4 → 1a.8 → 1a.11 → 1a.12 → 1a-13 → 1a.9 → 1a.10 → 1b.1 → 1b.2 → 1b.3 →
+      1b.4 → 1b.8 → 3.4 → 3.5
+      <br /><br />
+      <strong>瓶颈:</strong> 1a 执行序尾(1a-13→1a.9→1a.10)拖到 L9,推迟 1b 全链(L10–14),而 1b 又是
+      3.4/3.5/5.3/5.4 硬门 → <code>1a.9→1a.10→1b 链</code> 决定总工期。
+    </div>
+
+    <h2>并行策略</h2>
+    <div class="note">
+      <strong>当前:</strong> 1a.1–1a.8/1a.11/1a.12/1a-13 已合并 main;Epic 1a 剩 1a.9 →
+      1a.10(L8–L9)。<br /><br />
+      <strong>立即可并行(不阻塞 1a.9/1a.10):</strong><br />
+      • <code>2.1 → 2.2 → 2.3/2.4</code>(L1 起,2.1 仅需 1a.1 已就绪)<br />
+      • <code>3.1</code>(L4,CRDT 基座,解锁 L5 的 3.2/3.3/3.6 + Epic 4 + 5.3)<br />
+      • <code>5.1 → 5.2</code>(L5–L6,仅依赖已合并的 1a.2/4/7/8)<br /><br />
+      <strong>1b 内部:</strong> 1b.3 是瓶颈,之后 1b.4/5/7 三路并行(L13)。<br />
+      <strong>不受 1b 阻塞可先行交付:</strong> 3.1–3.3、4.1–4.4 协作与画板操作全域。
+    </div>
+
+    <script>
+      const EPICS = [
+        { key: "1a", name: "Epic 1a", sub: "建模与渲染", color: "#00d4ff" },
+        { key: "1b", name: "Epic 1b", sub: "Wasm 内核", color: "#bd00ff" },
+        { key: "2", name: "Epic 2", sub: "认证归属", color: "#ff9500" },
+        { key: "3", name: "Epic 3", sub: "实时协作", color: "#ff006e" },
+        { key: "4", name: "Epic 4", sub: "画板操作", color: "#ffd60a" },
+        { key: "5", name: "Epic 5", sub: "质感/游戏化", color: "#06ffa5" },
+      ];
+      const NL = 17; // L0..L16
+      const HOT = new Set([4, 5, 13]);
+
+      const NODES = [
+        // id, label, short, epic, layer, status
+        ["1a1", "1a.1", "应用骨架", "1a", 0, "done"],
+        ["1a2", "1a.2", "VRAM基座", "1a", 1, "done"],
+        ["1a3", "1a.3", "网格图元", "1a", 2, "done"],
+        ["1a4", "1a.4", "流量连接器", "1a", 3, "done"],
+        ["1a5", "1a.5", "空间索引", "1a", 4, "done"],
+        ["1a6", "1a.6", "小地图", "1a", 5, "done"],
+        ["1a7", "1a.7", "工具栏状态栏", "1a", 4, "done"],
+        ["1a8", "1a.8", "属性面板公式", "1a", 4, "done"],
+        ["1a11", "1a.11", "图元命名", "1a", 5, "done"],
+        ["1a12", "1a.12", "PromptPanel重构", "1a", 6, "done"],
+        ["1a13", "1a-13", "会话存盘", "1a", 7, "done"],
+        ["1a9", "1a.9", "界面i18n", "1a", 8, "todo"],
+        ["1a10", "1a.10", "模型设置", "1a", 9, "todo"],
+        ["1b1", "1b.1", "Wasm骨架", "1b", 10, "todo"],
+        ["1b2", "1b.2", "代数环DELAY", "1b", 11, "todo"],
+        ["1b3", "1b.3", "求解器主循环", "1b", 12, "todo"],
+        ["1b4", "1b.4", "非负钳制", "1b", 13, "todo"],
+        ["1b5", "1b.5", "溢出熔断", "1b", 13, "todo"],
+        ["1b6", "1b.6", "量纲校验", "1b", 11, "todo"],
+        ["1b7", "1b.7", "自适应降级", "1b", 13, "todo"],
+        ["1b8", "1b.8", "仿真闭环", "1b", 14, "todo"],
+        ["21", "2.1", "OAuth登录", "2", 1, "todo"],
+        ["22", "2.2", "画板归属权限", "2", 2, "todo"],
+        ["23", "2.3", "share_token", "2", 3, "todo"],
+        ["24", "2.4", "徽章持久化", "2", 2, "todo"],
+        ["31", "3.1", "CRDT+yjs-go", "3", 4, "todo"],
+        ["32", "3.2", "存在感知", "3", 5, "todo"],
+        ["33", "3.3", "权限runtime", "3", 5, "todo"],
+        ["34", "3.4", "状态广播", "3", 15, "blocked"],
+        ["35", "3.5", "房主迁移", "3", 16, "blocked"],
+        ["36", "3.6", "公式语义合并", "3", 5, "todo"],
+        ["41", "4.1", "标签页", "4", 5, "todo"],
+        ["42", "4.2", "统一删除RI", "4", 5, "todo"],
+        ["43", "4.3", "跨板复制粘贴", "4", 6, "todo"],
+        ["44", "4.4", "撤销栈", "4", 7, "todo"],
+        ["51", "5.1", "质感前8项", "5", 5, "todo"],
+        ["52", "5.2", "质感9/10项", "5", 6, "todo"],
+        ["53", "5.3", "徽章系统", "5", 15, "blocked"],
+        ["54", "5.4", "游戏化中心", "5", 16, "blocked"],
+      ];
+
+      // [from, to, type]
+      const E = [
+        // 1a hard
+        ["1a1", "1a2"],
+        ["1a2", "1a3"],
+        ["1a3", "1a4"],
+        ["1a4", "1a5"],
+        ["1a4", "1a7"],
+        ["1a4", "1a8"],
+        ["1a5", "1a6"],
+        ["1a8", "1a11"],
+        ["1a11", "1a12"],
+        ["1a11", "1a13"],
+        ["1a12", "1a13"],
+        // 1a seq
+        ["1a13", "1a9", "seq"],
+        ["1a9", "1a10", "seq"],
+        ["1a7", "1a10"],
+        ["1a8", "1a10"],
+        // 1b
+        ["1a10", "1b1"],
+        ["1b1", "1b2"],
+        ["1b2", "1b3"],
+        ["1b3", "1b4"],
+        ["1b3", "1b5"],
+        ["1b3", "1b7"],
+        ["1b1", "1b6"],
+        ["1a8", "1b6"],
+        ["1a10", "1b6"],
+        ["1b4", "1b8"],
+        ["1b5", "1b8"],
+        ["1b6", "1b8"],
+        ["1b7", "1b8"],
+        // Epic 2
+        ["1a1", "21"],
+        ["21", "22"],
+        ["22", "23"],
+        ["21", "24"],
+        // Epic 3
+        ["1a4", "31"],
+        ["21", "31"],
+        ["31", "32"],
+        ["31", "33"],
+        ["22", "33"],
+        ["31", "34"],
+        ["1b8", "34"],
+        ["34", "35"],
+        ["1b3", "35"],
+        ["31", "36"],
+        ["1a8", "36"],
+        // Epic 4
+        ["1a1", "41"],
+        ["1a7", "41"],
+        ["22", "41"],
+        ["31", "41"],
+        ["1a4", "42"],
+        ["1a7", "42"],
+        ["31", "42"],
+        ["41", "43"],
+        ["42", "43"],
+        ["1a5", "43"],
+        ["31", "43"],
+        ["31", "44"],
+        ["1a7", "44"],
+        ["42", "44"],
+        ["43", "44"],
+        // Epic 5
+        ["1a2", "51"],
+        ["1a4", "51"],
+        ["1a7", "51"],
+        ["1a8", "51"],
+        ["51", "52"],
+        ["1a2", "52"],
+        ["1a4", "53"],
+        ["1b8", "53"],
+        ["31", "53"],
+        ["24", "53"],
+        ["51", "53"],
+        ["53", "54"],
+        ["1a12", "54"],
+      ];
+
+      const svgNS = "http://www.w3.org/2000/svg";
+      function el(t, cls, html) {
+        const e = document.createElement(t);
+        if (cls) e.className = cls;
+        if (html != null) e.innerHTML = html;
+        return e;
+      }
+
+      const grid = document.getElementById("grid");
+      const epicIdx = {};
+      EPICS.forEach((e, i) => (epicIdx[e.key] = i));
+
+      // corner
+      const corner = el("div", "corner");
+      corner.textContent = "Layer →";
+      corner.style.gridRow = "1";
+      grid.appendChild(corner);
+      // layer headers
+      for (let l = 0; l < NL; l++) {
+        const h = el("div", "lhdr" + (HOT.has(l) ? " hot" : ""));
+        h.textContent = "L" + l;
+        h.style.gridColumn = l + 2;
+        h.style.gridRow = "1";
+        grid.appendChild(h);
+      }
+      // lane rows
+      EPICS.forEach((ep, ei) => {
+        const lab = el("div", "lanelabel");
+        lab.style.setProperty("--ec", ep.color);
+        lab.style.gridRow = ei + 2;
+        lab.innerHTML = "<b>" + ep.name + "</b><br><span>" + ep.sub + "</span>";
+        grid.appendChild(lab);
+        for (let l = 0; l < NL; l++) {
+          const cell = el("div", "cell");
+          cell.style.setProperty("--ec", ep.color);
+          cell.style.gridColumn = l + 2;
+          cell.style.gridRow = ei + 2;
+          cell.dataset.epic = ep.key;
+          grid.appendChild(cell);
+        }
+      });
+
+      // place cards
+      const cellMap = {};
+      NODES.forEach((n) => {
+        const k = n[3] + "_" + n[4];
+        (cellMap[k] = cellMap[k] || []).push(n);
+      });
+      NODES.forEach((n) => {
+        const cell = grid.querySelector('.cell[data-epic="' + n[3] + '"]');
+        // need correct layer cell: select by grid row/col? cells appended in order per epic row, so index by layer
+      });
+      // better: locate cell by epic + layer via children order
+      EPICS.forEach((ep, ei) => {
+        const cells = grid.querySelectorAll('.cell[data-epic="' + ep.key + '"]');
+        for (let l = 0; l < NL; l++) {
+          const list = cellMap[ep.key + "_" + l] || [];
+          list.forEach((n) => {
+            const c = el("div", "card " + n[5]);
+            c.id = "s" + n[0];
+            c.style.setProperty("--ec", ep.color);
+            c.innerHTML =
+              '<span class="num">' + n[1] + '</span><span class="nm">' + n[2] + "</span>";
+            cells[l].appendChild(c);
+          });
+        }
+      });
+
+      // draw links
+      const svg = document.getElementById("links");
+      function drawLinks() {
+        while (svg.firstChild) svg.removeChild(svg.firstChild);
+        const gr = grid.getBoundingClientRect();
+        svg.setAttribute("width", grid.scrollWidth);
+        svg.setAttribute("height", grid.scrollHeight);
+        E.forEach((e) => {
+          const a = document.getElementById("s" + e[0]);
+          const b = document.getElementById("s" + e[1]);
+          if (!a || !b) return;
+          const ra = a.getBoundingClientRect();
+          const rb = b.getBoundingClientRect();
+          const x1 = ra.right - gr.left;
+          const y1 = ra.top - gr.top + ra.height / 2;
+          const x2 = rb.left - gr.left;
+          const y2 = rb.top - gr.top + rb.height / 2;
+          const dx = Math.max(36, Math.abs(x2 - x1) * 0.45);
+          const d =
+            "M " +
+            x1 +
+            " " +
+            y1 +
+            " C " +
+            (x1 + dx) +
+            " " +
+            y1 +
+            ", " +
+            (x2 - dx) +
+            " " +
+            y2 +
+            ", " +
+            x2 +
+            " " +
+            y2;
+          const p = document.createElementNS(svgNS, "path");
+          p.setAttribute("d", d);
+          p.setAttribute("class", "link " + (e[2] === "seq" ? "seq" : "hard"));
+          p.dataset.from = e[0];
+          p.dataset.to = e[1];
+          svg.appendChild(p);
+        });
+      }
+
+      requestAnimationFrame(() => {
+        drawLinks();
+        // re-draw on resize / font load
+        setTimeout(drawLinks, 200);
+      });
+      window.addEventListener("resize", drawLinks);
+      if (document.fonts && document.fonts.ready) document.fonts.ready.then(drawLinks);
+
+      // hover highlight
+      const wrap = document.querySelector(".scroll-wrap");
+      wrap.addEventListener("mouseover", (ev) => {
+        const card = ev.target.closest(".card");
+        if (!card) return;
+        const id = card.id.slice(1);
+        document.querySelectorAll(".link").forEach((p) => {
+          if (p.dataset.from === id || p.dataset.to === id) p.classList.add("hl");
+          else p.classList.add("dim");
+        });
+        document.querySelectorAll(".card").forEach((c) => {
+          if (c === card) c.classList.add("hl");
+        });
+      });
+      wrap.addEventListener("mouseout", (ev) => {
+        if (!ev.target.closest(".card")) return;
+        document
+          .querySelectorAll(".link.hl,.link.dim")
+          .forEach((p) => p.classList.remove("hl", "dim"));
+        document.querySelectorAll(".card.hl").forEach((c) => c.classList.remove("hl"));
+      });
+    </script>
+  </body>
+</html>
