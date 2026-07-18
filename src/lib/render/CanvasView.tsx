@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useMemo, useSyncExternalStore } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, useMemo, useSyncExternalStore } from "react";
 
 import {
   clampCamera,
@@ -26,6 +26,7 @@ import {
 } from "./elements";
 import { readPalette } from "./palette";
 import { createElementStore, createFlow } from "../sd/store";
+import { restoreFromStorage, startAutosave, AUTOSAVE_KEY } from "../sd/autosave";
 import type { Flow, SDElement, Stock, ToolMode } from "../sd/types";
 import { GLYPH_H, bakeGlowAtlasCanvas, charToGlyphIdx } from "./vram/glowAtlas";
 import { VRAMRenderer, type RenderInstance } from "./vram/renderer";
@@ -39,6 +40,9 @@ import { PromptPanel } from "./PromptPanel";
 import { PropertyPanel } from "./PropertyPanel";
 import { promptStore } from "./promptStore";
 import { detectSetupErrors, type ErrorFinding } from "../sd/errorDetection";
+
+// Story 1a-13: prerender-safe iso layout effect (SDR#7). Module-scoped (not recreated per render).
+const useIsoLayoutEffect = typeof window !== "undefined" ? useLayoutEffect : useEffect;
 
 // Story 1a.1 sub-PR #3 — FR-CANVAS-1: infinite canvas navigation.
 //
@@ -684,6 +688,15 @@ export function CanvasView() {
     lastVp = vp;
   };
 
+  // Story 1a-13: session restore + autosave subscription (SDR#8, SDR#1).
+  // Must run BEFORE the seed-sample-stocks block so that a restored board
+  // is not overwritten by default seeds.
+  useIsoLayoutEffect(() => {
+    restoreFromStorage(elementStore);
+    const stopAutosave = startAutosave(elementStore);
+    return stopAutosave;
+  }, []);
+
   // ---- viewport + tokens + ready transition (mount) ----
   useEffect(() => {
     const el = containerRef.current;
@@ -691,9 +704,9 @@ export function CanvasView() {
     if (!el || !canvas) return;
 
     // AR#12 / AC-16: seed default stocks on first mount when the store is empty
-    // so the canvas never shows a blank screen. Clearing the store afterward
-    // (e.g. to test the empty-state guidance) does NOT re-seed — the seed is
-    // only applied once at initial mount.
+    // so the canvas never shows a blank screen. If an autosave envelope exists
+    // (even empty — user intentionally cleared the board), skip seeding to
+    // honour the restored state (Story 1a-13 AC-16, SDR#11).
     // Story 1a.7: wire e2e hooks (resolved lazily for toolbar/statusbar Playwright tests).
     _e2eSetSelectedId = (id: string | null) => {
       selectedIdRef.current = id;
@@ -702,7 +715,7 @@ export function CanvasView() {
     };
     _e2eGetToolMode = () => toolModeRef.current;
 
-    if (elementStore.getElements().length === 0) {
+    if (elementStore.getElements().length === 0 && !localStorage.getItem(AUTOSAVE_KEY)) {
       seedSampleStocks();
     }
 

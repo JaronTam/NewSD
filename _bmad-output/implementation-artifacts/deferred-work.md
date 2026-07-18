@@ -130,6 +130,21 @@ CR Run 1 verdict **PASS** (2026-07-16 全裁定). 剩余 5 findings 裁定: F-4 
 
 ---
 
+## From Story 1a.13 CR (Run 1, 2026-07-18)
+
+CR Run 1 (3-layer orchestrator-direct per newsd-cr-3-layers-orchestrator-direct-not-subagents). 已 patch: F-1 onBeforeUnload returnValue + F-7 flush-fail test + F-3 deriveFlowUnits 直调 + F-4 syncFlush dedupe + F-2 useIsoLayoutEffect 模块顶层 + F-8 history=[initialValue]. defer 4 项 (用户 2026-07-18 拍板):
+
+| ID   | Item                                                                                                                             | Target Story       | Rationale                                                                                                                                                                                                                              |
+| ---- | -------------------------------------------------------------------------------------------------------------------------------- | ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| F-5  | flow.toId ref-integrity: restore 时 toId 指向不存在/已删 stock 的 deriveFlowUnits 行为 (悬空 flow 残留, units 返 "")             | 1b (量纲/dangling) | restore deriveFlowUnits 对悬空 toId 返 "" (flow.units 空), flow 图元残留无错误标记; 1a.13 仅恢复不校验引用完整性; dangling-flow (1b) 是 flow.toId 完整性真归属, 1b 量纲/dangling 专题处理 flow ref-integrity + tombstone 一体设计      |
+| F-6  | formulaError null vs undefined 类型对齐: types.ts `formulaError?: string \| null`, restore 设 null, store 创建路径可能 undefined | post-1a (optional) | formulaError null (restore/derive 后) vs undefined (store createFlow 初始) 二义; 非阻塞 (两者 falsy, 渲染层 `formulaError &&` 兼容); 统一为 null 需核 store 全路径, defer 非阻塞优化                                                   |
+| F-9  | AC-15 storage-type isolation test: autosave key 不被其他 localStorage 污染的隔离测试缺失                                         | post-1a (optional) | AC-15 要求 storage 隔离; vitest mock localStorage 单 key 已覆盖功能 (autosave.test.ts 24 passed); isolation 边界 (多 key 并存/namespace 冲突) 缺独立 test; defer 非阻塞, 1a 单 key 场景无实际冲突                                      |
+| F-11 | Cloud/Flow roundtrip test: autosave.test.ts 主要测 Stock roundtrip, Cloud/Flow 缺独立 roundtrip test                             | post-1a (optional) | Stock roundtrip 已证 toPersisted/fromPersisted 对称 (AC-2/AC-3); Cloud/Flow 共用路径, roundtrip 对称性间接覆盖; 独立 Cloud/Flow roundtrip test nice-to-have defer; F-3 deriveFlowUnits 直调已覆盖 flow.units restore 正确性 (AC-4 e2e) |
+
+CR Run 1 verdict **PASS** (2026-07-18 全裁定). 11 findings: 6 patched (F-1/F-7 批1 + F-3/F-4/F-2/F-8 批2) + 4 defer (见上表) + F-10 sprint-status->done (独立 chore PR, 合并后推). 验证: tsc 0 + vitest 730 passed | 1 skipped / 31 files + autosave-restore e2e 2 passed + 全套件 e2e 29 passed | 21 skipped (minimap + stock-render 首次 timeout flaky, 重跑 11 passed 全绿, 非 patch 回归).
+
+---
+
 ## BMad Skill Enhancement Candidates (2026-07-17)
 
 非单个 story CR 产出的 defer, 而是跨 story 教训沉淀的 BMad skill(CS/VS/DS/CR)流程增强候选。1a.12 合并后从 memory 迁入解锁。非阻塞性 story-cycle 改进, 无具体 story 归属; 落地方式 = BMad custom override `persistent_facts` 注入 skill gate(见 memory newsd-persistent-facts-custom-override-bmad-upgrade-risk)。
