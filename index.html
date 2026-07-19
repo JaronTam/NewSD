@@ -42,9 +42,9 @@
       }
       .site-hd { position: relative; padding-right: 300px; margin: 10px 0 0; }
       .site-titles { min-width: 0; }
-      .percent-card { position: absolute; top: 0; right: 0; overflow: hidden; background: #050000; border: 1px solid #3a0000; border-radius: 0; padding: 22px 40px; text-align: center; min-width: 240px; }
+      .percent-card { position: absolute; top: 0; right: 0; overflow: hidden; background: #050000; border: 1px solid #3a0000; border-radius: 0; padding: 28px 34px; text-align: center; }
       .percent-card::after { content: ""; position: absolute; inset: 0; pointer-events: none; opacity: 0.22; mix-blend-mode: overlay; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.7' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"); }
-      .pct-val { display: block; position: relative; z-index: 1; font-family: "Type 95", "Hiragino Mincho ProN", "Yu Mincho", "MS Mincho", "SimSun", "Times New Roman", serif; font-size: 90px; font-weight: 900; color: #ff0f0f; line-height: 1; letter-spacing: -3px; filter: blur(0.5px) contrast(1.35); text-shadow: 0 0 3px rgba(255, 0, 0, 0.55), 0 0 10px rgba(255, 0, 0, 0.25); }
+      .pct-val { display: block; position: relative; z-index: 1; font-family: "Type 95", "Hiragino Mincho ProN", "Yu Mincho ProN", "Yu Mincho", "MS Mincho", "SimSun", "FangSong", "Times New Roman", serif; font-size: 56px; font-weight: 900; paint-order: stroke fill; -webkit-text-stroke: 2px #ff0f0f; color: #ff0f0f; line-height: 1.05; letter-spacing: 6px; filter: blur(0.6px) contrast(1.4); text-shadow: 0 2px 6px rgba(0,0,0,0.85), 0 0 3px rgba(255, 0, 0, 0.55), 0 0 12px rgba(255, 0, 0, 0.35); }
       .pct-lbl { display: none; }
 
       h2 {
@@ -609,9 +609,9 @@
       ];
       const NL = 17; // L0..L16
       const HOT = new Set([4, 5, 13]);
-      // 本次开发恒定高亮的故事(NODES[0] id)
-      // CUR(当次开发故事)读 URL hash 如 #cur=1a9,21;裸 URL 无高亮(option B:零 push/永不 stale)
-      const CUR = new Set((location.hash.match(/cur=([\w,]*)/) || [, ""])[1].split(",").filter(Boolean));
+      // 本次开发恒定高亮的故事(批次声明 option A:裸 URL 恒定高亮;换批改 CUR 推 gh-pages)
+      // 当批(2026-07-19 声明):1a.9 界面i18n / 2.1 OAuth登录 / 5.1 质感前8项 并行
+      const CUR = new Set(["1a9", "21", "51"]);
 
       const NODES = [
         // id, label, short, epic, layer, status
@@ -907,8 +907,10 @@
         }
         const legend = '<span class="dh-bar-legend">进度 <b>' + counts.done + '/' + NODES.length + '</b> 已合并 · ' + counts.todo + ' 待开发 · ' + counts.blocked + ' 阻塞</span>';
         const pct = NODES.length ? Math.round((counts.done / NODES.length) * 100) : 0;
+        const CN = ["零","一","二","三","四","五","六","七","八","九"];
+        const numToCn = (n) => { if (n === 0) return "零"; if (n >= 100) return "一百"; const t = Math.floor(n / 10), u = n % 10; return (t > 0 ? (t === 1 ? "" : CN[t]) + "十" : "") + (u > 0 ? CN[u] : ""); };
         const pctEl = document.getElementById("pct-val");
-        if (pctEl) { pctEl.textContent = pct + "%"; pctEl.title = counts.done + "/" + NODES.length + " 已合并 (" + pct + "%)"; }
+        if (pctEl) { pctEl.textContent = "百分之" + numToCn(pct); pctEl.title = counts.done + "/" + NODES.length + " 已合并 (" + pct + "%)"; }
         const bar = '<div class="dh-bar">' + barHtml + '</div>';
         const cols = '<div class="dh-cols">' + col1 + col2 + '</div>';
         const prog = document.getElementById("progbar");
