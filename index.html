@@ -40,6 +40,13 @@
         border-left: 4px solid var(--cyan);
         padding-left: 12px;
       }
+      .site-hd { position: relative; padding-right: 300px; margin: 10px 0 0; }
+      .site-titles { min-width: 0; }
+      .percent-card { position: absolute; top: 0; right: 0; overflow: hidden; background: #050000; border: 1px solid #3a0000; border-radius: 0; padding: 22px 40px; text-align: center; min-width: 240px; }
+      .percent-card::after { content: ""; position: absolute; inset: 0; pointer-events: none; opacity: 0.22; mix-blend-mode: overlay; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.7' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"); }
+      .pct-val { display: block; position: relative; z-index: 1; font-family: "Type 95", "Hiragino Mincho ProN", "Yu Mincho", "MS Mincho", "SimSun", "Times New Roman", serif; font-size: 90px; font-weight: 900; color: #ff0f0f; line-height: 1; letter-spacing: -3px; filter: blur(0.5px) contrast(1.35); text-shadow: 0 0 3px rgba(255, 0, 0, 0.55), 0 0 10px rgba(255, 0, 0, 0.25); }
+      .pct-lbl { display: none; }
+
       h2 {
         font-size: 15px;
         color: var(--cyan);
@@ -58,6 +65,7 @@
         gap: 8px;
         margin: 14px 0;
         font-size: 12px;
+        padding-right: 300px;
       }
       .chip {
         display: inline-flex;
@@ -361,11 +369,7 @@
       }
       .devhint { background: #0c1f18; border: 1px solid var(--mint); border-radius: 8px; padding: 12px 16px; margin: 12px 0 16px; font-size: 13px; }
       .dh-title { display: block; color: var(--mint); font-weight: 600; margin-bottom: 10px; font-size: 12px; letter-spacing: 0.3px; }
-      .dh-rows { display: flex; flex-direction: column; gap: 7px; }
-      .dh-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-      .dh-ep { font-weight: 700; color: var(--ec); border: 1px solid var(--ec); border-radius: 4px; padding: 1px 7px; font-size: 12px; min-width: 24px; text-align: center; }
-      .dh-arrow { color: var(--dim); }
-      .dh-story { border: 1px solid var(--ec); background: rgba(6, 255, 165, 0.06); border-radius: 4px; padding: 2px 8px; font-size: 12px; }
+      .dh-story { border: 1px solid var(--ec); background: rgba(6, 255, 165, 0.06); border-radius: 4px; padding: 2px 8px; font-size: 12px; display: inline-flex; align-items: center; gap: 3px; }
       .dh-story b { color: var(--ec); }
       .dh-nm { color: var(--dim); margin-left: 5px; }
       .dh-sep { color: var(--dim); }
@@ -373,15 +377,39 @@
       .dh-block { border-style: dashed; background: transparent; }
       .dh-block b { color: var(--dim); }
       .dh-wait { color: var(--dim); border: 1px dashed var(--dim); border-radius: 4px; padding: 1px 6px; font-size: 12px; }
-      .dh-wait-lbl { color: var(--dim); font-size: 12px; }
+      .dh-wait-lbl { color: var(--dim); font-size: 12px; margin-right: 3px; }
+      .dh-bar-legend { display: block; font-size: 11px; color: var(--dim); margin-bottom: 6px; letter-spacing: 0.2px; }
+      .dh-bar-legend b { color: var(--green); font-weight: 600; }
+      .dh-bar { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 5px; margin-bottom: 12px; }
+      .dh-bar-grp { display: inline-flex; gap: 0; }
+      .dh-bar-cell { width: 9px; height: 14px; border-radius: 2px; display: inline-block; cursor: help; }
+      .dh-bar-cell.done { background: var(--green); }
+      .dh-bar-cell.todo { background: var(--dim); opacity: 0.4; }
+      .dh-bar-cell.blocked { background: var(--orange); }
+      .dh-cols { display: flex; gap: 16px; flex-wrap: wrap; }
+      .dh-col { flex: 1 1 220px; min-width: 0; }
+      .progbar { width: 100%; margin: 4px 0 18px; padding-right: 300px; }
+      .progbar .dh-bar { margin-bottom: 0; }
+      .dh-col-h { display: block; color: var(--dim); font-size: 11px; margin-bottom: 6px; letter-spacing: 0.3px; }
+      .dh-col-row { display: flex; align-items: center; flex-wrap: wrap; gap: 5px; }
+      .dh-col-cards { display: flex; flex-direction: column; gap: 6px; }
     </style>
   </head>
-  <body>
-    <h1>NewSD 故事依赖 · 泳道图</h1>
-    <p class="meta">
-      纵向 6 Epic 泳道 · 横向 L0–L16 拓扑层(时间轴)· 同列节点无依赖可并行 · hover 卡片高亮直连边 ·
-      数据源 <code>epics.md</code>
-    </p>
+    <header class="site-hd">
+      <div class="site-titles">
+        <h1>NewSD 故事依赖 · 泳道图</h1>
+        <p class="meta">
+          纵向 6 Epic 泳道 · 横向 L0–L16 拓扑层(时间轴)· 同列节点无依赖可并行 · hover 卡片高亮直连边 ·
+          数据源 <code>epics.md</code>
+        </p>
+      </div>
+      <div class="percent-card" title="已合并故事占比">
+        <span class="pct-val" id="pct-val">-</span>
+        <span class="pct-lbl">已合并</span>
+      </div>
+    </header>
+
+    <div id="progbar" class="progbar"></div>
 
     <div class="legend">
       <span class="chip"
@@ -421,6 +449,7 @@
       >
       <span class="chip">── 硬依赖 &nbsp; ╌╌ 执行序</span>
     </div>
+
 
     <h2>泳道图</h2>
     <div id="devhint" class="devhint"></div>
@@ -829,9 +858,9 @@
       window.addEventListener("resize", drawLinks);
       if (document.fonts && document.fonts.ready) document.fonts.ready.then(drawLinks);
 
-      // 可开发故事提示框: 每 epic 取入边(硬+seq)from 全 done 且自身 todo 的最前 Layer(并行全列);
-      //   无可开发时显该 epic 最前非 done 故事 + 其阻塞项(blocked 态永不列可开发);
-      //   合并 story 后改 NODES status->done 即自动刷新,无需手改本框
+      // 可开发故事提示框 + 架构推进度条:
+      //   进度条 = 全 story 按拓扑层 L0->L16 分组排列(组内无缝/组间留白),位置=层 色=状态 -> 形状即推进度(形式即内容);
+      //   左列可开发(status=todo 且入边全 done),右列阻塞(status=blocked + blocker pill);合并后改 NODES status->done 自动刷新
       (function renderDevHint() {
         const done = {};
         NODES.forEach((n) => (done[n[0]] = n[5] === "done"));
@@ -839,34 +868,52 @@
         E.forEach((e) => ((incoming[e[1]] = incoming[e[1]] || []).push(e[0])));
         const numOrd = (label) => { const m = String(label).match(/(\d+)$/); return m ? +m[1] : 0; };
         const byLayer = (a, b) => a[4] - b[4] || numOrd(a[1]) - numOrd(b[1]);
-        const parts = [];
-        EPICS.forEach((ep) => {
-          const notDone = NODES.filter((n) => n[3] === ep.key && n[5] !== "done");
-          if (!notDone.length) return;
-          const dev = notDone.filter((n) => n[5] === "todo" && (incoming[n[0]] || []).every((d) => done[d]));
-          if (dev.length) {
-            const minL = Math.min.apply(null, dev.map((n) => n[4]));
-            parts.push({ ep: ep, stories: dev.filter((n) => n[4] === minL).sort(byLayer), wait: null });
-          } else {
-            const front = notDone.slice().sort(byLayer)[0];
-            const wait = (incoming[front[0]] || []).filter((d) => !done[d]).map((d) => NODES.find((n) => n[0] === d)).filter(Boolean);
-            parts.push({ ep: ep, stories: [front], wait: wait });
-          }
-        });
+        const epColor = (n) => ((EPICS.find((ep) => ep.key === n[3]) || {}).color) || "var(--dim)";
+
+        // 进度条: 按 layer 分组,组内无缝 组间 gap(绿带=层段;形式即内容:形状=推进度)
+        const counts = { done: 0, todo: 0, blocked: 0 };
+        const grp = {};
+        NODES.forEach((n) => { (grp[n[4]] = grp[n[4]] || []).push(n); });
+        const barHtml = Object.keys(grp).map((L) => +L).sort((a, b) => a - b).map((L) =>
+          '<span class="dh-bar-grp">' + grp[L].sort(byLayer).map((n) => {
+            counts[n[5]] = (counts[n[5]] || 0) + 1;
+            return '<span class="dh-bar-cell ' + n[5] + '" title="' + n[1] + ' ' + n[2] + '"></span>';
+          }).join("") + '</span>'
+        ).join("");
+
+        // 左列: 可开发 (todo 且入边全 done)
+        const dev = NODES.filter((n) => n[5] === "todo" && (incoming[n[0]] || []).every((d) => done[d])).sort(byLayer);
+        const col1 = dev.length
+          ? '<div class="dh-col"><span class="dh-col-h">可开发 (' + dev.length + ')</span><div class="dh-col-cards">' +
+            dev.map((n) => '<div class="dh-col-row"><span class="dh-story" style="--ec:' + epColor(n) + '"><b>' + n[1] + '</b><span class="dh-nm">' + n[2] + '</span></span></div>').join("") + '</div></div>'
+          : "";
+
+        // 右列: 阻塞 (blocked + blocker pill)
+        const blocked = NODES.filter((n) => n[5] === "blocked").sort(byLayer);
+        const col2 = blocked.length
+          ? '<div class="dh-col"><span class="dh-col-h">阻塞 (' + blocked.length + ')</span><div class="dh-col-cards">' +
+            blocked.map((n) => {
+              const wait = (incoming[n[0]] || []).filter((d) => !done[d]).map((d) => (NODES.find((x) => x[0] === d) || [])[1]).filter(Boolean);
+              const w = wait.length ? '<span class="dh-wait-lbl">等</span>' + wait.map((x) => '<span class="dh-wait">' + x + '</span>').join('<span class="dh-sep">/</span>') : "";
+              return '<div class="dh-col-row"><span class="dh-story dh-block" style="--ec:' + epColor(n) + '">⏳<b>' + n[1] + '</b><span class="dh-nm">' + n[2] + '</span></span>' + w + '</div>';
+            }).join("") + '</div></div>'
+          : "";
+
         const box = document.getElementById("devhint");
         if (!box) return;
-        if (!parts.length) { box.innerHTML = '<span class="dh-title">🚀 可开发故事 · 下一步</span><span class="dh-empty">全部已合并 🎉</span>'; return; }
-        const rows = parts.map((p) => {
-          const ec = p.ep.color;
-          if (p.wait) {
-            const w = p.wait.map((n) => '<span class="dh-wait">' + n[1] + '</span>').join('<span class="dh-sep">/</span>');
-            const st = p.stories[0];
-            return '<div class="dh-row"><span class="dh-ep" style="--ec:' + ec + '">' + p.ep.key + '</span><span class="dh-arrow">-></span><span class="dh-story dh-block" style="--ec:' + ec + '">⏳<b>' + st[1] + '</b><span class="dh-nm">' + st[2] + '</span></span><span class="dh-wait-lbl">等</span>' + w + '</div>';
-          }
-          const pills = p.stories.map((n) => '<span class="dh-story" style="--ec:' + ec + '"><b>' + n[1] + '</b><span class="dh-nm">' + n[2] + "</span></span>").join('<span class="dh-sep">&</span>');
-          return '<div class="dh-row"><span class="dh-ep" style="--ec:' + ec + '">' + p.ep.key + '</span><span class="dh-arrow">-></span>' + pills + "</div>";
-        }).join("");
-        box.innerHTML = '<span class="dh-title">🚀 可开发故事 · 下一步(绿=可开发 / ⏳=被阻塞显阻塞项;合并后自动刷新)</span><div class="dh-rows">' + rows + "</div>";
+        if (!dev.length && !blocked.length) {
+          box.innerHTML = '<span class="dh-title">🚀 可开发故事 · 下一步</span><span class="dh-empty">全部已合并 🎉</span>';
+          return;
+        }
+        const legend = '<span class="dh-bar-legend">进度 <b>' + counts.done + '/' + NODES.length + '</b> 已合并 · ' + counts.todo + ' 待开发 · ' + counts.blocked + ' 阻塞</span>';
+        const pct = NODES.length ? Math.round((counts.done / NODES.length) * 100) : 0;
+        const pctEl = document.getElementById("pct-val");
+        if (pctEl) { pctEl.textContent = pct + "%"; pctEl.title = counts.done + "/" + NODES.length + " 已合并 (" + pct + "%)"; }
+        const bar = '<div class="dh-bar">' + barHtml + '</div>';
+        const cols = '<div class="dh-cols">' + col1 + col2 + '</div>';
+        const prog = document.getElementById("progbar");
+        if (prog) { prog.innerHTML = legend + bar; }
+        box.innerHTML = '<span class="dh-title">🚀 可开发故事 · 下一步(左=可开发 / 右=阻塞;合并后自动刷新)</span>' + (prog ? "" : legend + bar) + cols;
       })();
 
       // "当前:"散文里的"本次开发"片段由 CUR 派生(永不再手改该行,避开 en-dash Edit 失配)
