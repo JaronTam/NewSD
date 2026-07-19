@@ -81,6 +81,14 @@
         border-radius: 8px;
         background: var(--panel);
         max-height: 80vh;
+        cursor: grab;
+      }
+      .scroll-wrap.panning,
+      .scroll-wrap.panning .card {
+        cursor: grabbing;
+      }
+      .scroll-wrap.panning {
+        user-select: none;
       }
       .lane-grid {
         display: grid;
@@ -227,6 +235,42 @@
           0 0 14px var(--green);
         z-index: 6;
       }
+      .card.cur {
+        box-shadow:
+          0 0 0 3px var(--mint),
+          0 0 14px var(--mint);
+        z-index: 6;
+        animation: curPulse 1.8s ease-in-out infinite;
+      }
+      .card.cur::after {
+        content: "开发中";
+        position: absolute;
+        top: -8px;
+        right: -6px;
+        background: var(--mint);
+        color: #00140c;
+        font-size: 9px;
+        font-weight: 700;
+        padding: 1px 5px;
+        border-radius: 8px;
+        line-height: 1.5;
+        letter-spacing: 0.5px;
+        white-space: nowrap;
+      }
+      @keyframes curPulse {
+        0%,
+        100% {
+          box-shadow:
+            0 0 0 3px var(--mint),
+            0 0 10px var(--mint);
+        }
+        50% {
+          box-shadow:
+            0 0 0 3px var(--mint),
+            0 0 22px var(--mint),
+            0 0 32px rgba(6, 255, 165, 0.45);
+        }
+      }
       svg.links {
         position: absolute;
         top: 0;
@@ -327,6 +371,13 @@
     <div class="legend">
       <span class="chip"
         ><span class="dot" style="background: #006d5b; border-color: #00ff9d"></span>已合并</span
+      >
+      <span class="chip"
+        ><span
+          class="dot"
+          style="background: #02150e; border-color: #06ffa5; box-shadow: 0 0 6px #06ffa5"
+        ></span
+        >开发中</span
       >
       <span class="chip"
         ><span class="dot" style="background: #0d1322; border-color: #00d4ff"></span>1a</span
@@ -513,6 +564,8 @@
       ];
       const NL = 17; // L0..L16
       const HOT = new Set([4, 5, 13]);
+      // 本次开发恒定高亮的故事(NODES[0] id)
+      const CUR = new Set(["1a9", "21"]); // 1a.9 界面i18n + 2.1 OAuth登录
 
       const NODES = [
         // id, label, short, epic, layer, status
@@ -697,7 +750,7 @@
         for (let l = 0; l < NL; l++) {
           const list = cellMap[ep.key + "_" + l] || [];
           list.forEach((n) => {
-            const c = el("div", "card " + n[5]);
+            const c = el("div", "card " + n[5] + (CUR.has(n[0]) ? " cur" : ""));
             c.id = "s" + n[0];
             c.style.setProperty("--ec", ep.color);
             c.innerHTML =
@@ -759,9 +812,45 @@
       window.addEventListener("resize", drawLinks);
       if (document.fonts && document.fonts.ready) document.fonts.ready.then(drawLinks);
 
-      // hover highlight
+      // hover highlight + grab-to-pan on blank
       const wrap = document.querySelector(".scroll-wrap");
+      let pan = null;
+
+      function clearHover() {
+        document
+          .querySelectorAll(".link.hl,.link.dim")
+          .forEach((p) => p.classList.remove("hl", "dim"));
+        document.querySelectorAll(".card.hl").forEach((c) => c.classList.remove("hl"));
+      }
+
+      // 左键按下空白处 -> 手掌形态,拖拉移动画布
+      wrap.addEventListener("mousedown", (ev) => {
+        if (ev.button !== 0) return; // 仅左键
+        if (ev.target.closest(".card")) return; // 卡片不触发拖动
+        // 点在滚动条上不触发
+        if (
+          ev.target === wrap &&
+          (ev.offsetX > wrap.clientWidth || ev.offsetY > wrap.clientHeight)
+        )
+          return;
+        pan = { x: ev.clientX, y: ev.clientY, sl: wrap.scrollLeft, st: wrap.scrollTop };
+        clearHover();
+        wrap.classList.add("panning");
+        ev.preventDefault();
+      });
+      window.addEventListener("mousemove", (ev) => {
+        if (!pan) return;
+        wrap.scrollLeft = pan.sl - (ev.clientX - pan.x);
+        wrap.scrollTop = pan.st - (ev.clientY - pan.y);
+      });
+      window.addEventListener("mouseup", () => {
+        if (!pan) return;
+        pan = null;
+        wrap.classList.remove("panning");
+      });
+
       wrap.addEventListener("mouseover", (ev) => {
+        if (pan) return; // 拖动中不触发 hover
         const card = ev.target.closest(".card");
         if (!card) return;
         const id = card.id.slice(1);
@@ -774,11 +863,9 @@
         });
       });
       wrap.addEventListener("mouseout", (ev) => {
+        if (pan) return;
         if (!ev.target.closest(".card")) return;
-        document
-          .querySelectorAll(".link.hl,.link.dim")
-          .forEach((p) => p.classList.remove("hl", "dim"));
-        document.querySelectorAll(".card.hl").forEach((c) => c.classList.remove("hl"));
+        clearHover();
       });
     </script>
   </body>
