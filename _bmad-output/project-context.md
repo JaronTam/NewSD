@@ -1,7 +1,7 @@
 ---
 project_name: "NewSD"
 user_name: "Jaron"
-date: "2026-07-17"
+date: "2026-07-19"
 sections_completed:
   [
     "technology_stack",
@@ -223,6 +223,17 @@ Exact patch versions: `package.json` / `wasm/Cargo.toml` / (future) `go.mod` are
 - **PR/merge gate**: before pushing the (irreversible) PR, report + re-review once and STOP for confirmation. A conditional "go ahead and merge" instruction's completion point is STILL a gate. Re-review ≠ report-both required.
 - **No CI workflow** (no `.github/workflows`): local gate (typecheck+test+test:e2e+lint) is the only safety net. 2026-07-08 ruling: do NOT reintroduce CI (conditional on single-dev + few PRs + guards error-prone; GitHub required-checks is chicken-and-egg needing user UI). Re-evaluate if team grows.
 
+**Swimlane visualization deployment (gh-pages orphan branch)**
+
+- Story-dependency swimlane = `gh-pages/index.html` (orphan branch, single file, isolated from main source; deployed https://jarontam.github.io/NewSD/, auto-redeploy 1-2min on push). Direct push to gh-pages is allowed-NOT subject to main's Require-PR (GH013 blocks main only).
+- **Batch declaration workflow** (cancels the one-story-one-push limit for the SWIMLANE/MEMORY push cadence ONLY; story code PRs unchanged):
+  1. Before a dev batch, declare the in-flight parallel stories (e.g., 1a.9 界面i18n / 2.1 OAuth登录 / 5.1 质感前8项).
+  2. Sync the declaration to auto-memory (`newsd-current-batch-declaration`) + maintain project-context here.
+  3. On each story merge, fold the batch-declaration push + memory/project-context update into a single gh-pages push for story-visualization management.
+  4. After the whole batch completes, review; push a cleanup if needed.
+- **CUR (current-dev highlight) = hardcoded Set (option A)** in `index.html` (`const CUR = new Set(["1a9","21","51"])`), NOT URL-hash option B. Reason: option B (`#cur=`) leaves the bare URL with NO highlight-conflicts with "constant highlight during dev". Switch batch = edit CUR + push gh-pages. Stale-highlight window = batch period (acceptable).
+- Story code PRs: STILL one-push-per-story + no fixup-PR chains + sprint-status separate (see Git/PR). This workflow touches ONLY the swimlane (gh-pages) + memory push cadence.
+
 **Authority hierarchy + config**
 
 - Spec authority: `epics.md` > prototype (prototype was a pre-epic probe). AD authority: `_bmad-output/planning-artifacts/architecture/architecture-NewSD-2026-07-01/ARCHITECTURE-SPINE.md` (AD-1..18). Term authority: `_bmad-output/planning-artifacts/glossary.md` (2026-07-15).
@@ -291,4 +302,4 @@ _Curated highest-stakes rules from the sections above. Violating these causes si
 - Update when the technology stack or BMAD workflow changes.
 - Review quarterly for outdated rules; remove rules that become obvious over time.
 
-Last Updated: 2026-07-17
+Last Updated: 2026-07-19
