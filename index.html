@@ -359,6 +359,17 @@
         color: var(--mint);
         font-size: 12px;
       }
+      .devhint { background: #0c1f18; border: 1px solid var(--mint); border-radius: 8px; padding: 12px 16px; margin: 12px 0 16px; font-size: 13px; }
+      .dh-title { display: block; color: var(--mint); font-weight: 600; margin-bottom: 10px; font-size: 12px; letter-spacing: 0.3px; }
+      .dh-rows { display: flex; flex-direction: column; gap: 7px; }
+      .dh-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+      .dh-ep { font-weight: 700; color: var(--ec); border: 1px solid var(--ec); border-radius: 4px; padding: 1px 7px; font-size: 12px; min-width: 24px; text-align: center; }
+      .dh-arrow { color: var(--dim); }
+      .dh-story { border: 1px solid var(--ec); background: rgba(6, 255, 165, 0.06); border-radius: 4px; padding: 2px 8px; font-size: 12px; }
+      .dh-story b { color: var(--ec); }
+      .dh-nm { color: var(--dim); margin-left: 5px; }
+      .dh-sep { color: var(--dim); }
+      .dh-empty { color: var(--dim); }
     </style>
   </head>
   <body>
@@ -408,6 +419,7 @@
     </div>
 
     <h2>泳道图</h2>
+    <div id="devhint" class="devhint"></div>
     <div class="scroll-wrap">
       <div class="lane-grid" id="grid">
         <svg class="links" id="links" xmlns="http://www.w3.org/2000/svg"></svg>
@@ -543,7 +555,7 @@
 
     <h2>并行策略</h2>
     <div class="note">
-      <strong>当前:</strong> 1a.1–1a.8/1a.11/1a.12/1a-13 已合并 main;Epic 1a 剩 1a.9 →
+      <strong>当前:</strong> 1a.1–1a.8/1a.11/1a.12/1a-13 已合并 main;本次开发 1a.9(界面 i18n) + 2.1(OAuth 登录)并行;Epic 1a 剩 1a.9 →
       1a.10(L8–L9)。<br /><br />
       <strong>立即可并行(不阻塞 1a.9/1a.10):</strong><br />
       • <code>2.1 → 2.2 → 2.3/2.4</code>(L1 起,2.1 仅需 1a.1 已就绪)<br />
@@ -811,6 +823,32 @@
       });
       window.addEventListener("resize", drawLinks);
       if (document.fonts && document.fonts.ready) document.fonts.ready.then(drawLinks);
+
+      // 可开发故事提示框: 每 epic 取入边(硬+seq)from 全 done 且自身非 done 的最前 Layer(并行全列)
+      // 合并 story 后改 NODES status->done 即自动刷新,无需手改本框
+      (function renderDevHint() {
+        const done = {};
+        NODES.forEach((n) => (done[n[0]] = n[5] === "done"));
+        const incoming = {};
+        E.forEach((e) => ((incoming[e[1]] = incoming[e[1]] || []).push(e[0])));
+        const numOrd = (label) => { const m = String(label).match(/(\d+)$/); return m ? +m[1] : 0; };
+        const parts = [];
+        EPICS.forEach((ep) => {
+          const list = NODES.filter((n) => n[3] === ep.key && !done[n[0]] && (incoming[n[0]] || []).every((d) => done[d]));
+          if (!list.length) return;
+          const minL = Math.min.apply(null, list.map((n) => n[4]));
+          const front = list.filter((n) => n[4] === minL).sort((a, b) => numOrd(a[1]) - numOrd(b[1]));
+          parts.push({ ep: ep, stories: front });
+        });
+        const box = document.getElementById("devhint");
+        if (!box) return;
+        if (!parts.length) { box.innerHTML = '<span class="dh-title">🚀 可开发故事 · 下一步</span><span class="dh-empty">暂无可开发故事(全部已合并或被阻塞)</span>'; return; }
+        const rows = parts.map((p) => {
+          const pills = p.stories.map((n) => '<span class="dh-story" style="--ec:' + p.ep.color + '"><b>' + n[1] + '</b><span class="dh-nm">' + n[2] + "</span></span>").join('<span class="dh-sep">&</span>');
+          return '<div class="dh-row"><span class="dh-ep" style="--ec:' + p.ep.color + '">' + p.ep.key + '</span><span class="dh-arrow">-></span>' + pills + "</div>";
+        }).join("");
+        box.innerHTML = '<span class="dh-title">🚀 可开发故事 · 下一步(按 epic 取序号最前,并行全列;合并后自动刷新)</span><div class="dh-rows">' + rows + "</div>";
+      })();
 
       // hover highlight + grab-to-pan on blank
       const wrap = document.querySelector(".scroll-wrap");
