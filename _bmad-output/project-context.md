@@ -87,6 +87,12 @@ Exact patch versions: `package.json` / `wasm/Cargo.toml` / (future) `go.mod` are
 - **`subscribe` is Set-based** (idempotent add/delete). StrictMode is currently OFF, but the Set design is StrictMode-safe if enabled-don't switch to an array-based listener list.
 - React 19; no experimental-feature opt-in (`use`, Actions, etc.) without a decision.
 
+**State persistence (1a.11 seq + 1a.13 autosave)**
+
+- **1a.11 seq storage = in-memory counter + `setElements` `deriveSeq` load-承接** (NOT persisted): `deriveSeq` 载入时承接 existing seq (双端锚定正则 + `MAX_SAFE_INTEGER` 边界); rename 脱规范 seq 永久流失 (acceptable). Per-type `seq` is display-only (see Language Rules §element-identity=id is the key).
+- **1a.13 autosave = localStorage** (F2 `beforeunload` flush + F3 定时 autosave; A2 hydrate 天然兼容-载入 localStorage elements). F5 刷新保护 = beforeunload flush + hydrate restore. Impl: `src/lib/sd/autosave.ts`.
+- **ATDD red-scaffold for new modules** (1a.13): 全新模块 import fail 破坏 baseline tsc 0; `declare const` ambient 声明 + `it.skip` 兼容 (1a.13 `autosave.ts` 首例: 23 `it.skip` + 2 e2e skip, tsc 0, baseline passed count 不变). DS 首步换真实 import.
+
 **Canvas rendering (AD-9)**
 
 - `CanvasView` renders via WebGL2 (`src/lib/render/vram/renderer.ts`); entities are GPU-drawn, NOT DOM elements. There is **no DOM overlay** on the canvas-don't add one "for testability" (breaks the render model; 1a.8 e2e lesson: DOM selectors can't reach canvas content).
@@ -107,9 +113,9 @@ Exact patch versions: `package.json` / `wasm/Cargo.toml` / (future) `go.mod` are
 
 **Three-tier pyramid (don't blur the tiers)**
 
-- **Unit (vitest, jsdom)**: `src/**/*.test.{ts,tsx}` (30 files). Pure domain logic + pure render helpers (camera math, palette, shader math). Run: `bun run test`. Config: `vitest.config.ts`-intentionally SEPARATE from `vite.config.ts` (the TanStack Start vite plugin must NOT run during tests; it generates `routeTree.gen.ts` and expects a router entry).
+- **Unit (vitest, jsdom)**: `src/**/*.test.{ts,tsx}` (31 files). Pure domain logic + pure render helpers (camera math, palette, shader math). Run: `bun run test`. Config: `vitest.config.ts`-intentionally SEPARATE from `vite.config.ts` (the TanStack Start vite plugin must NOT run during tests; it generates `routeTree.gen.ts` and expects a router entry).
 - **Component (vitest, jsdom + @testing-library/react)**: `getContext` is stubbed to `null` in jsdom, so every canvas-drawing component MUST null-guard `getContext` and early-return `draw()` on null-assert observable side-effects (HUD text, store state), NOT canvas pixels.
-- **E2E (Playwright, chromium)**: `e2e/*.spec.ts` (7 files). Real WebGL2 via SwiftShader. Run: `bun run test:e2e`.
+- **E2E (Playwright, chromium)**: `e2e/*.spec.ts` (8 files). Real WebGL2 via SwiftShader. Run: `bun run test:e2e`.
 
 **jsdom has NO WebGL2 (load-bearing test split)**
 
@@ -139,7 +145,7 @@ Exact patch versions: `package.json` / `wasm/Cargo.toml` / (future) `go.mod` are
 
 **Record FULL counts, passed AND skipped (not subsets)**
 
-- In sprint-status/CR, record the full suite count including skips (e.g., `706 passed / 1 skipped` vitest, `29 passed / 21 skipped` e2e), NOT the new story's subset (`7/7`). AC-8 "no regression" = full suite green.
+- In sprint-status/CR, record the full suite count including skips (e.g., `730 passed / 1 skipped` vitest, `29 passed / 21 skipped` e2e), NOT the new story's subset (`7/7`). AC-8 "no regression" = full suite green.
 - A skip is NOT a pass: every `.skip` needs a reason comment + `deferred-work.md` entry (1a.12: 21 skipped e2e = D4 canvas-click infra deferred). `forbidOnly: !!CI` rejects `.only`-don't commit it.
 
 **Story-cycle testing discipline (BMAD)**
@@ -264,7 +270,7 @@ _Curated highest-stakes rules from the sections above. Violating these causes si
 
 5. **WebGL canvas has NO DOM overlay (AD-9)** (Framework Rules): e2e probes via canvas coordinates, NOT DOM selectors (1a.8 lesson). jsdom has NO WebGL2-test pure helpers + null-ctx throw, don't render. SwiftShader args are load-bearing for Playwright. ⚠ WebGL context loss is NOT handled (no `webglcontextlost` listener)-forward gap, surface via `[SYSTEM HALTED]` (AD-5).
 6. **`routeTree.gen.ts` is GENERATED but COMMITTED** (Framework/Testing Rules): do NOT gitignore, or a fresh clone's typecheck breaks.
-7. **Record FULL test counts - passed AND skipped** (Testing Rules): `706 passed/1 skipped` (vitest), `29 passed/21 skipped` (e2e)-not `7/7` subsets. Skip ≠ pass-needs reason + `deferred-work.md` entry. Counts current as of 1a.12 (no code merged since).
+7. **Record FULL test counts - passed AND skipped** (Testing Rules): `730 passed/1 skipped` (vitest), `29 passed/21 skipped` (e2e)-not `7/7` subsets. Skip ≠ pass-needs reason + `deferred-work.md` entry. Counts current as of 1a.13 (no code merged since).
 
 **Code & traceability landmines**
 
