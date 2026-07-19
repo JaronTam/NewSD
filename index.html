@@ -370,6 +370,10 @@
       .dh-nm { color: var(--dim); margin-left: 5px; }
       .dh-sep { color: var(--dim); }
       .dh-empty { color: var(--dim); }
+      .dh-block { border-style: dashed; background: transparent; }
+      .dh-block b { color: var(--dim); }
+      .dh-wait { color: var(--dim); border: 1px dashed var(--dim); border-radius: 4px; padding: 1px 6px; font-size: 12px; }
+      .dh-wait-lbl { color: var(--dim); font-size: 12px; }
     </style>
   </head>
   <body>
@@ -555,7 +559,7 @@
 
     <h2>并行策略</h2>
     <div class="note">
-      <strong>当前:</strong> 1a.1–1a.8/1a.11/1a.12/1a-13 已合并 main;本次开发 1a.9(界面 i18n) + 2.1(OAuth 登录)并行;Epic 1a 剩 1a.9 →
+      <strong>当前:</strong> 1a.1–1a.8/1a.11/1a.12/1a-13 已合并 main<span id="cur-prose"></span>;Epic 1a 剩 1a.9 →
       1a.10(L8–L9)。<br /><br />
       <strong>立即可并行(不阻塞 1a.9/1a.10):</strong><br />
       • <code>2.1 → 2.2 → 2.3/2.4</code>(L1 起,2.1 仅需 1a.1 已就绪)<br />
@@ -577,7 +581,8 @@
       const NL = 17; // L0..L16
       const HOT = new Set([4, 5, 13]);
       // 本次开发恒定高亮的故事(NODES[0] id)
-      const CUR = new Set(["1a9", "21"]); // 1a.9 界面i18n + 2.1 OAuth登录
+      // CUR(当次开发故事)读 URL hash 如 #cur=1a9,21;裸 URL 无高亮(option B:零 push/永不 stale)
+      const CUR = new Set((location.hash.match(/cur=([\w,]*)/) || [, ""])[1].split(",").filter(Boolean));
 
       const NODES = [
         // id, label, short, epic, layer, status
@@ -824,30 +829,56 @@
       window.addEventListener("resize", drawLinks);
       if (document.fonts && document.fonts.ready) document.fonts.ready.then(drawLinks);
 
-      // 可开发故事提示框: 每 epic 取入边(硬+seq)from 全 done 且自身非 done 的最前 Layer(并行全列)
-      // 合并 story 后改 NODES status->done 即自动刷新,无需手改本框
+      // 可开发故事提示框: 每 epic 取入边(硬+seq)from 全 done 且自身 todo 的最前 Layer(并行全列);
+      //   无可开发时显该 epic 最前非 done 故事 + 其阻塞项(blocked 态永不列可开发);
+      //   合并 story 后改 NODES status->done 即自动刷新,无需手改本框
       (function renderDevHint() {
         const done = {};
         NODES.forEach((n) => (done[n[0]] = n[5] === "done"));
         const incoming = {};
         E.forEach((e) => ((incoming[e[1]] = incoming[e[1]] || []).push(e[0])));
         const numOrd = (label) => { const m = String(label).match(/(\d+)$/); return m ? +m[1] : 0; };
+        const byLayer = (a, b) => a[4] - b[4] || numOrd(a[1]) - numOrd(b[1]);
         const parts = [];
         EPICS.forEach((ep) => {
-          const list = NODES.filter((n) => n[3] === ep.key && !done[n[0]] && (incoming[n[0]] || []).every((d) => done[d]));
-          if (!list.length) return;
-          const minL = Math.min.apply(null, list.map((n) => n[4]));
-          const front = list.filter((n) => n[4] === minL).sort((a, b) => numOrd(a[1]) - numOrd(b[1]));
-          parts.push({ ep: ep, stories: front });
+          const notDone = NODES.filter((n) => n[3] === ep.key && n[5] !== "done");
+          if (!notDone.length) return;
+          const dev = notDone.filter((n) => n[5] === "todo" && (incoming[n[0]] || []).every((d) => done[d]));
+          if (dev.length) {
+            const minL = Math.min.apply(null, dev.map((n) => n[4]));
+            parts.push({ ep: ep, stories: dev.filter((n) => n[4] === minL).sort(byLayer), wait: null });
+          } else {
+            const front = notDone.slice().sort(byLayer)[0];
+            const wait = (incoming[front[0]] || []).filter((d) => !done[d]).map((d) => NODES.find((n) => n[0] === d)).filter(Boolean);
+            parts.push({ ep: ep, stories: [front], wait: wait });
+          }
         });
         const box = document.getElementById("devhint");
         if (!box) return;
-        if (!parts.length) { box.innerHTML = '<span class="dh-title">🚀 可开发故事 · 下一步</span><span class="dh-empty">暂无可开发故事(全部已合并或被阻塞)</span>'; return; }
+        if (!parts.length) { box.innerHTML = '<span class="dh-title">🚀 可开发故事 · 下一步</span><span class="dh-empty">全部已合并 🎉</span>'; return; }
         const rows = parts.map((p) => {
-          const pills = p.stories.map((n) => '<span class="dh-story" style="--ec:' + p.ep.color + '"><b>' + n[1] + '</b><span class="dh-nm">' + n[2] + "</span></span>").join('<span class="dh-sep">&</span>');
-          return '<div class="dh-row"><span class="dh-ep" style="--ec:' + p.ep.color + '">' + p.ep.key + '</span><span class="dh-arrow">-></span>' + pills + "</div>";
+          const ec = p.ep.color;
+          if (p.wait) {
+            const w = p.wait.map((n) => '<span class="dh-wait">' + n[1] + '</span>').join('<span class="dh-sep">/</span>');
+            const st = p.stories[0];
+            return '<div class="dh-row"><span class="dh-ep" style="--ec:' + ec + '">' + p.ep.key + '</span><span class="dh-arrow">-></span><span class="dh-story dh-block" style="--ec:' + ec + '">⏳<b>' + st[1] + '</b><span class="dh-nm">' + st[2] + '</span></span><span class="dh-wait-lbl">等</span>' + w + '</div>';
+          }
+          const pills = p.stories.map((n) => '<span class="dh-story" style="--ec:' + ec + '"><b>' + n[1] + '</b><span class="dh-nm">' + n[2] + "</span></span>").join('<span class="dh-sep">&</span>');
+          return '<div class="dh-row"><span class="dh-ep" style="--ec:' + ec + '">' + p.ep.key + '</span><span class="dh-arrow">-></span>' + pills + "</div>";
         }).join("");
-        box.innerHTML = '<span class="dh-title">🚀 可开发故事 · 下一步(按 epic 取序号最前,并行全列;合并后自动刷新)</span><div class="dh-rows">' + rows + "</div>";
+        box.innerHTML = '<span class="dh-title">🚀 可开发故事 · 下一步(绿=可开发 / ⏳=被阻塞显阻塞项;合并后自动刷新)</span><div class="dh-rows">' + rows + "</div>";
+      })();
+
+      // "当前:"散文里的"本次开发"片段由 CUR 派生(永不再手改该行,避开 en-dash Edit 失配)
+      (function renderCurProse() {
+        const span = document.getElementById("cur-prose");
+        if (!span) return;
+        if (!CUR.size) { span.textContent = ""; return; }
+        const items = [...CUR].map((id) => {
+          const n = NODES.find((x) => x[0] === id);
+          return n ? n[1] + "(" + n[2] + ")" : id;
+        });
+        span.textContent = ";本次开发 " + items.join(" + ") + "并行";
       })();
 
       // hover highlight + grab-to-pan on blank
