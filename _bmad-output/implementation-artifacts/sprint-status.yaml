@@ -17,7 +17,7 @@
 # - retrospective appends action_items
 
 generated: 2026-07-05
-last_updated: 2026-07-17
+last_updated: 2026-07-21
 project: NewSD
 project_key: NOKEY
 tracking_system: file-system
@@ -36,7 +36,7 @@ development_status:
   1a-6-minimap: done # PR#37 squash @fb3f2a1 (CR Run 1 FAIL->PASS: F-B/F-C/F-D/F-E/F-F patched + F-A spec amended; F-G/F-H defer); vitest 438/438 + tsc 0 + Playwright e2e 7/7; AC 9/9 (AC-1/2/3 RESOLVED, AC-4..8 PASS, AC-9 PASS-weak); Story 1a.6 闭合, 2026-07-09)
   1a-7-toolbar-statusbar: done # PR#39 squash (CR 3-layer orchestrator-direct PASS: F-cs-dep-mismatch 回退 @testing-library/user-event 恢复 CS 无新依赖 + F-dead-css 删 ns-prompt-panel__expand; minor 4 defer: COLLAPSED_H(26)vs CSS(25.6px)0.4px/testid-dup 多未答confirm/trim-cap 全confirm/autoscroll); vitest 499/499 + tsc 0 + build OK + Playwright e2e 全套件 29 passed/14 skipped (1a.7 AC-13 RED 脚手架 14 skip,无回归); F-1-4 非 modal confirm 落 PromptPanel + SDR#7 新建清空+重置cam{0,0,16}; Story 1a.7 闭合, 2026-07-10)
   1a-8-property-panel-formula-editor: done # PR#46 squash @ee63b1d (CR 3-layer orchestrator-direct PASS: F-1 deriveFlowUnits 声明↔代码不一致 + F-2 key remount 跨图元泄漏 patched, A1/A2 accept non-blocking; 4 defer D1/D2/D3 scope + D4 e2e canvas-click 基础设施 epic gap 归 1b; vitest 566/566 + tsc 0 + 1 skip(design: uncontrolled input 不反应外部 store 更新); DS 右侧属性面板 stock/cloud/flow + 公式编辑器 validateFormulaSyntax additive + 语法红高亮 + dimensionalCheck stub 待 1b + formatFormulaForEditor 接 UI + F8/F10 fold + 选区态 lift 镜像 1a.7 toolMode + 容器右侧列 1a.12 演进不推翻 + Q1 名称化编辑 defer 1a.12; Story 1a.8 闭合, 2026-07-13)
-  1a-9-i18n: backlog
+  1a-9-i18n: done # DS 2026-07-20 (bmad-dev-story): T0-T11 全 done; i18n.ts 50->101 dict keys + E27 3-tier fallback; langStore(singleton useSyncExternalStore + localStorage ns-lang + navigator.language 检测); SettingsPanel(Toolbar 齿轮 popover zh/en); 全 UI 组件 i18n 接线(Toolbar/PropertyPanel/StatusBar/CanvasView/PromptPanel/PromptTabs/PromptCapsule/StockTab/SourceSinkTab/AlertTab/MilestoneTab/AtMentionAutocomplete); AC-10 6 守卫测试(ASCII 字符画/name/testid 不变); grep 零残留中文; deferred-work.md 无 1a.9 defer 项; DS tsc 0/vitest 778|5fail(CSS pre-existing,quality/)/10skip(auth/login/PropertyPanel unrelated); CR Run1 PASS 2026-07-21 (orchestrator-direct 3-layer, F1 langStore "en" fallback/F2 齿轮 aria-label/F3 源汇->源/汇 patched, defer 无); 联合 gate tsc 0/vitest 799|1skip/46files/e2e 40|21skip|0fail; PR#64 @d9f0c9b
   1a-10-model-settings: backlog
   1a-11-entity-naming-mechanism: done # CC Step 5 (2026-07-12): FR-ELEM-5 图元命名机制(全局唯一+序号递增,推翻原"允许同名+软警告")独立小 story;1a.8+ 重构前置;编号 1a.11(1a.9/1a.10 不重编号,执行后移);CS 2026-07-15;VS PASS 2026-07-16;DS 2026-07-16 done;CR 2026-07-16 Run 1 PASS (orchestrator-direct, 3-layer 12→7 root cause, 4 patch F-1..F-4 + 1 dropped F-7 + 7 defer, vitest 594/594 + tsc 0);PR#52 @1bb3598
   1a-12-prompt-panel-restructure: done # PR#54 squash @21f2fd9 (CR 2026-07-16 Run 1 PASS: 3-layer orchestrator-direct, 10 findings 全裁定 5 patched F-1/F-3/F-8/F-9/F-10 + F-5 补填 + F-4 close + 3 defer F-2/F-6 归 4.2/F-7 归 1b/F-10 a11y, failed_layers=[]; vitest 706+1skip/30files + tsc 0 + e2e 29 passed|21 skipped); DS 2026-07-16 (bmad-dev-story): T0-T10 green, AtMentionAutocomplete D1 合流 + PropertyPanel uncontrolled→controlled; StatusBar ⚠N; errorDetection.ts 三检测器; 四 tab shell + 收起态胶囊; CS 2026-07-16 (bmad-create-story): 全读 epic L565-615 + ARCHITECTURE-SPINE + PromptPanel/PropertyPanel/promptStore/StatusBar/store/types baseline; 产 AC 22 + SDR 22 (12契约+5不变量+5meta) + Tasks T0-T10 + SAVE QUESTIONS 6; 依赖 1a.8/1a.11 done + D1 合流; e2e canvas-click defer 1b (复用 1a.8 D4); 里程碑内容 defer 5.4; 量纲/钳制 defer 1b; 公式悬空 defer 4.2; baseline_commit e6b9cea + baseline_tests 594/1skip/21files; Story 1a.12 闭合 2026-07-16
@@ -56,8 +56,8 @@ development_status:
   epic-1b-retrospective: optional
 
   # === Epic 2: 认证与画板归属权限 - 使能 epic (4 stories) ===
-  epic-2: backlog
-  2-1-oauth-login-session-dual-channel: backlog
+  epic-2: in-progress
+  2-1-oauth-login-session-dual-channel: ready-for-dev # CS 2026-07-20 done (bmad-create-story): AC 17 + SDR 22 + Tasks 24 TDD; Q1-Q4 裁定回填(Q1=A 不 gate defer 2.2/Q2=B FAKE_OAUTH=1 fake provider/Q3=A dev 跳 Secure prod 设/Q4=A 单 PR); baseline ca4ce02; DS 代码 working tree(未 CR 未 merge,CR TBD)
   2-2-board-ownership-static-permission-model: backlog
   2-3-share-token-generate-rotate: backlog
   2-4-badge-account-persistence-base: backlog
@@ -82,8 +82,8 @@ development_status:
   epic-4-retrospective: optional
 
   # === Epic 5: 赛博朋克交互质感与游戏化 (4 stories) ===
-  epic-5: backlog
-  5-1-cyberpunk-quality-first-8: backlog
+  epic-5: in-progress
+  5-1-cyberpunk-quality-first-8: done # PR#64 @d9f0c9b (CR Run2 PASS 2026-07-21, orchestrator-direct 3-layer: 4 findings patched F-P1 charToGlyphIdx/F-P2 __e2e__.maxFlowAnimElements/F-P3 删3 hollow+augment Toolbar/AtMention tests/F-P4 AC-2 4-sample+mouse.move; AC-2 e2e freeze 根因=headless idle-page rAF throttle 非 app bug; defer 无; 联合 gate tsc 0/vitest 797|1skip/43files/e2e 40|21skip|0fail); DS rework 2026-07-21 (bmad-dev-story): 12-item rework 全完成 + 5 minor fixes; CR Run1 FAIL 2026-07-21 (模块孤立,9 AC FAIL) -> rework -> Run2 PASS
   5-2-cyberpunk-quality-9-10-f1-replication: backlog
   5-3-badge-system-master-switch: backlog
   5-4-gamification-center: backlog # CC Step 5 (2026-07-12): 游戏化中心(表盘+等级+徽章墙,FR-GAME-4)新 story;门控=点3(游戏化中心详细设计)讨论收敛 + 5.3 就绪;AC 细节留 CS(待点3)
