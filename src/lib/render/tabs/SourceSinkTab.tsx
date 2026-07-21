@@ -50,24 +50,34 @@ function roleIcon(role: CloudRole): string {
   }
 }
 
+import type { Lang } from "../../sd/i18n";
+import { t } from "../../sd/i18n";
+
 export interface SourceSinkTabProps {
   clouds: readonly CloudItem[];
   elements: readonly TabElement[];
+  lang: Lang;
   onRowClick?: (id: string) => void;
   onErrorClick?: (subjectId: string) => void;
 }
 
-export function SourceSinkTab({ clouds, elements, onRowClick, onErrorClick }: SourceSinkTabProps) {
+export function SourceSinkTab({
+  clouds,
+  elements,
+  lang,
+  onRowClick,
+  onErrorClick,
+}: SourceSinkTabProps) {
   return (
     <div data-testid="ns-sourcesink-tab">
       <div className="ns-prompt-tab__header">
-        <span>名称</span>
-        <span>连接</span>
-        <span>流量</span>
-        <span>问题</span>
+        <span>{t("name", lang)}</span>
+        <span>{t("connection", lang)}</span>
+        <span>{t("flow", lang)}</span>
+        <span>{t("issues", lang)}</span>
       </div>
       {clouds.length === 0 ? (
-        <div className="ns-prompt-panel__empty">尚无源/汇</div>
+        <div className="ns-prompt-panel__empty">{t("noClouds", lang)}</div>
       ) : (
         clouds.map((c) => {
           const role = classifyCloud(c, elements);
@@ -103,7 +113,7 @@ export function SourceSinkTab({ clouds, elements, onRowClick, onErrorClick }: So
                       onErrorClick?.(c.id);
                     }}
                   >
-                    孤立
+                    {t("orphanCloud", lang)}
                   </button>
                 )}
               </span>

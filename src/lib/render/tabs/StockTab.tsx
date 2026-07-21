@@ -4,6 +4,8 @@
 // Lists stock elements with value-sign markers.
 // Props accept stocks + errors from parent (PromptPanel).
 
+import type { Lang } from "../../sd/i18n";
+import { t } from "../../sd/i18n";
 import type { ErrorFinding } from "../../sd/errorDetection";
 
 export interface StockItem {
@@ -29,21 +31,22 @@ function signClass(value: number): string {
 export interface StockTabProps {
   stocks: readonly StockItem[];
   errors: readonly ErrorFinding[];
+  lang: Lang;
   onRowClick?: (id: string) => void;
   onErrorClick?: (subjectId: string) => void;
 }
 
-export function StockTab({ stocks, errors, onRowClick, onErrorClick }: StockTabProps) {
+export function StockTab({ stocks, errors, lang, onRowClick, onErrorClick }: StockTabProps) {
   return (
     <div data-testid="ns-stock-tab">
       <div className="ns-prompt-tab__header">
-        <span>名称</span>
-        <span>变化值</span>
-        <span>单位</span>
-        <span>问题</span>
+        <span>{t("name", lang)}</span>
+        <span>{t("changeValue", lang)}</span>
+        <span>{t("units", lang)}</span>
+        <span>{t("issues", lang)}</span>
       </div>
       {stocks.length === 0 ? (
-        <div className="ns-prompt-panel__empty">尚无存量</div>
+        <div className="ns-prompt-panel__empty">{t("noStocks", lang)}</div>
       ) : (
         stocks.map((s) => {
           const errorForStock = errors.find((e) => e.subjectId === s.id);

@@ -9,7 +9,10 @@
 // Uses data-testid selectors per project convention.
 
 import { render, fireEvent, cleanup, waitFor, act } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { langStore } from "../../sd/langStore";
+
+beforeEach(() => langStore.setLang("zh"));
 
 import { PropertyPanel } from "../PropertyPanel";
 import type { PropertyPanelProps } from "../PropertyPanel";

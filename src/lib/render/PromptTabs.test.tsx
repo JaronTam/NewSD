@@ -25,7 +25,13 @@ afterEach(() => cleanup());
 describe("PromptTabs - AC-1 4-tab container (SDR#1)", () => {
   it("renders 4 tabs in order !/里程碑/源汇/存量 with role=tab + testids", () => {
     const { container } = render(
-      <PromptTabs messages={[]} activeTab="alert" onTabChange={() => {}} hasUnanswered={false} />,
+      <PromptTabs
+        lang="zh"
+        messages={[]}
+        activeTab="alert"
+        onTabChange={() => {}}
+        hasUnanswered={false}
+      />,
     );
     const tabs = container.querySelectorAll("[role='tab']");
     expect(tabs).toHaveLength(4);
@@ -37,7 +43,13 @@ describe("PromptTabs - AC-1 4-tab container (SDR#1)", () => {
 
   it("default activeTab=alert has aria-selected=true, others false", () => {
     const { container } = render(
-      <PromptTabs messages={[]} activeTab="alert" onTabChange={() => {}} hasUnanswered={false} />,
+      <PromptTabs
+        lang="zh"
+        messages={[]}
+        activeTab="alert"
+        onTabChange={() => {}}
+        hasUnanswered={false}
+      />,
     );
     const alert = container.querySelector("[data-testid='ns-prompt-panel-tab-alert']")!;
     expect(alert.getAttribute("aria-selected")).toBe("true");
@@ -49,6 +61,7 @@ describe("PromptTabs - AC-1 4-tab container (SDR#1)", () => {
     const onTabChange = vi.fn();
     const { container } = render(
       <PromptTabs
+        lang="zh"
         messages={[]}
         activeTab="alert"
         onTabChange={onTabChange}
@@ -61,7 +74,13 @@ describe("PromptTabs - AC-1 4-tab container (SDR#1)", () => {
 
   it("renders a role=tabpanel for the active tab body", () => {
     const { container } = render(
-      <PromptTabs messages={[]} activeTab="stock" onTabChange={() => {}} hasUnanswered={false} />,
+      <PromptTabs
+        lang="zh"
+        messages={[]}
+        activeTab="stock"
+        onTabChange={() => {}}
+        hasUnanswered={false}
+      />,
     );
     const panel = container.querySelector("[role='tabpanel']");
     expect(panel).not.toBeNull();
@@ -73,7 +92,13 @@ describe("PromptTabs - AC-1 4-tab container (SDR#1)", () => {
 describe("PromptTabs - AC-8 alert tab --flash when hasUnanswered (SDR#22/AD-9)", () => {
   it("alert tab carries --flash class when hasUnanswered=true", () => {
     const { container } = render(
-      <PromptTabs messages={[]} activeTab="stock" onTabChange={() => {}} hasUnanswered={true} />,
+      <PromptTabs
+        lang="zh"
+        messages={[]}
+        activeTab="stock"
+        onTabChange={() => {}}
+        hasUnanswered={true}
+      />,
     );
     const alert = container.querySelector("[data-testid='ns-prompt-panel-tab-alert']")!;
     expect(alert.className).toContain("flash");
@@ -81,7 +106,13 @@ describe("PromptTabs - AC-8 alert tab --flash when hasUnanswered (SDR#22/AD-9)",
 
   it("negative: no flash class when hasUnanswered=false", () => {
     const { container } = render(
-      <PromptTabs messages={[]} activeTab="stock" onTabChange={() => {}} hasUnanswered={false} />,
+      <PromptTabs
+        lang="zh"
+        messages={[]}
+        activeTab="stock"
+        onTabChange={() => {}}
+        hasUnanswered={false}
+      />,
     );
     const alert = container.querySelector("[data-testid='ns-prompt-panel-tab-alert']")!;
     expect(alert.className).not.toContain("flash");
@@ -137,6 +168,7 @@ describe("PromptTabs - AC-13 unread alert badge (SDR#4)", () => {
   it("renders a badge with unreadAlertCount when alert tab has unread > 0", () => {
     const { container } = render(
       <PromptTabs
+        lang="zh"
         messages={[]}
         activeTab="stock"
         onTabChange={() => {}}
@@ -152,6 +184,7 @@ describe("PromptTabs - AC-13 unread alert badge (SDR#4)", () => {
   it("badge only appears on the alert tab, not on others", () => {
     const { container } = render(
       <PromptTabs
+        lang="zh"
         messages={[]}
         activeTab="stock"
         onTabChange={() => {}}
@@ -167,7 +200,13 @@ describe("PromptTabs - AC-13 unread alert badge (SDR#4)", () => {
 
   it("no badge rendered when unreadAlertCount=0 (default)", () => {
     const { container } = render(
-      <PromptTabs messages={[]} activeTab="alert" onTabChange={() => {}} hasUnanswered={false} />,
+      <PromptTabs
+        lang="zh"
+        messages={[]}
+        activeTab="alert"
+        onTabChange={() => {}}
+        hasUnanswered={false}
+      />,
     );
     expect(container.querySelector("[data-testid='ns-prompt-panel-tab-unread']")).toBeNull();
   });

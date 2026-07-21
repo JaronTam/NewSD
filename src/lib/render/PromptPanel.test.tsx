@@ -1,5 +1,8 @@
 import { render, fireEvent, waitFor, cleanup, act } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { langStore } from "../sd/langStore";
+
+beforeEach(() => langStore.setLang("zh"));
 
 import { PromptPanel } from "./PromptPanel";
 import { promptStore, MAX_MESSAGES, TOAST_MS } from "./promptStore";

@@ -14,8 +14,10 @@
 // meaningful). It is NOT on the container: the per-frame FPS span would flood
 // screen readers (AC-8 announces count; FPS is Debug, kept out of the live region).
 
-import { useState } from "react";
-import { ERROR_TYPE_LABEL, type ErrorFinding } from "../sd/errorDetection";
+import { useSyncExternalStore, useState } from "react";
+import { getErrorLabel, type ErrorFinding } from "../sd/errorDetection";
+import { t } from "../sd/i18n";
+import { langStore } from "../sd/langStore";
 
 export interface StatusBarProps {
   elementCountRef: React.RefObject<HTMLSpanElement | null>;
@@ -30,6 +32,7 @@ export function StatusBar({
   warnings = [],
   onErrorClick,
 }: StatusBarProps) {
+  const lang = useSyncExternalStore(langStore.subscribe, langStore.getSnapshot);
   const [popoverOpen, setPopoverOpen] = useState(false);
   const hasWarnings = warnings.length > 0;
   return (
@@ -37,25 +40,25 @@ export function StatusBar({
       data-testid="ns-statusbar"
       className="ns-statusbar"
       role="contentinfo"
-      aria-label="状态栏"
+      aria-label={t("statusBar", lang)}
     >
       {/* ── 模拟时间 (占位) ── */}
       <span
         className="ns-statusbar__field"
         data-testid="ns-statusbar-模拟时间"
-        aria-label="模拟时间"
+        aria-label={t("simTimeLabel", lang)}
       >
-        模拟时间 0.00s
+        {t("simTimeLabel", lang)} 0.00s
       </span>
 
       {/* ── 图元计数 (ACTIVE — imperative update via ref) ── */}
       <span
         className="ns-statusbar__field"
         data-testid="ns-statusbar-element-count"
-        aria-label="图元计数"
+        aria-label={t("elementCount", lang)}
         aria-live="polite"
       >
-        图元{" "}
+        {t("elements", lang)}{" "}
         <span ref={elementCountRef} data-testid="ns-statusbar-element-count-value">
           0
         </span>
@@ -65,16 +68,16 @@ export function StatusBar({
       <span
         className="ns-statusbar__field"
         data-testid="ns-statusbar-在线用户数"
-        aria-label="在线用户数"
+        aria-label={t("onlineCount", lang)}
       >
-        在线 1
+        {t("online", lang)} 1
       </span>
 
       {/* ── 头像堆栈 (占位) ── */}
       <span
         className="ns-statusbar__field"
         data-testid="ns-statusbar-头像堆栈"
-        aria-label="头像堆栈"
+        aria-label={t("avatarStack", lang)}
       >
         ☺
       </span>
@@ -91,16 +94,16 @@ export function StatusBar({
       <span
         className="ns-statusbar__field"
         data-testid="ns-statusbar-连接状态"
-        aria-label="连接状态"
+        aria-label={t("connectionStatus", lang)}
       >
-        本地
+        {t("local", lang)}
       </span>
 
       {/* ── 量纲概要 slot (隐藏, L2 渐显 1b) ── */}
       <span
         className="ns-statusbar__field"
         data-testid="ns-statusbar-量纲概要"
-        aria-label="量纲概要"
+        aria-label={t("dimSummaryLabel", lang)}
         style={{ display: "none" }}
       >
         -
@@ -110,7 +113,7 @@ export function StatusBar({
       <span
         className="ns-statusbar__field"
         data-testid="ns-statusbar-warnings"
-        aria-label="警告"
+        aria-label={t("warnings", lang)}
         style={{ display: hasWarnings ? undefined : "none" }}
         onClick={() => setPopoverOpen((v) => !v)}
       >
@@ -135,7 +138,7 @@ export function StatusBar({
                 }
               }}
             >
-              [{ERROR_TYPE_LABEL[w.type]}] {w.subjectName} - {w.message}
+              [{getErrorLabel(w.type, lang)}] {w.subjectName} - {w.message}
             </div>
           ))}
         </div>

@@ -383,7 +383,7 @@ export function findNearestPort(
 }
 
 /** Center (cx, cy) of an element's bounding box (float — used for port pairing only). */
-function getElementCenter(el: SDElement): { x: number; y: number } {
+export function getElementCenter(el: SDElement): { x: number; y: number } {
   const b = getElementBounds(el);
   return { x: b.x + b.width / 2, y: b.y + b.height / 2 };
 }

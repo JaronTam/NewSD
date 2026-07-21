@@ -391,6 +391,7 @@
     color: var(--ns-stock);
     text-shadow: 0 0 4px var(--ns-stock);
     border-color: var(--ns-stock);
+    animation: ns-hue-cycle 4s linear infinite;
   }
 
   .ns-toolbar__select {
@@ -683,5 +684,145 @@
   .ns-prompt-panel__tag--alert {
     color: var(--ns-warn, #ffaa00);
     text-shadow: 0 0 4px var(--ns-warn, #ffaa00);
+  }
+
+  /* ── Story 5-1: Cyberpunk quality keyframes (AC-7/AC-8/AC-9) ── */
+
+  /* Breathing glow on dt select (SDR#8) */
+  @keyframes ns-breathing-glow {
+    0% {
+      box-shadow: 0 0 2px var(--ns-stock);
+    }
+    50% {
+      box-shadow:
+        0 0 8px var(--ns-stock),
+        0 0 12px var(--ns-stock);
+    }
+    100% {
+      box-shadow: 0 0 2px var(--ns-stock);
+    }
+  }
+
+  .ns-toolbar__select--breathing {
+    animation: ns-breathing-glow 2s ease-in-out infinite;
+  }
+
+  /* Hue cycle on active tool button (SDR#9) */
+  @keyframes ns-hue-cycle {
+    0% {
+      filter: hue-rotate(0deg);
+    }
+    100% {
+      filter: hue-rotate(360deg);
+    }
+  }
+
+  /* Blinking `>` caret next to select (SDR#9) */
+  @keyframes ns-blink-caret {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0;
+    }
+  }
+
+  .ns-toolbar__select-caret {
+    display: inline-block;
+    color: var(--ns-stock);
+    font-family: var(--ns-font-mono);
+    font-size: 0.7rem;
+    animation: ns-blink-caret 1s step-end infinite;
+    user-select: none;
+  }
+
+  /* Corner scanner quad-border animation (SDR#9) */
+  @keyframes ns-corner-scan {
+    0% {
+      border-color: transparent;
+    }
+    50% {
+      border-color: var(--ns-stock);
+    }
+    100% {
+      border-color: transparent;
+    }
+  }
+
+  .ns-corner-scanner {
+    animation: ns-corner-scan 2s ease-in-out infinite;
+  }
+
+  /* LVL UP overlay (SDR#7, AC-6) — centered DOM overlay on canvas */
+  .ns-lvlup-overlay {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-family: var(--ns-font-mono);
+    font-size: 2rem;
+    font-weight: bold;
+    color: var(--ns-stock);
+    text-shadow:
+      0 0 10px var(--ns-stock),
+      0 0 20px var(--ns-stock);
+    pointer-events: none;
+    user-select: none;
+    z-index: 10;
+    animation: ns-lvlup-show 0.3s ease-out;
+  }
+
+  .ns-lvlup-overlay--fading {
+    animation: ns-lvlup-fade 0.4s ease-out forwards;
+  }
+
+  @keyframes ns-lvlup-show {
+    0% {
+      opacity: 0;
+      transform: translate(-50%, -50%) scale(0.5);
+    }
+    100% {
+      opacity: 1;
+      transform: translate(-50%, -50%) scale(1);
+    }
+  }
+
+  @keyframes ns-lvlup-fade {
+    0% {
+      opacity: 1;
+    }
+    100% {
+      opacity: 0;
+    }
+  }
+
+  /* Input spark on PropertyPanel inputs (SDR#10) */
+  @keyframes ns-input-spark {
+    0% {
+      box-shadow: 0 0 0 var(--ns-stock);
+      opacity: 1;
+    }
+    100% {
+      box-shadow: 0 0 6px var(--ns-stock);
+      opacity: 0;
+    }
+  }
+
+  .ns-property-panel__input--spark {
+    animation: ns-input-spark 0.3s ease-out 1 forwards;
+  }
+
+  /* Reduced-motion: disable non-essential animations (SDR#11, AC-11) */
+  @media (prefers-reduced-motion: reduce) {
+    .ns-toolbar__select--breathing,
+    .ns-toolbar__btn--active,
+    .ns-toolbar__select-caret,
+    .ns-corner-scanner,
+    .ns-property-panel__input--spark,
+    .ns-lvlup-overlay,
+    .ns-lvlup-overlay--fading {
+      animation: none;
+    }
   }
 }

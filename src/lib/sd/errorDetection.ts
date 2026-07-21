@@ -11,16 +11,23 @@
 //   detectDimensionalError — AC-14(b): 量纲检测 defer 1b
 //   detectDanglingFormula — AC-14(c): 公式悬空 defer 4.2
 
+import type { Lang } from "./i18n";
+import { t } from "./i18n";
 import type { SDElement } from "./types";
 
 export type ErrorType = "orphan-cloud" | "dangling-flow-endpoint" | "parallel-flow";
 
-/** AC-16/AC-12: short Chinese label per error type (popover `[类型]` + badge 文案). */
-export const ERROR_TYPE_LABEL: Record<ErrorType, string> = {
-  "orphan-cloud": "孤立",
-  "dangling-flow-endpoint": "端点未连",
-  "parallel-flow": "平行",
-};
+/** Story 1a.9 T7: lang-aware error-type label (was static ERROR_TYPE_LABEL Record). */
+export function getErrorLabel(type: ErrorType, lang: Lang): string {
+  return t(
+    type === "orphan-cloud"
+      ? "orphanCloud"
+      : type === "dangling-flow-endpoint"
+        ? "danglingEndpoint"
+        : "parallelFlow",
+    lang,
+  );
+}
 
 export interface ErrorFinding {
   id: string;

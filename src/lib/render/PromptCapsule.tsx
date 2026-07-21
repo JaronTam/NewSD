@@ -6,30 +6,38 @@
 // "!" tab gets --flash class when there's an unanswered confirm (AC-8).
 
 import type { TabKey } from "./promptStore";
-import { TABS, resolveActivateTab } from "./PromptTabs";
+import { TABS, resolveActivateTab, tabLabel } from "./PromptTabs";
+import { t } from "../sd/i18n";
+import type { Lang } from "../sd/i18n";
 
 export interface PromptCapsuleProps {
   hasUnanswered: boolean;
   lastActiveTab: TabKey | null;
+  lang: Lang;
   onExpand: (tab: TabKey) => void;
 }
 
-export function PromptCapsule({ hasUnanswered, lastActiveTab, onExpand }: PromptCapsuleProps) {
+export function PromptCapsule({
+  hasUnanswered,
+  lastActiveTab,
+  lang,
+  onExpand,
+}: PromptCapsuleProps) {
   return (
     <div data-testid="ns-prompt-panel-capsule" className="ns-prompt-panel--collapsed">
-      {TABS.map((tab) => {
-        const isAlert = tab.key === "alert";
+      {TABS.map((key) => {
+        const isAlert = key === "alert";
         const flashClass = isAlert && hasUnanswered ? " ns-prompt-panel__tab--flash" : "";
         return (
           <button
-            key={tab.key}
+            key={key}
             type="button"
-            data-testid={`ns-prompt-panel-tab-${tab.key}`}
+            data-testid={`ns-prompt-panel-tab-${key}`}
             className={`ns-prompt-panel__capsule-tab${flashClass}`}
-            aria-label={tab.label}
-            onClick={() => onExpand(resolveActivateTab(hasUnanswered, tab.key, lastActiveTab))}
+            aria-label={tabLabel(key, lang)}
+            onClick={() => onExpand(resolveActivateTab(hasUnanswered, key, lastActiveTab))}
           >
-            {tab.label}
+            {tabLabel(key, lang)}
           </button>
         );
       })}
@@ -37,7 +45,7 @@ export function PromptCapsule({ hasUnanswered, lastActiveTab, onExpand }: Prompt
         type="button"
         data-testid="ns-prompt-panel-toggle"
         className="ns-prompt-panel__btn"
-        aria-label="展开提示中心"
+        aria-label={t("expandPrompt", lang)}
         onClick={() => onExpand(resolveActivateTab(hasUnanswered, null, lastActiveTab))}
       >
         [⏏]

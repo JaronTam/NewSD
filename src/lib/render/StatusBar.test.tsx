@@ -1,7 +1,8 @@
 import { render, fireEvent, cleanup } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ErrorFinding, ErrorType } from "../sd/errorDetection";
 import { StatusBar, type StatusBarProps } from "./StatusBar";
+import { langStore } from "../sd/langStore";
 
 // Story 1a.7 T2 — StatusBar unit tests (TDD green phase).
 // Covers: AC-8 rendering (7 fields, semantic roles, aria-live), AC-9
@@ -14,6 +15,8 @@ function props(overrides: Partial<StatusBarProps> = {}): StatusBarProps {
     ...overrides,
   };
 }
+
+beforeEach(() => langStore.setLang("zh"));
 
 describe("StatusBar — AC-8 rendering (7 fields, semantic roles)", () => {
   afterEach(() => cleanup());

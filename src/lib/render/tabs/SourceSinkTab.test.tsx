@@ -47,7 +47,7 @@ afterEach(cleanup);
 
 describe("SourceSinkTab - AC-4 表头+行标记 (SDR#6/SDR#7)", () => {
   it("renders 4-column header 名称|连接|流量|问题", () => {
-    const { container } = render(<SourceSinkTab clouds={[]} elements={[]} />);
+    const { container } = render(<SourceSinkTab lang="zh" clouds={[]} elements={[]} />);
     expect(container.textContent).toContain("名称");
     expect(container.textContent).toContain("连接");
     expect(container.textContent).toContain("流量");
@@ -55,7 +55,7 @@ describe("SourceSinkTab - AC-4 表头+行标记 (SDR#6/SDR#7)", () => {
   });
 
   it("empty store -> 尚无源/汇 empty state", () => {
-    const { container } = render(<SourceSinkTab clouds={[]} elements={[]} />);
+    const { container } = render(<SourceSinkTab lang="zh" clouds={[]} elements={[]} />);
     expect(container.textContent).toContain("尚无源/汇");
   });
 
@@ -63,7 +63,7 @@ describe("SourceSinkTab - AC-4 表头+行标记 (SDR#6/SDR#7)", () => {
     // c1 has outgoing flow only (c1 -> c2).
     const c1 = cloud("c1");
     const els = [c1, cloud("c2"), flow("f1", "c1", "c2")];
-    const { container } = render(<SourceSinkTab clouds={[c1]} elements={els} />);
+    const { container } = render(<SourceSinkTab lang="zh" clouds={[c1]} elements={els} />);
     const row = container.querySelector("[data-testid='ns-prompt-sourcesink-row']")!;
     expect(row.textContent).toContain("☁");
     expect(row.className).toContain("source");
@@ -73,7 +73,7 @@ describe("SourceSinkTab - AC-4 表头+行标记 (SDR#6/SDR#7)", () => {
     // c2 has incoming flow only (c1 -> c2).
     const c2 = cloud("c2");
     const els = [cloud("c1"), c2, flow("f1", "c1", "c2")];
-    const { container } = render(<SourceSinkTab clouds={[c2]} elements={els} />);
+    const { container } = render(<SourceSinkTab lang="zh" clouds={[c2]} elements={els} />);
     const row = container.querySelector("[data-testid='ns-prompt-sourcesink-row']")!;
     expect(row.textContent).toContain("◼");
     expect(row.className).toContain("sink");
@@ -81,14 +81,14 @@ describe("SourceSinkTab - AC-4 表头+行标记 (SDR#6/SDR#7)", () => {
 
   it("negative: stock does not appear in source/sink tab", () => {
     const stockEl = { id: "s1", kind: "stock" as const, name: "s1" };
-    const { container } = render(<SourceSinkTab clouds={[]} elements={[stockEl]} />);
+    const { container } = render(<SourceSinkTab lang="zh" clouds={[]} elements={[stockEl]} />);
     expect(container.querySelector("[data-testid='ns-prompt-sourcesink-row']")).toBeNull();
   });
 
   it("流量 column shows - stub (no flow-rate computed yet)", () => {
     const c1 = cloud("c1");
     const els = [c1, cloud("c2"), flow("f1", "c1", "c2")];
-    const { container } = render(<SourceSinkTab clouds={[c1]} elements={els} />);
+    const { container } = render(<SourceSinkTab lang="zh" clouds={[c1]} elements={els} />);
     const row = container.querySelector("[data-testid='ns-prompt-sourcesink-row']")!;
     expect(row.textContent).toContain("-");
   });
@@ -99,7 +99,7 @@ describe("SourceSinkTab - AC-4 表头+行标记 (SDR#6/SDR#7)", () => {
 describe("SourceSinkTab - AC-12/AC-17 orphan cloud badge (SDR#9)", () => {
   it("orphan cloud (no flows) shows 孤立 error badge", () => {
     const c1 = cloud("c1");
-    const { container } = render(<SourceSinkTab clouds={[c1]} elements={[c1]} />);
+    const { container } = render(<SourceSinkTab lang="zh" clouds={[c1]} elements={[c1]} />);
     const badge = container.querySelector("[data-testid='ns-prompt-error-badge']")!;
     expect(badge).not.toBeNull();
     expect(badge.textContent).toContain("孤立");
@@ -114,7 +114,7 @@ describe("SourceSinkTab - AC-6 行点击 (SDR#10)", () => {
     const els = [c1, cloud("c2"), flow("f1", "c1", "c2")];
     const onRowClick = vi.fn();
     const { container } = render(
-      <SourceSinkTab clouds={[c1]} elements={els} onRowClick={onRowClick} />,
+      <SourceSinkTab lang="zh" clouds={[c1]} elements={els} onRowClick={onRowClick} />,
     );
     fireEvent.click(container.querySelector("[data-testid='ns-prompt-sourcesink-row']")!);
     expect(onRowClick).toHaveBeenCalledWith("c1");
@@ -128,7 +128,7 @@ describe("SourceSinkTab - AC-17 badge 点击 (SDR#10)", () => {
     const c1 = cloud("c1");
     const onErrorClick = vi.fn();
     const { container } = render(
-      <SourceSinkTab clouds={[c1]} elements={[c1]} onErrorClick={onErrorClick} />,
+      <SourceSinkTab lang="zh" clouds={[c1]} elements={[c1]} onErrorClick={onErrorClick} />,
     );
     fireEvent.click(container.querySelector("[data-testid='ns-prompt-error-badge']")!);
     expect(onErrorClick).toHaveBeenCalledWith("c1");

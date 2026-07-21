@@ -19,7 +19,7 @@ afterEach(cleanup);
 
 describe("MilestoneTab - AC-3 里程碑占位骨架 (SDR#5, defer 5.4)", () => {
   it("renders both sections ★ 已达成 / ☆ 未达成", () => {
-    const { container } = render(<MilestoneTab />);
+    const { container } = render(<MilestoneTab lang="zh" />);
     expect(container.textContent).toContain("★");
     expect(container.textContent).toContain("已达成");
     expect(container.textContent).toContain("☆");
@@ -27,7 +27,7 @@ describe("MilestoneTab - AC-3 里程碑占位骨架 (SDR#5, defer 5.4)", () => {
   });
 
   it("renders defer notice text (游戏化中心 Epic 5.4 接入前占位)", () => {
-    const { container } = render(<MilestoneTab />);
+    const { container } = render(<MilestoneTab lang="zh" />);
     expect(container.textContent).toContain("游戏化中心");
     expect(container.textContent).toContain("Epic 5.4");
     expect(container.textContent).toContain("占位");
@@ -35,7 +35,7 @@ describe("MilestoneTab - AC-3 里程碑占位骨架 (SDR#5, defer 5.4)", () => {
 
   it("renders without store dependency (pure static, no props, no crash)", () => {
     // AC-3c: 无 store 依赖. 组件不读 elementStore/promptStore, 纯静态.
-    const { container } = render(<MilestoneTab />);
+    const { container } = render(<MilestoneTab lang="zh" />);
     expect(container).not.toBeNull();
   });
 });

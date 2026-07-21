@@ -1,6 +1,7 @@
 import { render, fireEvent, cleanup } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Toolbar, type ToolbarProps } from "./Toolbar";
+import { langStore } from "../sd/langStore";
 
 // Story 1a.7 T1 — Toolbar unit tests (TDD green phase).
 // Covers: AC-1 rendering (6 groups, Chinese labels, aria), AC-2 enable/disable
@@ -21,6 +22,8 @@ function props(overrides: Partial<ToolbarProps> = {}): ToolbarProps {
     ...overrides,
   };
 }
+
+beforeEach(() => langStore.setLang("zh"));
 
 describe("Toolbar — AC-1 rendering (6 groups, Chinese labels, aria)", () => {
   afterEach(() => cleanup());
@@ -50,26 +53,28 @@ describe("Toolbar — AC-1 rendering (6 groups, Chinese labels, aria)", () => {
 
   it("renders all toolbar buttons with Chinese labels", () => {
     const { container } = render(<Toolbar {...props()} />);
-    const expectedLabels = [
-      "新建",
-      "打开",
-      "保存",
-      "撤销",
-      "重做",
-      "复制",
-      "粘贴",
-      "删除",
-      "选择",
-      "存量",
-      "源汇",
-      "流量",
-      "暂停",
-      "播放",
-      "重置",
-      "单步",
+    // testid (TOOL_TESTID, Q2=A fixed Chinese) vs aria-label (t(TOOL_I18N_KEY, lang)):
+    // cloud diverges after F3-a unify: testid="源汇", aria-label="源/汇" = t("cloud").
+    const expectedButtons = [
+      { testid: "新建", label: "新建" },
+      { testid: "打开", label: "打开" },
+      { testid: "保存", label: "保存" },
+      { testid: "撤销", label: "撤销" },
+      { testid: "重做", label: "重做" },
+      { testid: "复制", label: "复制" },
+      { testid: "粘贴", label: "粘贴" },
+      { testid: "删除", label: "删除" },
+      { testid: "选择", label: "选择" },
+      { testid: "存量", label: "存量" },
+      { testid: "源汇", label: "源/汇" },
+      { testid: "流量", label: "流量" },
+      { testid: "暂停", label: "暂停" },
+      { testid: "播放", label: "播放" },
+      { testid: "重置", label: "重置" },
+      { testid: "单步", label: "单步" },
     ];
-    for (const label of expectedLabels) {
-      const btn = container.querySelector(`[data-testid='ns-toolbar-btn-${label}']`);
+    for (const { testid, label } of expectedButtons) {
+      const btn = container.querySelector(`[data-testid='ns-toolbar-btn-${testid}']`);
       expect(btn).not.toBeNull();
       expect(btn!.getAttribute("aria-label")).toBe(label);
     }
@@ -248,5 +253,32 @@ describe("Toolbar — action callbacks", () => {
     const { container } = render(<Toolbar {...props({ onDelete })} />);
     fireEvent.click(container.querySelector("[data-testid='ns-toolbar-btn-删除']")!);
     expect(onDelete).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ── AC-7 / AC-8 quality CSS classes (F-P3: real component assertions) ──
+// gov: AC-7 + SDR#8 (breathing glow) + AC-8 + SDR#9 (caret blink / corner scan).
+// Replaces 3 hollow quality/*.test.ts that injected their own @keyframes and
+// asserted their own inline style - tautological. These mount the real Toolbar
+// and assert the real class names exist on the real elements.
+describe("Toolbar - AC-7/AC-8 quality CSS classes (real component)", () => {
+  afterEach(() => cleanup());
+
+  it("dt select has ns-toolbar__select--breathing class (AC-7 呼吸辉光)", () => {
+    const { container } = render(<Toolbar {...props()} />);
+    const select = container.querySelector("[data-testid='ns-toolbar-dt-select']")!;
+    expect(select).toHaveClass("ns-toolbar__select--breathing");
+  });
+
+  it("dt select caret span has ns-toolbar__select-caret class (AC-8 `>` 闪烁)", () => {
+    const { container } = render(<Toolbar {...props()} />);
+    const caret = container.querySelector("[data-testid='ns-toolbar-select-caret']")!;
+    expect(caret).toHaveClass("ns-toolbar__select-caret");
+  });
+
+  it("settings button has ns-corner-scanner class (AC-8 四角扫描)", () => {
+    const { container } = render(<Toolbar {...props()} />);
+    const settings = container.querySelector("[data-testid='ns-toolbar-btn-settings']")!;
+    expect(settings).toHaveClass("ns-corner-scanner");
   });
 });

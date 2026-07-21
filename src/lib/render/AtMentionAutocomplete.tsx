@@ -8,6 +8,9 @@
 // stored id-form for persistence.
 
 import { useState, useRef, useEffect, useCallback } from "react";
+import { useSyncExternalStore } from "react";
+import { t } from "../sd/i18n";
+import { langStore } from "../sd/langStore";
 
 export interface ElementRef {
   id: string;
@@ -91,6 +94,7 @@ export function AtMentionAutocomplete({
   className,
   ariaLabel,
 }: AtMentionAutocompleteProps) {
+  const lang = useSyncExternalStore(langStore.subscribe, langStore.getSnapshot);
   const idMap = useRef<Map<string, string>>(buildIdMap(elements));
   const nameMap = useRef<Map<string, string>>(buildNameMap(elements));
 
@@ -105,6 +109,9 @@ export function AtMentionAutocomplete({
   const [listboxOpen, setListboxOpen] = useState(false);
   const [filteredOptions, setFilteredOptions] = useState<ElementRef[]>([]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // AC-9 / SDR#10: input spark — toggled on each keypress, cleared on animation end.
+  const [spark, setSpark] = useState(false);
 
   // Sync display when external value changes.
   useEffect(() => {
@@ -157,6 +164,10 @@ export function AtMentionAutocomplete({
     if (e.key === "Escape") {
       setListboxOpen(false);
     }
+    // AC-9 / SDR#10: input spark on each keypress (printable chars only).
+    if (e.key.length === 1) {
+      setSpark(true);
+    }
   }, []);
 
   const handleBlur = useCallback(() => {
@@ -174,17 +185,18 @@ export function AtMentionAutocomplete({
       <textarea
         ref={textareaRef}
         data-testid={inputTestId ?? "ns-at-mention-input"}
-        className={className}
+        className={`${className ?? ""}${spark ? " ns-property-panel__input--spark" : ""}`}
         aria-label={ariaLabel}
         value={displayValue}
         onChange={handleChange}
         onKeyDown={handleKeyDown}
+        onAnimationEnd={() => setSpark(false)}
         onBlur={handleBlur}
       />
       {listboxOpen && (
         <div data-testid="ns-at-mention-listbox" role="listbox">
           {filteredOptions.length === 0 ? (
-            <div className="ns-at-mention-empty">无匹配</div>
+            <div className="ns-at-mention-empty">{t("noMatch", lang)}</div>
           ) : (
             filteredOptions.map((el) => (
               <div

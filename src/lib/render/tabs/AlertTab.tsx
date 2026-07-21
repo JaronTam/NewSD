@@ -5,11 +5,14 @@
 // Renders alert + confirm messages filtered by filterByTab("alert"),
 // excluding info/toast. Confirm rows get [确认]/[取消] buttons.
 
+import type { Lang } from "../../sd/i18n";
+import { t } from "../../sd/i18n";
 import type { PromptMessage } from "../promptStore";
 import { filterByTab } from "../promptStore";
 
 export interface AlertTabProps {
   messages: readonly PromptMessage[];
+  lang: Lang;
   onResolve?: (id: string, confirmed: boolean) => void;
 }
 
@@ -17,7 +20,7 @@ function tagOf(msg: PromptMessage): string {
   return `[${msg.type}]`;
 }
 
-export function AlertTab({ messages, onResolve }: AlertTabProps) {
+export function AlertTab({ messages, lang, onResolve }: AlertTabProps) {
   const filtered = messages.filter((m) => filterByTab(m, "alert"));
 
   if (filtered.length === 0) {
@@ -47,7 +50,7 @@ export function AlertTab({ messages, onResolve }: AlertTabProps) {
             {isConfirm &&
               (resolved ? (
                 <span className="ns-prompt-panel__result">
-                  {m.result ? "[已确认]" : "[已取消]"}
+                  [{m.result ? t("confirmed", lang) : t("cancelled", lang)}]
                 </span>
               ) : (
                 <span className="ns-prompt-panel__actions">
@@ -56,14 +59,14 @@ export function AlertTab({ messages, onResolve }: AlertTabProps) {
                     data-testid="ns-prompt-panel-confirm"
                     onClick={() => onResolve?.(m.id, true)}
                   >
-                    确认
+                    {t("confirm", lang)}
                   </button>
                   <button
                     type="button"
                     data-testid="ns-prompt-panel-cancel"
                     onClick={() => onResolve?.(m.id, false)}
                   >
-                    取消
+                    {t("cancel", lang)}
                   </button>
                 </span>
               ))}

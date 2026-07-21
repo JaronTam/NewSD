@@ -10,6 +10,8 @@ import { useSyncExternalStore, useRef, useState } from "react";
 import { type ElementStore, deriveFlowUnits } from "../sd/store";
 import { validateFormulaSyntax, formatFormulaForEditor } from "../sd/formula";
 import { checkDimensions, type DimensionalCheckResult } from "../sd/dimensionalCheck";
+import { t } from "../sd/i18n";
+import { langStore } from "../sd/langStore";
 import { AtMentionAutocomplete, type ElementRef } from "./AtMentionAutocomplete";
 
 export interface PropertyPanelProps {
@@ -21,6 +23,7 @@ export interface PropertyPanelProps {
 export function PropertyPanel({ elementStore, selectedId }: PropertyPanelProps) {
   // Subscribe to element store for field reactivity (CS钉死 #5: dual-channel).
   const elements = useSyncExternalStore(elementStore.subscribe, elementStore.getSnapshot);
+  const lang = useSyncExternalStore(langStore.subscribe, langStore.getSnapshot);
 
   // Find the selected element (null if no selection or not found).
   const selectedElement = selectedId ? (elements.find((el) => el.id === selectedId) ?? null) : null;
@@ -48,10 +51,10 @@ export function PropertyPanel({ elementStore, selectedId }: PropertyPanelProps) 
         className="ns-property-panel"
         data-testid="ns-property-panel"
         role="region"
-        aria-label="图元属性"
+        aria-label={t("elementProperties", lang)}
       >
         <div data-testid="ns-property-panel-empty" className="ns-property-panel__empty">
-          点击图元查看属性
+          {t("clickToView", lang)}
         </div>
       </div>
     );
@@ -87,13 +90,13 @@ export function PropertyPanel({ elementStore, selectedId }: PropertyPanelProps) 
   // Name field (common to all element kinds — Stock/Cloud/Flow).
   fields.push(
     <label key="name" className="ns-property-panel__field">
-      <span className="ns-property-panel__label">名称</span>
+      <span className="ns-property-panel__label">{t("name", lang)}</span>
       <input
         ref={nameInputRef}
         type="text"
         data-testid="ns-property-field-name"
         className={`ns-property-panel__input${nameError ? " ns-property-panel__input--error" : ""}`}
-        aria-label="名称"
+        aria-label={t("name", lang)}
         defaultValue={selectedElement.name}
         onBlur={(e) => {
           const raw = e.target.value;
@@ -106,7 +109,7 @@ export function PropertyPanel({ elementStore, selectedId }: PropertyPanelProps) 
             // Collision or empty-name rejection (SDR#4 / SDR#11): surface error,
             // revert input to the element's stored name. All element kinds
             // guarantee name: string (SDR#5), so no nullish fallback needed.
-            setNameError(err instanceof Error ? err.message : "名称无效");
+            setNameError(err instanceof Error ? err.message : t("invalidName", lang));
             if (nameInputRef.current) {
               nameInputRef.current.value = selectedElement.name;
             }
@@ -129,33 +132,33 @@ export function PropertyPanel({ elementStore, selectedId }: PropertyPanelProps) 
   if (selectedElement.kind === "stock") {
     fields.push(
       <label key="initialValue" className="ns-property-panel__field">
-        <span className="ns-property-panel__label">初始值</span>
+        <span className="ns-property-panel__label">{t("initialValue", lang)}</span>
         <input
           type="number"
           data-testid="ns-property-field-initialValue"
           className="ns-property-panel__input"
-          aria-label="初始值"
+          aria-label={t("initialValue", lang)}
           defaultValue={selectedElement.initialValue}
           onBlur={persistField("initialValue")}
         />
       </label>,
       <label key="units" className="ns-property-panel__field">
-        <span className="ns-property-panel__label">单位</span>
+        <span className="ns-property-panel__label">{t("units", lang)}</span>
         <input
           type="text"
           data-testid="ns-property-field-units"
           className="ns-property-panel__input"
-          aria-label="单位"
+          aria-label={t("units", lang)}
           defaultValue={selectedElement.units}
           onBlur={persistField("units")}
         />
       </label>,
       <label key="allowNegative" className="ns-property-panel__field">
-        <span className="ns-property-panel__label">允许负值</span>
+        <span className="ns-property-panel__label">{t("allowNeg", lang)}</span>
         <input
           type="checkbox"
           data-testid="ns-property-field-allowNegative"
-          aria-label="允许负值"
+          aria-label={t("allowNeg", lang)}
           checked={selectedElement.allowNegative}
           onChange={(e) =>
             elementStore.updateElement(selectedElement.id, {
@@ -171,13 +174,13 @@ export function PropertyPanel({ elementStore, selectedId }: PropertyPanelProps) 
   if (selectedElement.kind === "flow") {
     fields.push(
       <label key="formula" className="ns-property-panel__field">
-        <span className="ns-property-panel__label">公式</span>
+        <span className="ns-property-panel__label">{t("formula", lang)}</span>
         <AtMentionAutocomplete
           value={selectedElement.formula}
           elements={elementRefs}
           inputTestId="ns-property-field-formula"
           className={`ns-property-panel__input ns-property-panel__textarea${formulaError ? " ns-property-panel__input--error" : ""}`}
-          ariaLabel="公式"
+          ariaLabel={t("formula", lang)}
           onChange={() => {
             // Display-only callback — no store persistence on typing.
           }}
@@ -186,7 +189,7 @@ export function PropertyPanel({ elementStore, selectedId }: PropertyPanelProps) 
               formula: storedForm,
             } as Partial<typeof selectedElement>);
             const result = validateFormulaSyntax(storedForm);
-            setFormulaError(result.ok ? null : (result.error ?? "语法错误"));
+            setFormulaError(result.ok ? null : (result.error ?? t("syntaxError", lang)));
             // AC-11: trigger dimensional check on every edit (non-blocking stub).
             setDimStatus(checkDimensions(storedForm));
           }}
@@ -210,7 +213,7 @@ export function PropertyPanel({ elementStore, selectedId }: PropertyPanelProps) 
         )}
       </label>,
       <div key="formulaPreview" className="ns-property-panel__field">
-        <span className="ns-property-panel__label">预览</span>
+        <span className="ns-property-panel__label">{t("preview", lang)}</span>
         <span
           data-testid="ns-property-formula-preview"
           className="ns-property-panel__input ns-property-panel__readonly"
@@ -219,12 +222,12 @@ export function PropertyPanel({ elementStore, selectedId }: PropertyPanelProps) 
         </span>
       </div>,
       <label key="isVariable" className="ns-property-panel__field">
-        <span className="ns-property-panel__label">可变量</span>
+        <span className="ns-property-panel__label">{t("variable", lang)}</span>
         <input
           type="checkbox"
           role="switch"
           data-testid="ns-property-field-isVariable"
-          aria-label="可变/常数切换"
+          aria-label={t("variableToggle", lang)}
           checked={selectedElement.isVariable}
           aria-checked={selectedElement.isVariable}
           onChange={(e) =>
@@ -235,11 +238,11 @@ export function PropertyPanel({ elementStore, selectedId }: PropertyPanelProps) 
         />
       </label>,
       <div key="derivedUnits" className="ns-property-panel__field">
-        <span className="ns-property-panel__label">派生单位</span>
+        <span className="ns-property-panel__label">{t("derivedUnit", lang)}</span>
         <span
           data-testid="ns-property-field-derivedUnits"
           className="ns-property-panel__input ns-property-panel__readonly"
-          aria-label="派生单位"
+          aria-label={t("derivedUnit", lang)}
         >
           {deriveFlowUnits(selectedElement.formula, selectedElement.toId, elements)}
         </span>
@@ -252,7 +255,7 @@ export function PropertyPanel({ elementStore, selectedId }: PropertyPanelProps) 
       className="ns-property-panel"
       data-testid="ns-property-panel"
       role="region"
-      aria-label="图元属性"
+      aria-label={t("elementProperties", lang)}
     >
       <div className="ns-property-panel__fields" key={selectedElement.id}>
         {fields}
