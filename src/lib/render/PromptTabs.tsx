@@ -6,19 +6,19 @@
 // Wraps children in a role="tabpanel" container.
 
 import type { TabKey, PromptMessage } from "./promptStore";
+import { t } from "../sd/i18n";
+import type { Lang } from "../sd/i18n";
 
-export interface TabDef {
-  key: TabKey;
-  label: string;
+/** SDR#1: 4-tab key set, fixed order. Q6=C: keep key, delete label, component-internal t(). */
+export const TABS: readonly TabKey[] = ["alert", "milestone", "sourcesink", "stock"];
+
+/** Q6=C: resolve tab display label at render time. "!" is ASCII art (AC-10). */
+export function tabLabel(key: TabKey, lang: Lang): string {
+  if (key === "alert") return "!";
+  if (key === "milestone") return t("milestone", lang);
+  if (key === "sourcesink") return t("sourceSink", lang);
+  return t("stock", lang);
 }
-
-/** SDR#1: 4-tab key set, fixed order. */
-export const TABS: readonly TabDef[] = [
-  { key: "alert", label: "!" },
-  { key: "milestone", label: "里程碑" },
-  { key: "sourcesink", label: "源/汇" },
-  { key: "stock", label: "存量" },
-];
 
 /**
  * SDR#3: resolve which tab to activate (9-group routing matrix).
@@ -39,6 +39,7 @@ export function resolveActivateTab(
 export interface PromptTabsProps {
   messages: readonly PromptMessage[];
   activeTab: TabKey;
+  lang: Lang;
   onTabChange: (key: TabKey) => void;
   hasUnanswered: boolean;
   /** AC-13: unread alert count for the "!" tab badge. */
@@ -49,6 +50,7 @@ export interface PromptTabsProps {
 export function PromptTabs({
   messages: _messages,
   activeTab,
+  lang,
   onTabChange,
   hasUnanswered,
   unreadAlertCount = 0,
@@ -56,24 +58,24 @@ export function PromptTabs({
 }: PromptTabsProps) {
   return (
     <>
-      <div className="ns-prompt-panel__tabs" role="tablist" aria-label="提示面板标签">
-        {TABS.map((tab) => {
-          const isActive = tab.key === activeTab;
-          const isAlert = tab.key === "alert";
+      <div className="ns-prompt-panel__tabs" role="tablist" aria-label={t("promptTabsLabel", lang)}>
+        {TABS.map((key) => {
+          const isActive = key === activeTab;
+          const isAlert = key === "alert";
           const flashClass =
             isAlert && hasUnanswered && !isActive ? " ns-prompt-panel__tab--flash" : "";
           return (
             <button
-              key={tab.key}
+              key={key}
               type="button"
               role="tab"
-              data-testid={`ns-prompt-panel-tab-${tab.key}`}
+              data-testid={`ns-prompt-panel-tab-${key}`}
               className={`ns-prompt-panel__tab${isActive ? " ns-prompt-panel__tab--active" : ""}${flashClass}`}
               aria-selected={isActive}
-              aria-label={tab.label}
-              onClick={() => onTabChange(tab.key)}
+              aria-label={tabLabel(key, lang)}
+              onClick={() => onTabChange(key)}
             >
-              {tab.label}
+              {tabLabel(key, lang)}
               {isAlert && unreadAlertCount > 0 && (
                 <span
                   className="ns-prompt-panel__tab-badge"
@@ -89,7 +91,7 @@ export function PromptTabs({
       <div
         role="tabpanel"
         className="ns-prompt-panel__list"
-        aria-label={`${activeTab} tab content`}
+        aria-label={t("tabContent", lang).replace("{tab}", tabLabel(activeTab, lang))}
       >
         {children}
       </div>

@@ -1,5 +1,8 @@
 import { render, fireEvent, cleanup } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { langStore } from "../sd/langStore";
+
+beforeEach(() => langStore.setLang("zh"));
 
 // Story 1a.12 RED - AtMentionAutocomplete (D1 controlled formula + name<->id reverse map).
 // gov: SDR#11 (controlled 双路径) / SDR#23 (name 反向映射) / AC-19 / AC-20.
@@ -166,5 +169,32 @@ describe("AtMentionAutocomplete - AC-20(b) Esc 关闭", () => {
     fireEvent.keyDown(ta, { key: "Escape" });
     expect(container.querySelector("[data-testid='ns-at-mention-listbox']")).toBeNull();
     expect(ta.value).toContain("@");
+  });
+});
+
+// ── AC-9 输入火花 spark (F-P3: real component) ──
+// gov: AC-9 + SDR#10. Replaces hollow input-spark.test.ts which injected its own
+// @keyframes + inline style (tautological). This mounts the real component and
+// drives the real spark state machine: keydown printable -> spark state true ->
+// ns-property-panel__input--spark class applied.
+//
+// Coverage note: the spark CLEAR (onAnimationEnd -> setSpark(false)) is NOT
+// unit-tested here. React 19's onAnimationEnd does not fire for programmatically
+// dispatched "animationend" events in jsdom (verified: fireEvent.animationEnd,
+// plain Event, and an AnimationEvent polyfill with animationName+bubbles all
+// fail to trigger it - the native event reaches the root but React's plugin
+// never dispatches the synthetic event). jsdom has no real animation engine.
+// The clear path is exercised in e2e, where a real browser fires animationend.
+describe("AtMentionAutocomplete - AC-9 spark (SDR#10)", () => {
+  it("keydown printable char adds ns-property-panel__input--spark class", () => {
+    const { container } = render(
+      <AtMentionAutocomplete value="" elements={ELS} onChange={() => {}} />,
+    );
+    const ta = container.querySelector(
+      "[data-testid='ns-at-mention-input']",
+    ) as HTMLTextAreaElement;
+    expect(ta).not.toHaveClass("ns-property-panel__input--spark");
+    fireEvent.keyDown(ta, { key: "a" });
+    expect(ta).toHaveClass("ns-property-panel__input--spark");
   });
 });

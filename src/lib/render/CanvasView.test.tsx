@@ -1,5 +1,8 @@
 import { render, fireEvent, waitFor, cleanup } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { langStore } from "../sd/langStore";
+
+beforeEach(() => langStore.setLang("zh"));
 
 import { CanvasView, computeCameraChanged, perfProbe } from "./CanvasView";
 import type { Camera } from "./camera";
@@ -1009,7 +1012,7 @@ describe("CanvasView — empty state (AC-16, AR#12)", () => {
     const guide = container.querySelector(".ns-canvas__guide") as HTMLElement;
     expect(guide).not.toBeNull();
     expect(guide.style.display).toBe("block");
-    expect(guide.textContent).toBe("按 S 放置存量 · 按 C 放置源汇 · 按 F 连流量");
+    expect(guide.textContent).toBe("按 S 放置存量 · 按 C 放置源/汇 · 按 F 连流量");
   });
 
   it("AC-16: guidance text disappears when elements are added", async () => {

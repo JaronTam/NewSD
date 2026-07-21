@@ -18,6 +18,7 @@ import {
   findNearestPort,
   flowToInstances,
   getElementBounds,
+  getElementCenter,
   getElementPorts,
   resizeStock,
   stockToInstances,
@@ -40,6 +41,18 @@ import { PromptPanel } from "./PromptPanel";
 import { PropertyPanel } from "./PropertyPanel";
 import { promptStore } from "./promptStore";
 import { detectSetupErrors, type ErrorFinding } from "../sd/errorDetection";
+import { t } from "../sd/i18n";
+import { langStore } from "../sd/langStore";
+import {
+  startAnimationTicker,
+  getAnimationState,
+  computeFlowOffset,
+  computeGlitchGlyphIdx,
+  MAX_FLOW_ANIM_ELEMENTS,
+} from "./quality/animation";
+import { createParticleSystem, type ParticleSystem } from "./quality/particles";
+import { createLvlUpOverlay, type LvlUpOverlay } from "./quality/overlay";
+import { createBlipPlayer, type BlipPlayer } from "./quality/audio";
 
 // Story 1a-13: prerender-safe iso layout effect (SDR#7). Module-scoped (not recreated per render).
 const useIsoLayoutEffect = typeof window !== "undefined" ? useLayoutEffect : useEffect;
@@ -200,12 +213,20 @@ let minimapProjector: MinimapProjector | null = null;
 // Story 1a.7: e2e test hooks — resolved lazily after component mount.
 let _e2eSetSelectedId: ((id: string | null) => void) | null = null;
 let _e2eGetToolMode: (() => string) | null = null;
+// Story 5-1: quality module e2e hooks (set on mount, cleared on unmount).
+let _e2eQuality: {
+  particles: ParticleSystem | null;
+  overlay: LvlUpOverlay | null;
+  blip: BlipPlayer | null;
+} = { particles: null, overlay: null, blip: null };
 
 export { elementStore, spatialIndex, dirtyTracker, perfProbe, minimapProjector };
 
 // e2e test hook — expose store + spatialIndex + createFlow on window for
-// Playwright (dev only). Story 1a.5 extends __e2e__ with culling stats.
-if (typeof window !== "undefined" && import.meta.env.DEV) {
+// Playwright. Story 1a.5 extends __e2e__ with culling stats.
+// F-E3 (CR rework): consistent with cullStats — both always available since
+// e2e tests run against the Go binary (production build, no DEV guard).
+if (typeof window !== "undefined") {
   (window as any).__e2e__ = {
     elementStore,
     spatialIndex,
@@ -213,10 +234,12 @@ if (typeof window !== "undefined" && import.meta.env.DEV) {
     perfProbe,
     createFlow,
     buildInstances: () =>
-      buildInstancesFromStore(
-        null,
-        lastCam && lastVp ? { spatialIndex, cam: lastCam, vp: lastVp } : undefined,
-      ),
+      buildInstancesFromStore(null, {
+        spatialIndex,
+        cam: lastCam ?? undefined,
+        vp: lastVp ?? undefined,
+        timeMs: getAnimationState().timeMs,
+      }),
     /** Bulk-seed N stock elements in a grid for perf/culling e2e (Story 1a.5 AC-9).
      *  Uses setElements (single notify) to avoid O(n²) subscription cascade. */
     seedBulk: (n: number) => {
@@ -261,6 +284,25 @@ if (typeof window !== "undefined" && import.meta.env.DEV) {
     },
     getToolMode: () => {
       return (_e2eGetToolMode as (() => string) | null)?.() ?? "select";
+    },
+    // Story 5-1: quality module e2e hooks (T23 / rework: richer state).
+    animation: {
+      getState: () => getAnimationState(),
+      getOffset: () => computeFlowOffset(getAnimationState().timeMs),
+      getGlitchGlyphIdx: (trueIdx: number) =>
+        computeGlitchGlyphIdx(getAnimationState().timeMs, trueIdx),
+    },
+    // Story 5-1 AC-12: flow-animation cap exposed for e2e (F-P2 fix: e2e
+    // previously hardcoded 1000 -> tautology; now reads the real guard).
+    maxFlowAnimElements: MAX_FLOW_ANIM_ELEMENTS,
+    get particles() {
+      return _e2eQuality.particles;
+    },
+    get overlay() {
+      return _e2eQuality.overlay;
+    },
+    get audio() {
+      return _e2eQuality.blip;
     },
   };
 }
@@ -332,9 +374,9 @@ export function computeCameraChanged(
   );
 }
 
-function buildInstancesFromStore(
+export function buildInstancesFromStore(
   selectedId: string | null,
-  opts?: { spatialIndex?: SpatialIndex | null; cam?: Camera; vp?: Viewport },
+  opts?: { spatialIndex?: SpatialIndex | null; cam?: Camera; vp?: Viewport; timeMs?: number },
 ): RenderInstance[] {
   const out: RenderInstance[] = [];
 
@@ -360,27 +402,70 @@ function buildInstancesFromStore(
   // Expose cull stats on window for e2e assertions (dev only).
   // NOTE: direct property assignment preserves getter-based minimap hooks
   // (Story 1a.6) — Object spread evaluates getters into static values.
-  if (typeof window !== "undefined" && import.meta.env.DEV && cullStats) {
+  if (typeof window !== "undefined" && cullStats) {
     (window as any).__e2e__.cullStats = cullStats;
   }
+
+  // Animation data (SDR#3 flow marching + SDR#6 glitch, AC-2 + AC-5).
+  const timeMs = opts?.timeMs ?? 0;
+  const flowOffset = timeMs > 0 ? computeFlowOffset(timeMs) : 0;
 
   // 1. Flow instances first (edges below nodes — CS钉死 z-order).
   // When culling, pass the FULL element set to flowToInstances so it can find
   // source/target stocks even if they're outside the viewport.
   const allElements = elementStore.getElements();
+  let flowCount = 0;
   for (const el of elements) {
     if (el.kind !== "flow") continue;
     const flow = el as Flow;
     const selected = el.id === selectedId;
     const instances = flowToInstances(flow, allElements, selected);
+
+    // AC-2 / SDR#3: flow marching `>>>>>>>` — shift instances along flow
+    // direction by flowOffset. Limited to MAX_FLOW_ANIM_ELEMENTS (AC-12/SDR#12).
+    if (flowOffset > 0 && flowCount < MAX_FLOW_ANIM_ELEMENTS) {
+      const src = allElements.find((e) => e.id === flow.fromId);
+      const dst = allElements.find((e) => e.id === flow.toId);
+      if (src && dst) {
+        const sc = getElementCenter(src);
+        const dc = getElementCenter(dst);
+        const ddx = dc.x - sc.x;
+        const ddy = dc.y - sc.y;
+        const len = Math.sqrt(ddx * ddx + ddy * ddy) || 1;
+        const nx = ddx / len;
+        const ny = ddy / len;
+        // Offset magnitude: flowOffset is 0..10 units wrapping. Scale to
+        // a subtle 0.5-world-unit march per full cycle.
+        const march = (flowOffset / 10) * 0.5;
+        for (const ri of instances) {
+          ri.worldX += nx * march;
+          ri.worldY += ny * march;
+        }
+      }
+    }
+    flowCount++;
+
     for (const ri of instances) out.push(ri);
   }
 
   // 2. Stock + cloud instances (nodes above edges).
+  // Digit glyph indices in CHARSET: '0'..'9' = ASCII 48..57, CHARSET offset 16..25.
+  const DIGIT_GLYPH_MIN = 16;
+  const DIGIT_GLYPH_MAX = 25;
   for (const el of elements) {
     if (el.kind === "stock") {
       const selected = el.id === selectedId;
       const instances = stockToInstances(el as Stock, false, selected);
+
+      // AC-5 / SDR#6: glitch decoding — perturb digit glyphs on stock values.
+      if (timeMs > 0) {
+        for (const ri of instances) {
+          if (ri.glyphIdx >= DIGIT_GLYPH_MIN && ri.glyphIdx <= DIGIT_GLYPH_MAX) {
+            ri.glyphIdx = computeGlitchGlyphIdx(timeMs, ri.glyphIdx);
+          }
+        }
+      }
+
       for (const ri of instances) out.push(ri);
     } else if (el.kind === "cloud") {
       const selected = el.id === selectedId;
@@ -444,9 +529,23 @@ export function CanvasView() {
   const [pulseHighlightId, setPulseHighlightId] = useState<string | null>(null);
   const pulseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Story 5-1: quality module instances (created on mount, exposed via __e2e__).
+  const qualityRef = useRef<{
+    stopTicker: (() => void) | null;
+    particles: ParticleSystem | null;
+    overlay: LvlUpOverlay | null;
+    blip: BlipPlayer | null;
+  }>({ stopTicker: null, particles: null, overlay: null, blip: null });
+
+  // AC-6 / SDR#7: LVL UP overlay DOM ref — imperative update in drawRef (same pattern as HUD).
+  const lvlUpOverlayRef = useRef<HTMLDivElement | null>(null);
+  // Track last draw time for dt calculation (F-E1: dt clamp guard).
+  const lastDrawTimeRef = useRef<number>(0);
+
   // 1a.12 T8: reactive warnings from error detection (SDR#9).
   const elements = useSyncExternalStore(elementStore.subscribe, elementStore.getSnapshot);
   const warnings = useMemo(() => detectSetupErrors(elements), [elements]);
+  const lang = useSyncExternalStore(langStore.subscribe, langStore.getSnapshot);
   // Drag state: when active, tracks the world-offset from pointer to element origin.
   const dragRef = useRef<{
     active: boolean;
@@ -549,13 +648,40 @@ export function CanvasView() {
       fpsRef.current.textContent = fps > 0 ? fps.toFixed(0) : "-";
     }
 
+    // ── Story 5-1 quality modules (AC-2/AC-4/AC-5/AC-6) ──
+    const animState = getAnimationState();
+    const timeMs = animState.timeMs;
+    // F-E1: dt clamp — tab switch / resume can cause huge dt spikes.
+    const rawDt = lastDrawTimeRef.current === 0 ? 16 : timeMs - lastDrawTimeRef.current;
+    const dtMs = Math.min(rawDt, 100);
+    lastDrawTimeRef.current = timeMs;
+
+    const quality = qualityRef.current;
+    let particleInstances: RenderInstance[] = [];
+    if (quality) {
+      // AC-6 / SDR#7: advance overlay state machine.
+      if (quality.overlay) quality.overlay.update(dtMs);
+
+      // AC-4 / SDR#5: advance particle simulation, collect VRAM instances.
+      if (quality.particles) particleInstances = quality.particles.update(dtMs);
+
+      // AC-6: imperative LVL UP overlay DOM update (same pattern as HUD).
+      const overlayEl = lvlUpOverlayRef.current;
+      if (overlayEl && quality.overlay) {
+        const oState = quality.overlay.getState();
+        overlayEl.style.display = oState === "hidden" ? "none" : "block";
+        overlayEl.className =
+          oState === "fading" ? "ns-lvlup-overlay ns-lvlup-overlay--fading" : "ns-lvlup-overlay";
+      }
+    }
+
     // Empty-state guidance + warnings (also DOM-based, testable in jsdom).
     const guide = guideRef.current;
     if (guide) {
       const isEmpty = elementStore.getElements().length === 0;
       guide.style.display = isEmpty ? "block" : "none";
       if (isEmpty) {
-        guide.textContent = "按 S 放置存量 · 按 C 放置源汇 · 按 F 连流量";
+        guide.textContent = t("emptyGuide", lang);
       }
     }
     const warn = warnElRef.current;
@@ -647,11 +773,15 @@ export function CanvasView() {
     }
 
     // 6. 3-branch render decision (Story 1a.5 AC-3, CS钉死 #5):
+    //    Story 5-1: animation (flow marching / glitch / particles) changes every
+    //    frame — force WebGL render when animation is active to pick up per-frame
+    //    instance mutations (SDR#3, SDR#5, SDR#6).
     if (cameraChanged) {
       dirtyTracker.clear();
     }
 
-    const shouldRenderWebGL = cameraChanged || dirtyTracker.hasDirty();
+    const hasAnimatingElements = timeMs > 0 || particleInstances.length > 0;
+    const shouldRenderWebGL = cameraChanged || dirtyTracker.hasDirty() || hasAnimatingElements;
 
     if (shouldRenderWebGL) {
       // Branch 1 & 2: full visible rebuild + WebGL redraw.
@@ -659,11 +789,17 @@ export function CanvasView() {
         spatialIndex,
         cam,
         vp,
+        timeMs, // AC-2/AC-5: animation time for flow marching + glitch
       });
 
       // 6a. Prepend flow drag preview if active (Story 1a.4).
       if (flowDragRef.current.active && flowDragRef.current.previewInstances.length > 0) {
         instancesRef.current = [...flowDragRef.current.previewInstances, ...instancesRef.current];
+      }
+
+      // 6b. AC-4 / SDR#5: merge particle instances (VRAM debris above all elements).
+      if (particleInstances.length > 0) {
+        instancesRef.current = [...instancesRef.current, ...particleInstances];
       }
 
       // 7. VRAM glyph overlay (AD-9). Renders the pre-baked glow atlas via the
@@ -819,6 +955,26 @@ export function CanvasView() {
     // Runs its own rAF loop — independent of drawRef.current().
     perfProbe.start();
 
+    // Story 5-1: start animation ticker + create quality instances (AC-1).
+    const tickerStop = startAnimationTicker(
+      drawRef,
+      () => window.matchMedia("(prefers-reduced-motion: reduce)").matches,
+    );
+    const particles = createParticleSystem();
+    const overlay = createLvlUpOverlay();
+    const blip = createBlipPlayer();
+    qualityRef.current = { stopTicker: tickerStop, particles, overlay, blip };
+    _e2eQuality = { particles, overlay, blip };
+
+    // AC-10 / SDR#4: resume AudioContext on first user gesture (autoplay policy).
+    const resumeAudio = () => {
+      blip.resumeOnGesture();
+      window.removeEventListener("pointerdown", resumeAudio);
+      window.removeEventListener("keydown", resumeAudio);
+    };
+    window.addEventListener("pointerdown", resumeAudio);
+    window.addEventListener("keydown", resumeAudio);
+
     // Story 1a.6: instantiate minimap projector (AC-1). Uses the minimap canvas
     // overlay for 2D projection of all elements + highlight box. Own
     // DirtyRectTracker runs parallel to the main tracker (CS钉死 #4).
@@ -846,11 +1002,14 @@ export function CanvasView() {
     return () => {
       clearTimeout(readyTimer);
       perfProbe.stop();
+      qualityRef.current.stopTicker?.();
+      qualityRef.current = { stopTicker: null, particles: null, overlay: null, blip: null };
       minimapRO?.disconnect();
       minimapProjector?.dispose();
       minimapProjector = null;
       _e2eSetSelectedId = null;
       _e2eGetToolMode = null;
+      _e2eQuality = { particles: null, overlay: null, blip: null };
       unsubStore();
       ro?.disconnect();
       rendererRef.current?.dispose();
@@ -1343,7 +1502,7 @@ export function CanvasView() {
             },
           );
         } catch (err: unknown) {
-          warnRef.current = err instanceof Error ? err.message : "Flow creation failed";
+          warnRef.current = err instanceof Error ? err.message : t("flowCreateFailed", lang);
         }
       }
 
@@ -1456,7 +1615,7 @@ export function CanvasView() {
     // confirm is non-modal: it lands in the PromptPanel (bottom area) and
     // handleNew awaits its promise before clearing.
     if (elementStore.getElements().length > 0) {
-      const ok = await promptStore.confirm("新建将清空当前画布上的所有元素，确定吗?");
+      const ok = await promptStore.confirm(t("newConfirm", lang));
       if (!ok) return;
     }
     elementStore.setElements([]);
@@ -1561,6 +1720,16 @@ export function CanvasView() {
           {pulseHighlightId && (
             <div className="ns-canvas__pulse-highlight" data-testid="ns-pulse-highlight" />
           )}
+          {/* AC-6 / SDR#7: LVL UP overlay — DOM layer, not canvas (CAP-11 allows DOM). */}
+          <div
+            ref={lvlUpOverlayRef}
+            data-testid="ns-lvlup-overlay"
+            className="ns-lvlup-overlay"
+            style={{ display: "none" }}
+            aria-live="polite"
+          >
+            LVL UP
+          </div>
           <div className="ns-canvas__ctrl" role="group" aria-label="zoom controls">
             <button
               type="button"

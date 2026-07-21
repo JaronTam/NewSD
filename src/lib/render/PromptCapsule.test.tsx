@@ -26,7 +26,7 @@ afterEach(() => {
 describe("PromptCapsule - AC-7 收起态单行胶囊 (SDR#3)", () => {
   it("renders capsule with 4 tab-name buttons + ⏏️ toggle, no content body", () => {
     const { container } = render(
-      <PromptCapsule hasUnanswered={false} lastActiveTab="stock" onExpand={() => {}} />,
+      <PromptCapsule lang="zh" hasUnanswered={false} lastActiveTab="stock" onExpand={() => {}} />,
     );
     expect(container.querySelector("[data-testid='ns-prompt-panel-capsule']")).not.toBeNull();
     // 4 tab-name buttons reuse the expanded-state testids.
@@ -48,7 +48,7 @@ describe("PromptCapsule - AC-7 收起态单行胶囊 (SDR#3)", () => {
 describe("PromptCapsule - AC-8 胶囊 ! 按钮 --flash (SDR#22/AD-9)", () => {
   it("! button carries --flash class when hasUnanswered=true", () => {
     const { container } = render(
-      <PromptCapsule hasUnanswered={true} lastActiveTab="stock" onExpand={() => {}} />,
+      <PromptCapsule lang="zh" hasUnanswered={true} lastActiveTab="stock" onExpand={() => {}} />,
     );
     const alert = container.querySelector("[data-testid='ns-prompt-panel-tab-alert']")!;
     expect(alert.className).toContain("flash");
@@ -56,7 +56,7 @@ describe("PromptCapsule - AC-8 胶囊 ! 按钮 --flash (SDR#22/AD-9)", () => {
 
   it("negative: no flash when hasUnanswered=false", () => {
     const { container } = render(
-      <PromptCapsule hasUnanswered={false} lastActiveTab="stock" onExpand={() => {}} />,
+      <PromptCapsule lang="zh" hasUnanswered={false} lastActiveTab="stock" onExpand={() => {}} />,
     );
     const alert = container.querySelector("[data-testid='ns-prompt-panel-tab-alert']")!;
     expect(alert.className).not.toContain("flash");
@@ -69,7 +69,7 @@ describe("PromptCapsule - AC-9 ⏏️ 展开路由 (SDR#3)", () => {
   it("hasUnanswered + ⏏️ click -> onExpand(alert) (force)", () => {
     const onExpand = vi.fn();
     const { container } = render(
-      <PromptCapsule hasUnanswered={true} lastActiveTab="stock" onExpand={onExpand} />,
+      <PromptCapsule lang="zh" hasUnanswered={true} lastActiveTab="stock" onExpand={onExpand} />,
     );
     fireEvent.click(container.querySelector("[data-testid='ns-prompt-panel-toggle']")!);
     expect(onExpand).toHaveBeenCalledWith("alert");
@@ -78,7 +78,7 @@ describe("PromptCapsule - AC-9 ⏏️ 展开路由 (SDR#3)", () => {
   it("!hasUnanswered + lastActive=stock + ⏏️ click -> onExpand(stock)", () => {
     const onExpand = vi.fn();
     const { container } = render(
-      <PromptCapsule hasUnanswered={false} lastActiveTab="stock" onExpand={onExpand} />,
+      <PromptCapsule lang="zh" hasUnanswered={false} lastActiveTab="stock" onExpand={onExpand} />,
     );
     fireEvent.click(container.querySelector("[data-testid='ns-prompt-panel-toggle']")!);
     expect(onExpand).toHaveBeenCalledWith("stock");
@@ -87,7 +87,7 @@ describe("PromptCapsule - AC-9 ⏏️ 展开路由 (SDR#3)", () => {
   it("!hasUnanswered + first session (lastActive=null) + ⏏️ click -> onExpand(alert) fallback", () => {
     const onExpand = vi.fn();
     const { container } = render(
-      <PromptCapsule hasUnanswered={false} lastActiveTab={null} onExpand={onExpand} />,
+      <PromptCapsule lang="zh" hasUnanswered={false} lastActiveTab={null} onExpand={onExpand} />,
     );
     fireEvent.click(container.querySelector("[data-testid='ns-prompt-panel-toggle']")!);
     expect(onExpand).toHaveBeenCalledWith("alert");
@@ -100,7 +100,7 @@ describe("PromptCapsule - AC-10 tab 名展开路由 (SDR#3)", () => {
   it("hasUnanswered + click 里程碑 tab name -> onExpand(alert) (force, ignore clicked)", () => {
     const onExpand = vi.fn();
     const { container } = render(
-      <PromptCapsule hasUnanswered={true} lastActiveTab="stock" onExpand={onExpand} />,
+      <PromptCapsule lang="zh" hasUnanswered={true} lastActiveTab="stock" onExpand={onExpand} />,
     );
     fireEvent.click(container.querySelector("[data-testid='ns-prompt-panel-tab-milestone']")!);
     expect(onExpand).toHaveBeenCalledWith("alert");
@@ -109,7 +109,7 @@ describe("PromptCapsule - AC-10 tab 名展开路由 (SDR#3)", () => {
   it("!hasUnanswered + click 存量 tab name -> onExpand(stock)", () => {
     const onExpand = vi.fn();
     const { container } = render(
-      <PromptCapsule hasUnanswered={false} lastActiveTab="alert" onExpand={onExpand} />,
+      <PromptCapsule lang="zh" hasUnanswered={false} lastActiveTab="alert" onExpand={onExpand} />,
     );
     fireEvent.click(container.querySelector("[data-testid='ns-prompt-panel-tab-stock']")!);
     expect(onExpand).toHaveBeenCalledWith("stock");
@@ -121,7 +121,7 @@ describe("PromptCapsule - AC-10 tab 名展开路由 (SDR#3)", () => {
 describe("PromptCapsule - AC-11 ⏏️ toggle label", () => {
   it("⏏️ toggle has aria-label `展开提示中心` in collapsed state", () => {
     const { container } = render(
-      <PromptCapsule hasUnanswered={false} lastActiveTab="stock" onExpand={() => {}} />,
+      <PromptCapsule lang="zh" hasUnanswered={false} lastActiveTab="stock" onExpand={() => {}} />,
     );
     const toggle = container.querySelector("[data-testid='ns-prompt-panel-toggle']")!;
     expect(toggle.getAttribute("aria-label")).toBe("展开提示中心");

@@ -45,7 +45,7 @@ afterEach(cleanup);
 
 describe("StockTab - AC-5 表头+行标记 (SDR#6)", () => {
   it("renders 4-column header 名称|变化值|单位|问题", () => {
-    const { container } = render(<StockTab stocks={[]} errors={[]} />);
+    const { container } = render(<StockTab lang="zh" stocks={[]} errors={[]} />);
     expect(container.textContent).toContain("名称");
     expect(container.textContent).toContain("变化值");
     expect(container.textContent).toContain("单位");
@@ -53,13 +53,13 @@ describe("StockTab - AC-5 表头+行标记 (SDR#6)", () => {
   });
 
   it("empty store -> 尚无存量 empty state", () => {
-    const { container } = render(<StockTab stocks={[]} errors={[]} />);
+    const { container } = render(<StockTab lang="zh" stocks={[]} errors={[]} />);
     expect(container.textContent).toContain("尚无存量");
   });
 
   it("S1 (currentValue>0) row: 行首 ⚪ + class --pos", () => {
     const s1 = stock("s1", 5);
-    const { container } = render(<StockTab stocks={[s1]} errors={[]} />);
+    const { container } = render(<StockTab lang="zh" stocks={[s1]} errors={[]} />);
     const row = container.querySelector("[data-testid='ns-prompt-stock-row']")!;
     expect(row.textContent).toContain("⚪");
     expect(row.className).toContain("pos");
@@ -67,7 +67,7 @@ describe("StockTab - AC-5 表头+行标记 (SDR#6)", () => {
 
   it("S2 (currentValue<0) row: 行首 ⚫ + class --neg", () => {
     const s2 = stock("s2", -3);
-    const { container } = render(<StockTab stocks={[s2]} errors={[]} />);
+    const { container } = render(<StockTab lang="zh" stocks={[s2]} errors={[]} />);
     const row = container.querySelector("[data-testid='ns-prompt-stock-row']")!;
     expect(row.textContent).toContain("⚫");
     expect(row.className).toContain("neg");
@@ -75,7 +75,7 @@ describe("StockTab - AC-5 表头+行标记 (SDR#6)", () => {
 
   it("S3 (currentValue=0) row: 行首 ☯ + class --zero", () => {
     const s3 = stock("s3", 0);
-    const { container } = render(<StockTab stocks={[s3]} errors={[]} />);
+    const { container } = render(<StockTab lang="zh" stocks={[s3]} errors={[]} />);
     const row = container.querySelector("[data-testid='ns-prompt-stock-row']")!;
     expect(row.textContent).toContain("☯");
     expect(row.className).toContain("zero");
@@ -84,7 +84,7 @@ describe("StockTab - AC-5 表头+行标记 (SDR#6)", () => {
   it("negative: cloud/flow do not appear in stock tab", () => {
     const cloudEl = { id: "c1", kind: "cloud" as const, name: "c1" };
     const { container } = render(
-      <StockTab stocks={[]} errors={[]} />, // 父已过滤, 但 tab 自身也不应渲染非 stock
+      <StockTab lang="zh" stocks={[]} errors={[]} />, // 父已过滤, 但 tab 自身也不应渲染非 stock
     );
     expect(container.querySelector("[data-testid='ns-prompt-stock-row']")).toBeNull();
     expect(cloudEl.kind).toBe("cloud"); // 占位: cloud 不传入 stocks
@@ -92,7 +92,7 @@ describe("StockTab - AC-5 表头+行标记 (SDR#6)", () => {
 
   it("变化值 column shows - stub (no change-rate computed yet)", () => {
     const s1 = stock("s1", 5);
-    const { container } = render(<StockTab stocks={[s1]} errors={[]} />);
+    const { container } = render(<StockTab lang="zh" stocks={[s1]} errors={[]} />);
     const row = container.querySelector("[data-testid='ns-prompt-stock-row']")!;
     expect(row.textContent).toContain("-");
   });
@@ -103,13 +103,13 @@ describe("StockTab - AC-5 表头+行标记 (SDR#6)", () => {
 describe("StockTab - AC-17 stock 问题 badge (SDR#9/SDR#10)", () => {
   it("stock with error finding shows ns-prompt-error-badge", () => {
     const s1 = stock("s1", 5);
-    const { container } = render(<StockTab stocks={[s1]} errors={[err("s1")]} />);
+    const { container } = render(<StockTab lang="zh" stocks={[s1]} errors={[err("s1")]} />);
     expect(container.querySelector("[data-testid='ns-prompt-error-badge']")).not.toBeNull();
   });
 
   it("stock without error finding shows no badge", () => {
     const s1 = stock("s1", 5);
-    const { container } = render(<StockTab stocks={[s1]} errors={[]} />);
+    const { container } = render(<StockTab lang="zh" stocks={[s1]} errors={[]} />);
     expect(container.querySelector("[data-testid='ns-prompt-error-badge']")).toBeNull();
   });
 
@@ -117,7 +117,7 @@ describe("StockTab - AC-17 stock 问题 badge (SDR#9/SDR#10)", () => {
     const s1 = stock("s1", 5);
     const onErrorClick = vi.fn();
     const { container } = render(
-      <StockTab stocks={[s1]} errors={[err("s1")]} onErrorClick={onErrorClick} />,
+      <StockTab lang="zh" stocks={[s1]} errors={[err("s1")]} onErrorClick={onErrorClick} />,
     );
     fireEvent.click(container.querySelector("[data-testid='ns-prompt-error-badge']")!);
     expect(onErrorClick).toHaveBeenCalledWith("s1");
@@ -130,7 +130,9 @@ describe("StockTab - AC-6 行点击 (SDR#10)", () => {
   it("click stock row -> onRowClick(stockId)", () => {
     const s1 = stock("s1", 5);
     const onRowClick = vi.fn();
-    const { container } = render(<StockTab stocks={[s1]} errors={[]} onRowClick={onRowClick} />);
+    const { container } = render(
+      <StockTab lang="zh" stocks={[s1]} errors={[]} onRowClick={onRowClick} />,
+    );
     fireEvent.click(container.querySelector("[data-testid='ns-prompt-stock-row']")!);
     expect(onRowClick).toHaveBeenCalledWith("s1");
   });

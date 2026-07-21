@@ -9,6 +9,8 @@
 // resize drag, COLLAPSED_H/EXPANDED_DEFAULT_H.
 
 import { useRef, useState, useSyncExternalStore, useEffect, useMemo } from "react";
+import { t } from "../sd/i18n";
+import { langStore } from "../sd/langStore";
 import { promptStore, type PromptMessage, type TabKey } from "./promptStore";
 import { PromptTabs } from "./PromptTabs";
 import { PromptCapsule } from "./PromptCapsule";
@@ -54,6 +56,7 @@ function persistLastTab(tab: TabKey) {
 
 export function PromptPanel({ elements = [], onRowClick, onErrorClick }: PromptPanelProps) {
   const messages = useSyncExternalStore(promptStore.subscribe, promptStore.getSnapshot);
+  const lang = useSyncExternalStore(langStore.subscribe, langStore.getSnapshot);
   const unreadAlertCount = useSyncExternalStore(
     promptStore.subscribe,
     promptStore.getUnreadAlertCount,
@@ -161,6 +164,7 @@ export function PromptPanel({ elements = [], onRowClick, onErrorClick }: PromptP
         <PromptCapsule
           hasUnanswered={hasUnansweredConfirm}
           lastActiveTab={lastActiveTab}
+          lang={lang}
           onExpand={handleExpand}
         />
       </div>
@@ -188,8 +192,10 @@ export function PromptPanel({ elements = [], onRowClick, onErrorClick }: PromptP
         onPointerCancel={endResize}
       />
       <div className="ns-prompt-panel__header">
-        <span className="ns-prompt-panel__title">+-- [Prompt] --+</span>
-        <span className="ns-prompt-panel__count">&lt;{messages.length} msgs&gt;</span>
+        <span className="ns-prompt-panel__title">{t("promptTitle", lang)}</span>
+        <span className="ns-prompt-panel__count">
+          {t("promptMsgs", lang).replace("{n}", String(messages.length))}
+        </span>
         <span className="ns-prompt-panel__spacer" />
         <button
           type="button"
@@ -197,13 +203,13 @@ export function PromptPanel({ elements = [], onRowClick, onErrorClick }: PromptP
           className="ns-prompt-panel__btn"
           onClick={() => promptStore.clearResolved()}
         >
-          [清空]
+          [{t("clear", lang)}]
         </button>
         <button
           type="button"
           data-testid="ns-prompt-panel-toggle"
           className="ns-prompt-panel__btn"
-          aria-label="收起提示中心"
+          aria-label={t("collapsePrompt", lang)}
           onClick={handleCollapse}
         >
           [⏏]
@@ -212,6 +218,7 @@ export function PromptPanel({ elements = [], onRowClick, onErrorClick }: PromptP
       <PromptTabs
         messages={messages}
         activeTab={activeTab}
+        lang={lang}
         onTabChange={handleSelectTab}
         hasUnanswered={hasUnansweredConfirm}
         unreadAlertCount={unreadAlertCount}
@@ -219,17 +226,19 @@ export function PromptPanel({ elements = [], onRowClick, onErrorClick }: PromptP
         {activeTab === "alert" ? (
           <AlertTab
             messages={messages}
+            lang={lang}
             onResolve={(id, confirmed) => {
               const msg = messages.find((m) => m.id === id);
               msg?.resolve?.(confirmed);
             }}
           />
         ) : activeTab === "milestone" ? (
-          <MilestoneTab />
+          <MilestoneTab lang={lang} />
         ) : activeTab === "sourcesink" ? (
           <SourceSinkTab
             clouds={clouds}
             elements={tabElements}
+            lang={lang}
             onRowClick={onRowClick}
             onErrorClick={onErrorClick}
           />
@@ -237,6 +246,7 @@ export function PromptPanel({ elements = [], onRowClick, onErrorClick }: PromptP
           <StockTab
             stocks={stocks}
             errors={[]}
+            lang={lang}
             onRowClick={onRowClick}
             onErrorClick={onErrorClick}
           />
