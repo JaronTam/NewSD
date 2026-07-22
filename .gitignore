@@ -16,6 +16,11 @@ dist-ssr
 .nitro
 *.local
 
+# Env 文件（本地密钥；.env.example 为脚手架例外，允许提交）
+.env
+.env.*
+!.env.example
+
 # Wrangler / Cloudflare
 .wrangler/
 .dev.vars
