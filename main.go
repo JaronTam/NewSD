@@ -11,6 +11,7 @@ import (
 	"embed"
 	"io/fs"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -109,8 +110,17 @@ func main() {
 		port = "8080"
 	}
 
-	log.Printf("newsd listening on :%s (version %s)", port, version.Version)
-	if err := http.ListenAndServe(":"+port, server.New(clientFS, st, authCfg, providers)); err != nil {
+	// Bind address: default 127.0.0.1 (dev localhost-only; avoids LAN exposure
+	// of the dev server incl. the FAKE_OAUTH backdoor). Prod behind a reverse
+	// proxy sets BIND_ADDR=0.0.0.0 (or the container-facing interface).
+	bindAddr := os.Getenv("BIND_ADDR")
+	if bindAddr == "" {
+		bindAddr = "127.0.0.1"
+	}
+	addr := net.JoinHostPort(bindAddr, port)
+
+	log.Printf("newsd listening on %s (version %s)", addr, version.Version)
+	if err := http.ListenAndServe(addr, server.New(clientFS, st, authCfg, providers)); err != nil {
 		log.Fatalf("server error: %v", err)
 	}
 }

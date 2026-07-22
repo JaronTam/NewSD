@@ -6,3 +6,8 @@ node_modules
 dist
 target
 .playwright-mcp
+
+# Env (local secrets) - never enter build context / intermediate layer cache
+.env
+.env.*
+.dev.vars
