@@ -58,3 +58,9 @@ test-results/
 
 # 测试覆盖率
 /coverage
+
+# SQLite 数据库（Story 2.1: users/sessions 表，含用户邮箱与 session token，不提交）
+/data
+
+# Go build 产物（本地编译二进制，不提交）
+/newsd.exe

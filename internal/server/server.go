@@ -10,12 +10,15 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/jarontam/newsd/internal/auth"
+	"github.com/jarontam/newsd/internal/store"
 	"github.com/jarontam/newsd/internal/version"
 )
 
-// New returns the HTTP handler serving the SPA plus /__version and /__health.
-// distClient is the dist/client subtree (SPA static assets).
-func New(distClient fs.FS) http.Handler {
+// New returns the HTTP handler serving the SPA plus /__version, /__health, and
+// OAuth auth routes (when st + providers are non-nil). distClient is the
+// dist/client subtree (SPA static assets).
+func New(distClient fs.FS, st *store.Store, authCfg auth.Config, providers map[string]auth.Provider) http.Handler {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("GET /__version", func(w http.ResponseWriter, _ *http.Request) {
@@ -26,6 +29,12 @@ func New(distClient fs.FS) http.Handler {
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 	})
 
+	// Wire OAuth auth routes (AC-1/AC-11). Skipped when store is nil (tests that
+	// only exercise static/version/health endpoints).
+	if st != nil && providers != nil {
+		auth.New(mux, authCfg, st, providers)
+	}
+
 	// Static assets + SPA client-routing fallback.
 	fileServer := http.FileServer(http.FS(distClient))
 	mux.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -34,11 +43,15 @@ func New(distClient fs.FS) http.Handler {
 			http.NotFound(w, r)
 			return
 		}
-		// SPA fallback: a client-side route has no static file → serve index.html.
+		// SPA fallback: client-side route has no static file → serve _shell.html.
+		// TanStack Start SPA output uses _shell.html as the entry point.
 		if p := strings.TrimPrefix(r.URL.Path, "/"); p != "" {
 			if _, err := fs.Stat(distClient, p); err != nil {
-				r.URL.Path = "/"
+				r.URL.Path = "/_shell.html"
 			}
+		} else {
+			// Root path: serve _shell.html directly (no index.html in TanStack Start SPA).
+			r.URL.Path = "/_shell.html"
 		}
 		fileServer.ServeHTTP(w, r)
 	}))

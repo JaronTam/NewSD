@@ -8,7 +8,7 @@ export default defineConfig({
   workers: process.env.CI ? 1 : undefined,
   reporter: process.env.CI ? "github" : "list",
   use: {
-    baseURL: "http://localhost:5173",
+    baseURL: "http://localhost:8080",
     trace: "on-first-retry",
     screenshot: "only-on-failure",
   },
@@ -27,8 +27,8 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: "npx vite",
-    port: 5173,
+    command: 'bash -c "FAKE_OAUTH=1 C:/Two/NewSD/newsd.exe"',
+    port: 8080,
     reuseExistingServer: !process.env.CI,
     timeout: 30_000,
   },

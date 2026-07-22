@@ -7,21 +7,23 @@ import (
 	"strings"
 	"testing"
 	"testing/fstest"
+
+	"github.com/jarontam/newsd/internal/auth"
 )
 
-// testFS mimics dist/client: an index.html (SPA entry) and a hashed asset.
+// testFS mimics dist/client: _shell.html (TanStack Start SPA entry) and a hashed asset.
 // Tests run without a built frontend — the handler is dist-agnostic.
 func testFS() fs.FS {
 	return fstest.MapFS{
-		"index.html":      &fstest.MapFile{Data: []byte("<!doctype html><html><body>SPA</body></html>")},
-		"assets/app.js":   &fstest.MapFile{Data: []byte("console.log('app')")},
+		"_shell.html":    &fstest.MapFile{Data: []byte("<!doctype html><html><body>SPA</body></html>")},
+		"assets/app.js":  &fstest.MapFile{Data: []byte("console.log('app')")},
 	}
 }
 
 func TestVersionEndpoint(t *testing.T) {
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/__version", nil)
-	New(testFS()).ServeHTTP(rec, req)
+	New(testFS(), nil, auth.Config{}, nil).ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200", rec.Code)
@@ -38,7 +40,7 @@ func TestVersionEndpoint(t *testing.T) {
 func TestHealthEndpoint(t *testing.T) {
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/__health", nil)
-	New(testFS()).ServeHTTP(rec, req)
+	New(testFS(), nil, auth.Config{}, nil).ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200", rec.Code)
@@ -51,7 +53,7 @@ func TestHealthEndpoint(t *testing.T) {
 func TestStaticAsset(t *testing.T) {
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/assets/app.js", nil)
-	New(testFS()).ServeHTTP(rec, req)
+	New(testFS(), nil, auth.Config{}, nil).ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200", rec.Code)
@@ -62,16 +64,16 @@ func TestStaticAsset(t *testing.T) {
 }
 
 func TestSPAFallback(t *testing.T) {
-	// A client-side route (/boards/abc) has no static file → serves index.html.
+	// A client-side route (/boards/abc) has no static file → serves _shell.html.
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/boards/abc", nil)
-	New(testFS()).ServeHTTP(rec, req)
+	New(testFS(), nil, auth.Config{}, nil).ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200 (SPA fallback)", rec.Code)
 	}
 	if !strings.Contains(rec.Body.String(), "SPA") {
-		t.Fatalf("body = %q, want index.html (SPA fallback)", rec.Body.String())
+		t.Fatalf("body = %q, want _shell.html (SPA fallback)", rec.Body.String())
 	}
 }
 
@@ -79,7 +81,7 @@ func TestReservedPrefix404(t *testing.T) {
 	// Unknown /__ paths are reserved (not SPA fallback) → 404.
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/__unknown", nil)
-	New(testFS()).ServeHTTP(rec, req)
+	New(testFS(), nil, auth.Config{}, nil).ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("status = %d, want 404", rec.Code)
