@@ -57,7 +57,7 @@ development_status:
 
   # === Epic 2: 认证与画板归属权限 - 使能 epic (4 stories) ===
   epic-2: in-progress
-  2-1-oauth-login-session-dual-channel: ready-for-dev # CS 2026-07-20 done (bmad-create-story): AC 17 + SDR 22 + Tasks 24 TDD; Q1-Q4 裁定回填(Q1=A 不 gate defer 2.2/Q2=B FAKE_OAUTH=1 fake provider/Q3=A dev 跳 Secure prod 设/Q4=A 单 PR); baseline ca4ce02; DS 代码 working tree(未 CR 未 merge,CR TBD)
+  2-1-oauth-login-session-dual-channel: done # CR 2026-07-22 done @PR#66(3 层 orchestrator-direct Run 1 PASS:6 patch F1/F2/F3/F4/F5/F9+6 defer F6/F7/F8/F10/F11/F12+F13 合并 F1+2 spec 回写; gate tsc0/go auth13+server+store+version/vitest 797|1skip/43files/e2e 40|21skip); CS 2026-07-20 ready-for-dev(bmad-create-story): AC 17+SDR 22+Tasks 24 TDD; Q1-Q4 裁定回填(Q1=A 不 gate defer 2.2/Q2=B FAKE_OAUTH=1 fake provider/Q3=A dev 跳 Secure prod 设/Q4=A 单 PR); baseline ca4ce02
   2-2-board-ownership-static-permission-model: backlog
   2-3-share-token-generate-rotate: backlog
   2-4-badge-account-persistence-base: backlog
