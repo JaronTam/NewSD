@@ -49,6 +49,7 @@ _bmad/
 # Playwright MCP 工具产物 / 仿真截图（临时产物，不提交）
 .playwright-mcp/
 /sd-sim-*.png
+/swimlane_eva_card.png
 
 # Playwright e2e output (Story 1a.3 C3 fold)
 playwright-report/
