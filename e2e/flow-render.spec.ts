@@ -93,13 +93,13 @@ test.describe("flow render (AC-17)", () => {
     await expect(gl).toBeVisible();
   });
 
-  test("AC-17: WebGL canvas renders flow glyphs (non-empty readPixels after flow creation)", async ({
+  test("AC-17: WebGL canvas renders flow glyphs (readPixels + F6 glyph assertion)", async ({
     page,
   }) => {
     await page.goto("/");
     await waitForRenderReady(page);
 
-    // Baseline: count non-background pixels before flow creation (stocks only).
+    // Baseline sanity: the canvas renders the seed stocks before any flow.
     const baselinePx = await page.evaluate(() => {
       const canvas = document.querySelector("canvas.ns-canvas__gl") as HTMLCanvasElement | null;
       if (!canvas) return -1;
@@ -118,11 +118,20 @@ test.describe("flow render (AC-17)", () => {
     });
     expect(baselinePx).toBeGreaterThan(0);
 
-    // Create a flow between two existing seed stocks.
-    // Seed stocks: Population (x=-8,y=-6), CO₂ (x=6,y=-6), GDP (x=-2,y=3)
+    // Create a flow between two existing seed stocks (horizontal: Population -> CO2).
+    // Seed stocks: Population (x=-8,y=-6), CO2 (x=6,y=-6), GDP (x=-2,y=3).
+    // Default isVariable=false -> marker; horizontal pair -> path + arrow.
     await createFlowAndWait(page, "Population", "CO₂");
 
-    // After flow creation: pixel count should increase (flow glyphs add to the canvas).
+    // Pixel sanity: the canvas still renders after flow creation (non-empty).
+    // NOTE: we intentionally do NOT assert afterFlowPx > baselinePx. Flow path
+    // pixels (signal) are comparable in magnitude to stock-glyph glitch rotation
+    // (animation.ts computeGlitchGlyphIdx: ~50ms ASCII glyph rotation across a
+    // 2000ms cycle) and rAF readPixels timing noise, so a strict > comparison
+    // flips pass/fail across runs (signal < noise -> flaky). The F6 glyph
+    // assertion below is the deterministic check that flow glyphs reached the
+    // renderer; pixel-non-empty here is only a weak sanity gate (mirrors the
+    // marker tests).
     const afterFlowPx = await page.evaluate(() => {
       const canvas = document.querySelector("canvas.ns-canvas__gl") as HTMLCanvasElement | null;
       if (!canvas) return -1;
@@ -139,8 +148,25 @@ test.describe("flow render (AC-17)", () => {
       }
       return n;
     });
-    // The flow adds path segments (─, │) + arrowhead (▶) + marker (○) → more non-bg pixels.
-    expect(afterFlowPx).toBeGreaterThan(baselinePx);
+    expect(afterFlowPx).toBeGreaterThan(0);
+
+    // F6 (non-sham, deterministic channel): the flow's path segment, arrowhead
+    // and marker (isVariable=false default) glyphs must be present in the
+    // instances the renderer draws. Mirrors the marker tests below; this is the
+    // real assertion that flow geometry reached the renderer, independent of
+    // per-frame glitch/rAF pixel noise.
+    const [instances, arrowIdx, hbarIdx, circleIdx] = await Promise.all([
+      builtInstances(page),
+      glyphIdxOf(page, "▶"),
+      glyphIdxOf(page, "─"),
+      glyphIdxOf(page, "○"),
+    ]);
+    expect(arrowIdx).toBeGreaterThanOrEqual(0);
+    expect(hbarIdx).toBeGreaterThanOrEqual(0);
+    expect(circleIdx).toBeGreaterThanOrEqual(0);
+    expect(instances.some((ri) => ri.glyphIdx === arrowIdx)).toBe(true);
+    expect(instances.some((ri) => ri.glyphIdx === hbarIdx)).toBe(true);
+    expect(instances.some((ri) => ri.glyphIdx === circleIdx)).toBe(true);
   });
 
   test("AC-17: variable flow renders ▼ marker (isVariable=true)", async ({ page }) => {
