@@ -813,6 +813,71 @@
     animation: ns-input-spark 0.3s ease-out 1 forwards;
   }
 
+  /* ── Story 1a-10 T11: SettingsPanel (AC-1 timeUnit 控件 + AC-7/AC-13 状态行).
+       1a.9 SettingsPanel 类零 CSS 规则, 本 story 补 panel 容器 + timeUnit 控件
+       (mirror .ns-toolbar__select) + dim-revalidation 状态行. ── */
+  .ns-settings-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    padding: 0.4rem 0.5rem;
+    background: var(--ns-bg-elev);
+    border: 1px solid var(--ns-border);
+    font-family: var(--ns-font-mono);
+  }
+
+  .ns-settings-panel__label {
+    color: var(--ns-fg-mid);
+    font-size: 0.68rem;
+  }
+
+  .ns-settings-panel__lang-btn {
+    background: transparent;
+    border: 1px solid transparent;
+    color: var(--ns-fg);
+    font-family: var(--ns-font-mono);
+    font-size: 0.7rem;
+    padding: 0.1rem 0.4rem;
+    cursor: pointer;
+    text-align: left;
+  }
+
+  .ns-settings-panel__lang-btn:hover {
+    border-color: var(--ns-border);
+    background-color: rgba(255, 255, 255, 0.04);
+  }
+
+  .ns-settings-panel__lang-btn--active {
+    color: var(--ns-stock);
+    border-color: var(--ns-stock);
+  }
+
+  .ns-settings-panel__time-unit {
+    background: transparent;
+    border: 1px solid var(--ns-border);
+    color: var(--ns-fg);
+    font-family: var(--ns-font-mono);
+    font-size: 0.7rem;
+    padding: 0.1rem 0.3rem;
+    cursor: pointer;
+    outline: none;
+  }
+
+  .ns-settings-panel__time-unit:focus-visible {
+    outline: 1px solid var(--ns-stock);
+    outline-offset: -1px;
+  }
+
+  .ns-settings-panel__time-unit option {
+    background: var(--ns-bg-elev);
+    color: var(--ns-fg);
+  }
+
+  .ns-settings-panel__dim-revalidation {
+    color: var(--ns-fg-dim);
+    font-size: 0.66rem;
+  }
+
   /* Reduced-motion: disable non-essential animations (SDR#11, AC-11) */
   @media (prefers-reduced-motion: reduce) {
     .ns-toolbar__select--breathing,

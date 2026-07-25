@@ -43,6 +43,8 @@ import { promptStore } from "./promptStore";
 import { detectSetupErrors, type ErrorFinding } from "../sd/errorDetection";
 import { t } from "../sd/i18n";
 import { langStore } from "../sd/langStore";
+import { modelStore } from "../sd/modelStore";
+import { revalidateAllDimensions } from "../sd/dimensionalCheck";
 import {
   startAnimationTicker,
   getAnimationState,
@@ -572,7 +574,21 @@ export function CanvasView() {
   toolModeRef.current = toolMode;
 
   // Story 1a.7 T8: dt (time step) lifted to React state for toolbar dt selector.
-  const [dt, setDt] = useState(0.1);
+  // Story 1a-10 T4 (AC-3/AC-4, SDR#3): dt backing migrated from local useState
+  // to modelStore (model-level config, persisted to ns-model-config; Toolbar dt
+  // selector stays in place — 1a.7 AC-5 unchanged).
+  const modelConfig = useSyncExternalStore(modelStore.subscribe, modelStore.getSnapshot);
+
+  // Story 1a-10 T8 (AC-5/AC-7/AC-8, SDR#5/#6): timeUnit 变更 -> nonce++ ->
+  // 全模型量纲重校验 (revalidateAllDimensions 遍历 flow 调 checkDimensions
+  // stub "待 1b") -> modelStore.recordRevalidation. setDt 不增 nonce 不触发
+  // (dt 非量纲基准). mount 首跑填充初始 lastRevalidation (无 mount-skip);
+  // recordRevalidation notify -> re-render 但 nonce 不变 -> 无无限循环.
+  // 双 store 解耦: modelStore 不持 elementStore ref, 编排在 CanvasView.
+  useEffect(() => {
+    const results = revalidateAllDimensions(elementStore.getElements());
+    modelStore.recordRevalidation(results);
+  }, [modelConfig.revalidationNonce]);
 
   // Story 1a.7 T9/T10: imperative refs for zoom slider/label and statusbar live fields.
   const zoomSliderRef = useRef<HTMLInputElement | null>(null);
@@ -1670,8 +1686,8 @@ export function CanvasView() {
       <Toolbar
         toolMode={toolMode}
         setToolMode={setToolMode}
-        dt={dt}
-        setDt={setDt}
+        dt={modelConfig.dt}
+        setDt={modelStore.setDt}
         onDelete={handleDelete}
         onNew={handleNew}
         zoomSliderRef={zoomSliderRef}
