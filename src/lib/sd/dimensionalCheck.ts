@@ -8,6 +8,8 @@
 // independently decide soft warnings; FR-SIM-7 derivation lives in 1b
 // Wasm kernel per ARCHITECTURE-SPINE L371 capability map).
 
+import type { Flow, SDElement } from "./types";
+
 export interface DimensionalCheckResult {
   status: "deferred";
   message: string;
@@ -24,4 +26,21 @@ export interface DimensionalCheckResult {
  */
 export function checkDimensions(_formula: string): DimensionalCheckResult {
   return { status: "deferred", message: "待 1b" };
+}
+
+/**
+ * Story 1a-10 T6 — aggregate full-model dimensional revalidation.
+ * gov: AC-5/AC-6 + SDR#4.
+ *
+ * Pure: filters `kind === "flow"` → maps `checkDimensions(flow.formula)`; one
+ * result per flow (all "待 1b" in 1a — proves the stub ran, not derivation).
+ * Fresh array each call. This is the aggregation entry 1b.1 wires into when
+ * replacing the checkDimensions stub (epics 1b.1 L871/L876: "1a.8/1a.10 量纲
+ * stub 入口存在, 1b.1 替换 stub"). checkDimensions stub itself is NOT changed
+ * (SDR#20).
+ */
+export function revalidateAllDimensions(elements: readonly SDElement[]): DimensionalCheckResult[] {
+  return elements
+    .filter((el): el is Flow => el.kind === "flow")
+    .map((flow) => checkDimensions(flow.formula));
 }

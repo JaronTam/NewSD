@@ -1,4 +1,4 @@
-import { render, fireEvent, waitFor, cleanup } from "@testing-library/react";
+import { render, fireEvent, waitFor, cleanup, act } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { langStore } from "../sd/langStore";
 
@@ -225,6 +225,7 @@ describe("CanvasView — VRAM overlay + WebGL2 graceful degrade (1a.2 sub-PR #2)
 // ---- Story 1a.3 Task 7: element interaction (AC-7) --------------------------
 
 import { elementStore, dirtyTracker } from "./CanvasView";
+import { modelStore } from "../sd/modelStore";
 import { promptStore } from "./promptStore";
 
 describe("CanvasView — element interaction (Story 1a.3 Task 7)", () => {
@@ -2173,5 +2174,128 @@ describe("CanvasView - 1a.12 RED 跳转接线 (AC-6/16/17)", () => {
     // Pulse overlay appears on the canvas (DOM seam; WebGL canvas has no DOM
     // nodes, so DS must add an overlay element for this to be observable).
     expect(container.querySelector(".ns-canvas__pulse-highlight")).not.toBeNull();
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Story 1a-10 T3 — AC-3/AC-4: dt backing migrated CanvasView useState -> modelStore.
+// gov: AC-3/AC-4 + SDR#3 + T3. Toolbar dt selector 留原位 (1a.7 AC-5 不回归);
+// backing 迁 modelStore (模型级配置, 持久化跨刷新).
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe("CanvasView — 1a-10 AC-4: dt backing migrated to modelStore", () => {
+  beforeEach(() => {
+    localStorage.clear();
+    act(() => modelStore.setDt(0.1)); // reset singleton to default
+  });
+  afterEach(() => {
+    cleanup();
+    act(() => modelStore.setDt(0.1));
+    localStorage.clear();
+  });
+
+  it("[P0] Toolbar dt select reflects modelStore.getSnapshot().dt (not CanvasView-local useState)", async () => {
+    // gov: AC-4 + SDR#3 + T3. RED: CanvasView L575 useState(0.1) transient (modelStore 0.5 不反映).
+    act(() => modelStore.setDt(0.5));
+    const { container } = await renderReady();
+    const select = container.querySelector(
+      "[data-testid='ns-toolbar-dt-select']",
+    ) as HTMLSelectElement;
+    expect(select.value).toBe("0.5");
+  });
+
+  it("[P0] modelStore.setDt(next) reactively updates the Toolbar dt select", async () => {
+    // gov: AC-4 + SDR#3/#23 + T3. useSyncExternalStore re-render on notify.
+    const { container } = await renderReady();
+    const select = container.querySelector(
+      "[data-testid='ns-toolbar-dt-select']",
+    ) as HTMLSelectElement;
+    expect(select.value).toBe("0.1");
+    act(() => modelStore.setDt(1.0));
+    expect(select.value).toBe("1");
+  });
+
+  it("[P0] Toolbar dt select change writes modelStore.dt + persists ns-model-config", async () => {
+    // gov: AC-3/AC-4 + SDR#3 + T3. reverse direction: select -> modelStore.setDt -> persist.
+    const { container } = await renderReady();
+    const select = container.querySelector(
+      "[data-testid='ns-toolbar-dt-select']",
+    ) as HTMLSelectElement;
+    fireEvent.change(select, { target: { value: "0.5" } });
+    expect(modelStore.getSnapshot().dt).toBe(0.5);
+    expect(JSON.parse(localStorage.getItem("ns-model-config")!).dt).toBe(0.5);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Story 1a-10 T7 — AC-5/AC-7/AC-8: timeUnit change -> effect[revalidationNonce]
+// -> revalidateAllDimensions(elementStore.getElements()) -> recordRevalidation.
+// gov: AC-5/AC-7/AC-8 + SDR#5/#6 + T7. 双 store 解耦: modelStore 不持
+// elementStore ref, 编排在 CanvasView; setDt 不触发 (dt 非量纲基准).
+// ═══════════════════════════════════════════════════════════════════════════════
+
+function e2eFlow(id: string, formula: string) {
+  return {
+    id,
+    kind: "flow" as const,
+    name: id,
+    fromId: "from-" + id,
+    toId: "to-" + id,
+    formula,
+    isVariable: false,
+    lastValue: 0,
+    units: "",
+  };
+}
+
+describe("CanvasView — 1a-10 AC-5/AC-7/AC-8: dimensional revalidation effect", () => {
+  beforeEach(() => {
+    localStorage.clear();
+    elementStore.setElements([]);
+    act(() => modelStore.setTimeUnit("year")); // normalize singleton (no-op if already year)
+  });
+  afterEach(() => {
+    cleanup();
+    elementStore.setElements([]);
+    act(() => modelStore.setTimeUnit("year"));
+    localStorage.clear();
+  });
+
+  it("[P0] AC-5: setTimeUnit -> effect reruns -> lastRevalidation {flowCount:N, allDeferred:true, nonce+1}", async () => {
+    // gov: AC-5 + SDR#5/#6 + T7. reactive 三元组: before nonce/lastRevalidation
+    // -> setTimeUnit -> after nonce+1 + flowCount===N (N=2 seeded flows).
+    elementStore.setElements([e2eFlow("f1", "人口 * 0.05"), e2eFlow("f2", "1")]);
+    const { container } = await renderReady();
+    expect(container.querySelector("[data-testid='ns-toolbar-dt-select']")).not.toBeNull();
+    const before = modelStore.getSnapshot().lastRevalidation;
+    const nonceBefore = modelStore.getSnapshot().revalidationNonce;
+    act(() => modelStore.setTimeUnit("month"));
+    const after = modelStore.getSnapshot().lastRevalidation;
+    expect(modelStore.getSnapshot().revalidationNonce).toBe(nonceBefore + 1);
+    expect(after).not.toBe(before);
+    expect(after!.flowCount).toBe(2);
+    expect(after!.allDeferred).toBe(true);
+    expect(after!.nonce).toBe(nonceBefore + 1);
+  });
+
+  it("[P0] AC-7: mount-run populates lastRevalidation (observable via getSnapshot, 0 flows baseline)", async () => {
+    // gov: AC-7 + SDR#5 mount 行为 + SDR#6 + T7. effect 首跑记录初始 "待 1b" 状态.
+    elementStore.setElements([]);
+    await renderReady();
+    const last = modelStore.getSnapshot().lastRevalidation;
+    expect(last).not.toBeNull();
+    expect(last!.flowCount).toBe(0);
+    expect(last!.allDeferred).toBe(true);
+  });
+
+  it("[P0] AC-8: setDt does NOT rerun the effect (nonce + lastRevalidation ref unchanged)", async () => {
+    // gov: AC-8 + SDR#5 + T7. dt 非量纲基准 -> nonce 不递增, lastRevalidation 同 ref.
+    elementStore.setElements([e2eFlow("f1", "1")]);
+    await renderReady();
+    const nonceBefore = modelStore.getSnapshot().revalidationNonce;
+    const lastBefore = modelStore.getSnapshot().lastRevalidation;
+    act(() => modelStore.setDt(0.5));
+    expect(modelStore.getSnapshot().revalidationNonce).toBe(nonceBefore);
+    expect(modelStore.getSnapshot().lastRevalidation).toBe(lastBefore);
   });
 });

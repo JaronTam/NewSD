@@ -131,6 +131,16 @@ const dict = {
   notImplementedEpic43: { zh: "暂未实现(Epic 4.3)", en: "Not implemented (Epic 4.3)" },
   notImplemented1b: { zh: "暂未实现(1b sim)", en: "Not implemented (1b sim)" },
   flowCreateFailed: { zh: "流量创建失败", en: "Flow creation failed" },
+  // ── Story 1a-10 new keys (model settings, AC-13) ──
+  modelSettings: { zh: "模型设置", en: "Model Settings" },
+  timeUnit: { zh: "时间单位", en: "Time Unit" },
+  unitYear: { zh: "年", en: "Year" },
+  unitMonth: { zh: "月", en: "Month" },
+  unitDay: { zh: "日", en: "Day" },
+  unitHour: { zh: "时", en: "Hour" },
+  unitMinute: { zh: "分", en: "Minute" },
+  unitSecond: { zh: "秒", en: "Second" },
+  dimRevalidationPending: { zh: "量纲重校验: 待 1b", en: "Dim revalidation: 待 1b" },
 } as const;
 
 export type DictKey = keyof typeof dict;
